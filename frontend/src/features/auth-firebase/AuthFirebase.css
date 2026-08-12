@@ -1,0 +1,437 @@
+/* ============================================================================
+   auth-firebase — minimal design system for Login / Register / ForgotPassword
+   ----------------------------------------------------------------------------
+   Design plan
+   Palette   #F7F5F0 paper / #FFFFFF surface / #1E1C19 ink / #6B675F ink-soft /
+             #E4E0D6 hairline / #0E6E63 accent (bookmark-ribbon teal) /
+             #B3261E error
+   Type      Lora (display, headline only) paired with Inter (already the
+             app's body face) for every control, label, and line of copy.
+   Layout    One centered card. No boxed inputs — a single hairline under
+             each field that thickens and turns teal on focus. Tabs are plain
+             text with the same underline treatment, not filled pills.
+   Signature A small hand-drawn bookmark mark (inline SVG, not a raster logo)
+             plus the focus underline are the only two accents in an
+             otherwise quiet page — quiet page, one considered flourish.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@600;700&display=swap');
+
+.fa-page {
+  --fa-paper: #f7f5f0;
+  --fa-surface: #ffffff;
+  --fa-ink: #1e1c19;
+  --fa-ink-soft: #6b675f;
+  --fa-line: #e4e0d6;
+  --fa-accent: #0e6e63;
+  --fa-accent-soft: #e3f1ee;
+  --fa-error: #b3261e;
+  --fa-error-soft: #fbeaea;
+  --fa-font-display: 'Lora', Georgia, 'Times New Roman', serif;
+
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: var(--fa-paper);
+  box-sizing: border-box;
+  font-family: var(--font-body, 'Inter', ui-sans-serif, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+.fa-page *,
+.fa-page *::before,
+.fa-page *::after {
+  box-sizing: border-box;
+}
+
+.fa-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--fa-surface);
+  border-radius: 20px;
+  padding: 44px 36px;
+  box-shadow: 0 1px 2px rgba(30, 28, 25, 0.04), 0 16px 40px rgba(30, 28, 25, 0.06);
+}
+
+/* ---------- Brand mark: inline SVG, crisp at any size/density ---------- */
+
+.fa-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.fa-brand svg {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: var(--fa-accent);
+}
+
+.fa-brand span {
+  font-family: var(--fa-font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--fa-ink);
+  letter-spacing: 0.01em;
+}
+
+.fa-title {
+  margin: 0 0 6px;
+  font-family: var(--fa-font-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: var(--fa-ink);
+  line-height: 1.25;
+}
+
+.fa-subtitle {
+  margin: 0 0 28px;
+  font-size: 0.92rem;
+  color: var(--fa-ink-soft);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+/* ---------- Tabs: plain text + underline, not filled pills ---------- */
+
+.fa-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--fa-line);
+  margin-bottom: 24px;
+}
+
+.fa-tab {
+  border: none;
+  background: transparent;
+  padding: 0 0 10px;
+  margin-bottom: -1px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--fa-ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.fa-tab.is-active {
+  color: var(--fa-ink);
+  font-weight: 600;
+  border-bottom-color: var(--fa-accent);
+}
+
+.fa-tab:hover:not(.is-active) {
+  color: var(--fa-ink);
+}
+
+/* ---------- Fields: underline style, no boxed borders ---------- */
+
+.fa-field {
+  margin-bottom: 22px;
+}
+
+.fa-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--fa-ink-soft);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fa-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-bottom: 1.5px solid var(--fa-line);
+  transition: border-color 0.15s ease;
+}
+
+.fa-input-wrap:focus-within {
+  border-bottom-color: var(--fa-accent);
+  border-bottom-width: 2px;
+}
+
+.fa-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 2px 10px;
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--fa-ink);
+  outline: none;
+}
+
+.fa-input-wrap input::placeholder {
+  color: #b3b0a7;
+}
+
+.fa-input-wrap input:disabled {
+  color: var(--fa-ink-soft);
+  cursor: not-allowed;
+}
+
+.fa-input-wrap input[aria-invalid='true'] {
+  color: var(--fa-error);
+}
+
+.fa-input-wrap:has(input[aria-invalid='true']) {
+  border-bottom-color: var(--fa-error);
+}
+
+.fa-toggle-visibility {
+  border: none;
+  background: transparent;
+  color: var(--fa-ink-soft);
+  cursor: pointer;
+  padding: 6px;
+  margin-right: -6px;
+  display: flex;
+  flex: none;
+  border-radius: 6px;
+}
+
+.fa-toggle-visibility:hover {
+  color: var(--fa-ink);
+}
+
+.fa-toggle-visibility:focus-visible,
+.fa-tab:focus-visible,
+.fa-submit:focus-visible,
+.fa-secondary:focus-visible,
+.fa-ghost-link:focus-visible,
+.fa-links button:focus-visible {
+  outline: 2px solid var(--fa-accent);
+  outline-offset: 2px;
+}
+
+.fa-error {
+  display: block;
+  margin-top: 7px;
+  font-size: 0.8rem;
+  color: var(--fa-error);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.fa-hint {
+  display: block;
+  margin-top: 7px;
+  font-size: 0.8rem;
+  color: var(--fa-ink-soft);
+  line-height: 1.5;
+}
+
+.fa-success {
+  display: block;
+  margin-top: 7px;
+  font-size: 0.82rem;
+  color: var(--fa-accent);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* ---------- Alerts: flat tint, no border box ---------- */
+
+.fa-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--fa-error-soft);
+  color: var(--fa-error);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  margin-bottom: 22px;
+  word-break: break-word;
+}
+
+.fa-banner i {
+  margin-top: 2px;
+  flex: none;
+}
+
+.fa-banner.is-success {
+  background: var(--fa-accent-soft);
+  color: var(--fa-accent);
+}
+
+/* ---------- Buttons ---------- */
+
+.fa-submit {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--fa-ink);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.fa-submit:hover:not(:disabled) {
+  background: var(--fa-accent);
+}
+
+.fa-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fa-submit .fa-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: fa-spin 0.7s linear infinite;
+  flex: none;
+}
+
+@keyframes fa-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fa-secondary {
+  width: 100%;
+  border: 1px solid var(--fa-line);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: transparent;
+  color: var(--fa-ink);
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.fa-secondary:hover:not(:disabled) {
+  border-color: var(--fa-ink-soft);
+  background: var(--fa-paper);
+}
+
+.fa-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- Links / footer rows ---------- */
+
+.fa-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 22px;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--fa-ink-soft);
+}
+
+.fa-links a,
+.fa-links button {
+  border: none;
+  background: transparent;
+  color: var(--fa-ink);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fa-links a:hover,
+.fa-links button:hover {
+  color: var(--fa-accent);
+}
+
+.fa-ghost-link {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 0.82rem;
+  color: var(--fa-ink-soft);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  padding: 4px;
+}
+
+.fa-ghost-link:hover {
+  color: var(--fa-ink);
+}
+
+.fa-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 4px;
+  color: var(--fa-ink-soft);
+  font-size: 0.78rem;
+}
+
+.fa-divider::before,
+.fa-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--fa-line);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 420px) {
+  .fa-page {
+    padding: 24px 16px;
+    align-items: flex-start;
+  }
+
+  .fa-card {
+    padding: 32px 22px;
+    border-radius: 16px;
+    margin-top: 16px;
+  }
+
+  .fa-title {
+    font-size: 1.4rem;
+  }
+
+  .fa-tabs {
+    gap: 18px;
+  }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .fa-submit .fa-spinner {
+    animation-duration: 1.4s;
+  }
+
+  .fa-input-wrap,
+  .fa-tab,
+  .fa-submit,
+  .fa-secondary {
+    transition: none;
+  }
+}
