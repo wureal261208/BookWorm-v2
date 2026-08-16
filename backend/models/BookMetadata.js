@@ -12,7 +12,7 @@ const BookMetadataSchema = new mongoose.Schema(
     type: { type: String, default: '' }, // "Type"
     issued: { type: String, default: '' }, // "Issued"
     title: { type: String, default: '' }, // "Title"
-    language: { type: String, default: '' }, // "Language"
+    bookLanguage: { type: String, default: '' }, // "Language" (renamed from "language" - MongoDB reserves that field name for text-index language overrides, and Gutenberg's ISO codes like "la" aren't in Mongo's supported language list)
     locc: { type: String, default: '' }, // "LoCC"
     bookshelves: { type: String, default: '' }, // "Bookshelves"
     authors: { type: String, default: '' }, // "Authors"

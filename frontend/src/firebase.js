@@ -1,19 +1,10 @@
-import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-
-// Firebase's client-side web config (apiKey, authDomain, etc.) is not a
-// secret the way a server credential is - it's meant to ship in the bundle.
-// It's still kept in env vars here for convenience when swapping projects
-// (e.g. dev vs prod) without touching code.
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-}
-
-export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+// This file used to hold its own Firebase config that read from
+// import.meta.env.VITE_FIREBASE_* env vars - but the project never had a
+// `.env` file, so `apiKey` was always undefined and any code importing from
+// here crashed with `auth/invalid-api-key`.
+//
+// The one working, correct config lives in
+// `./features/auth-firebase/firebaseConfig.js` (already used by Login,
+// Register, and ForgotPassword). Re-exporting from there instead of keeping
+// a second copy means both configs can no longer drift apart.
+export { app, auth } from './features/auth-firebase/firebaseConfig'

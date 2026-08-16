@@ -251,8 +251,8 @@ function AdminPage({
     setCatalogLoading(true)
     setCatalogError('')
     try {
-      const data = await apiFetch(`/api/books/catalog-search?q=${encodeURIComponent(catalogQuery.trim())}`)
-      setCatalogResults(data.books || [])
+      const data = await apiFetch(`/api/book-metadata?q=${encodeURIComponent(catalogQuery.trim())}&limit=8`)
+      setCatalogResults(data.results || [])
     } catch (error) {
       setCatalogError(error.message)
     } finally {
@@ -260,19 +260,26 @@ function AdminPage({
     }
   }
 
-  function importCatalogBook(book) {
+  // `entry` is a raw book_metadata document (see backend/models/BookMetadata.js).
+  // Note the Gutenberg catalog only carries bibliographic fields - it has no
+  // plot description, so `description` is intentionally left for staff to write.
+  function importCatalogBook(entry) {
+    const guessedCover = entry.etextNumber
+      ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg`
+      : ''
+
     setAdminBook({
       ...adminBook,
-      title: book.title || adminBook.title,
-      author: book.author || adminBook.author,
-      category: book.category || adminBook.category,
-      subjects: book.subjects?.length ? book.subjects.join(', ') : adminBook.subjects,
-      description: book.description || adminBook.description,
-      cover: book.cover || adminBook.cover,
-      readerUrl: book.readerUrl || adminBook.readerUrl,
-      language: 'en',
+      title: entry.title || adminBook.title,
+      author: entry.authors || adminBook.author,
+      subjects: entry.subjects || adminBook.subjects,
+      cover: adminBook.cover || guessedCover,
+      readerUrl: entry.readOnlineUrl || entry.plainTextUtf8Url || adminBook.readerUrl,
+      language: (entry.bookLanguage || 'en').toLowerCase(),
       access: bookAccess,
+      sourceEtextNumber: entry.etextNumber ?? null,
     })
+    setCatalogError('')
   }
 
   return (
@@ -404,14 +411,19 @@ function AdminPage({
                 </button>
               </form>
               {catalogError && <p className="settings-error">{catalogError}</p>}
+              {adminBook.sourceEtextNumber && (
+                <p className="form-note">
+                  <i className="bi bi-link-45deg" /> This form is filled from Gutenberg #{adminBook.sourceEtextNumber}. Cover is a guess from the standard Gutenberg URL - check it loaded before pushing.
+                </p>
+              )}
               {catalogResults.length > 0 && (
                 <section className="admin-table staff-table">
-                  {catalogResults.map((book) => (
-                    <div className="table-row" key={book._id}>
-                      <span>{book.title}</span>
-                      <small>{book.author} - Gutenberg #{book.gutenbergId || 'n/a'}</small>
+                  {catalogResults.map((entry) => (
+                    <div className="table-row" key={entry.etextNumber}>
+                      <span>{entry.title || 'Untitled'}</span>
+                      <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
                       <div className="admin-row-actions">
-                        <button className="ghost-button" onClick={() => importCatalogBook(book)} type="button">
+                        <button className="ghost-button" onClick={() => importCatalogBook(entry)} type="button">
                           Use this book
                         </button>
                       </div>

@@ -27,6 +27,24 @@ const searchBookMetadata = asyncHandler(async (req, res) => {
   });
 });
 
+// @route GET /api/book-metadata/batch?ids=84,1342,11
+// @desc  Look up many entries at once by Etext Number, e.g. to enrich the
+//        app's hardcoded static book list (frontend/src/data/bookData.js),
+//        whose ids already are Gutenberg etext numbers.
+const getBookMetadataBatch = asyncHandler(async (req, res) => {
+  const ids = String(req.query.ids || '')
+    .split(',')
+    .map((id) => Number(id.trim()))
+    .filter((id) => Number.isFinite(id));
+
+  if (!ids.length) {
+    return success(res, 200, 'No ids provided.', { results: [] });
+  }
+
+  const results = await BookMetadata.find({ etextNumber: { $in: ids } });
+  return success(res, 200, 'Book metadata batch retrieved successfully.', { results });
+});
+
 // @route GET /api/book-metadata/:etextNumber
 const getBookMetadata = asyncHandler(async (req, res) => {
   const entry = await BookMetadata.findOne({ etextNumber: Number(req.params.etextNumber) });
@@ -38,4 +56,4 @@ const getBookMetadata = asyncHandler(async (req, res) => {
   return success(res, 200, 'Book metadata retrieved successfully.', { entry });
 });
 
-module.exports = { searchBookMetadata, getBookMetadata };
+module.exports = { searchBookMetadata, getBookMetadata, getBookMetadataBatch };

@@ -22,6 +22,10 @@ const BookSchema = new mongoose.Schema(
     availableCopies: { type: Number, default: 1, min: 0 },
     // Staff member (admin/manager/employee) who pushed this book.
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // Links this Book back to its BookMetadata entry (book_metadata.etextNumber)
+    // when it was pushed via "Import from catalog" or manually tagged to a
+    // Gutenberg record. Optional - manually-typed books can leave this null.
+    sourceEtextNumber: { type: Number, default: null, index: true },
   },
   { timestamps: true }
 );

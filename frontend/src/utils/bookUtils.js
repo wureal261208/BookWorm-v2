@@ -1,5 +1,5 @@
 export function getCover(book) {
-  return book.formats?.['image/jpeg'] || book.cover || 'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
+  return book.formats?.['image/jpeg'] || book.cover || book.coverUrl || 'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
 }
 
 export function getAuthor(book) {

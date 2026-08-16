@@ -12,13 +12,11 @@ import AuthPage from './components/auth/AuthPage'
 import AppShell from './components/layout/AppShell'
 import { apiFetch, publicApiFetch } from './utils/apiClient'
 import {
-  fallbackBooks,
   hasAccess,
-  mergeBookCatalogs,
   normalizeRole,
 } from './data/bookData'
 import { NavigationProvider } from './context/NavigationContext'
-import { auth } from './firebase'
+import { auth } from './features/auth-firebase/firebaseConfig'
 import { getAuthor, getCategory, getReaderUrl } from './utils/bookUtils'
 import { buildRentalRecord, formatDeliveryDate, formatRentalExpiry, getRentalStatus } from './utils/rentalUtils'
 import {
@@ -62,6 +60,10 @@ const emptyAdminBook = {
   chapterText: '',
   chaptersDraft: [{ title: 'Chapter 1', pages: '10', content: '' }],
   access: 'read',
+  // Set when the form was filled from the Gutenberg catalog (book_metadata);
+  // null for a manually typed book. Sent to the backend so the pushed Book
+  // stays linked to its catalog entry.
+  sourceEtextNumber: null,
 }
 const guestAccount = { id: 'guest', name: 'None Account', email: 'guest@bookworm.local', role: 'guest' }
 const SEARCH_HISTORY_LIMIT = 8
@@ -100,7 +102,7 @@ function App() {
   const [toast, setToast] = useState(null)
   const [pageState, dispatchPage] = useReducer(pageReducer, pageInitialState)
   const routeTimerRef = useRef(null)
-  const [books, setBooks] = useState(fallbackBooks)
+  const [books, setBooks] = useState([])
   const [, setBooksLoading] = useState(false)
   const [managedBooks, setManagedBooks] = useState([])
   const [managedBooksError, setManagedBooksError] = useState('')
@@ -545,10 +547,10 @@ function App() {
         const combinedBooks = pages.flat()
 
         if (!ignore) {
-          setBooks(mergeBookCatalogs(combinedBooks, fallbackBooks))
+          setBooks(combinedBooks)
         }
       } catch {
-        if (!ignore) setBooks(fallbackBooks)
+        if (!ignore) setBooks([])
       } finally {
         if (!ignore) setBooksLoading(false)
       }
@@ -1359,6 +1361,19 @@ function createAdminBookRecord(adminBook) {
       ...(cover ? { 'image/jpeg': cover } : {}),
       ...(readerUrl ? { [getReaderFormatKey(readerUrl)]: readerUrl } : {}),
     },
+    // Fields the real backend (backend/controllers/bookController.js) actually
+    // reads off req.body - it only picks these exact keys, so the Gutendex-shaped
+    // fields above (cover/chapterList/authors[]/formats) are cosmetic only and
+    // get silently dropped by Mongo without these.
+    coverUrl: cover,
+    chapters: chapterList.map((chapter) => ({
+      order: chapter.number,
+      title: chapter.title,
+      content: chapter.content,
+    })),
+    totalCopies: getPositiveInteger(adminBook.totalCopies) || 1,
+    isAvailableToRent: adminBook.access === 'rent',
+    sourceEtextNumber: adminBook.sourceEtextNumber || null,
   }
 }
 

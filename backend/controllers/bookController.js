@@ -5,7 +5,7 @@ const { success, fail } = require('../utils/response');
 // @route POST /api/books
 // @desc  Admin/manager/employee push a new book.
 const createBook = asyncHandler(async (req, res) => {
-  const { title, author, description, category, coverUrl, chapters, totalCopies, isAvailableToRent } = req.body;
+  const { title, author, description, category, coverUrl, chapters, totalCopies, isAvailableToRent, sourceEtextNumber } = req.body;
 
   if (!title || !author) {
     return fail(res, 400, 'Title and author are required.');
@@ -32,6 +32,7 @@ const createBook = asyncHandler(async (req, res) => {
     totalCopies: copies,
     availableCopies: copies,
     createdBy: req.user._id,
+    sourceEtextNumber: Number.isFinite(Number(sourceEtextNumber)) ? Number(sourceEtextNumber) : null,
   });
 
   return success(res, 201, 'Book pushed successfully.', { book });
@@ -94,6 +95,7 @@ const updateBook = asyncHandler(async (req, res) => {
     'isAvailableToRent',
     'totalCopies',
     'availableCopies',
+    'sourceEtextNumber',
   ];
 
   allowedFields.forEach((field) => {
