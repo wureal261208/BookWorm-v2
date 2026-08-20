@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getAuthor, getCategory, getDescription, getReaderUrl } from '../../utils/bookUtils'
 import { getBookChapters, getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
@@ -29,18 +29,11 @@ const accessChoices = [
   { value: 'rent', label: 'To Rent - needs a rental' },
 ]
 
-const usageTypeChoices = [
-  { value: 'none', label: 'None' },
-  { value: 'read', label: 'Read' },
-  { value: 'rent', label: 'Rent' },
-  { value: 'both', label: 'Both' },
-]
-
 const adminBookFilters = [
   { id: 'all', label: 'All books' },
-  { id: 'reader-ready', label: 'Ready for Reader' },
-  { id: 'missing-cover', label: 'Missing Cover' },
-  { id: 'missing-chapters', label: 'Missing Chapters' },
+  { id: 'draft', label: 'Draft' },
+  { id: 'published', label: 'Published' },
+  { id: 'incomplete', label: 'Missing info' },
 ]
 
 function AdminPage({
@@ -56,7 +49,9 @@ function AdminPage({
   setAdminBook,
   staff,
   users,
-  onToggleUserLock,
+  onBanUser,
+  onUnbanUser,
+  onRefreshStaff,
   onDecideRentalRequest,
   rentalRequests = [],
 }) {
@@ -65,13 +60,13 @@ function AdminPage({
   const isManager = role === 'manager'
   const isEmployee = role === 'employee'
 
-  const myEmail = (account?.email || '').toLowerCase()
-  const myStaffRecord = staff.find((item) => (item.email || '').toLowerCase() === myEmail)
+  // staff[].email is masked by the backend (see maskEmail.js) - can't match
+  // by it. account.id is the trusted Mongo _id from resolveTrustedProfile.
+  const myStaffRecord = staff.find((item) => item.id === account?.id)
   const mySection = myStaffRecord?.section === 'rent' ? 'rent' : 'read'
 
   const canPushBooks = isAdmin || isEmployee
   const canManageUsers = isAdmin || isManager
-  const canSyncCatalog = isAdmin
   const canReviewRequests = isAdmin || isManager
   const availableBookSections = isAdmin ? ['read', 'rent'] : isEmployee ? [mySection] : []
 
@@ -79,7 +74,6 @@ function AdminPage({
     canPushBooks && 'book',
     canManageUsers && 'team',
     canReviewRequests && 'requests',
-    canSyncCatalog && 'sync',
   ].filter(Boolean)
 
   const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'book')
@@ -87,15 +81,17 @@ function AdminPage({
   const [userTab, setUserTab] = useState(isAdmin ? 'manager' : 'employee')
   const [bookFilter, setBookFilter] = useState('all')
   const [showPreview, setShowPreview] = useState(false)
-  const [catalogQuery, setCatalogQuery] = useState('')
-  const [catalogResults, setCatalogResults] = useState([])
-  const [catalogLoading, setCatalogLoading] = useState(false)
-  const [catalogError, setCatalogError] = useState('')
+  const [showBookModal, setShowBookModal] = useState(false)
+  const [banTarget, setBanTarget] = useState(null)
+  const [banBusyId, setBanBusyId] = useState('')
   const [managerPrefill, setManagerPrefill] = useState({ name: '', email: '' })
   const [employeePrefill, setEmployeePrefill] = useState({ name: '', email: '' })
 
   const sectionBooks = useMemo(
-    () => managedBooks.filter((book) => (book.access === 'rent' ? 'rent' : 'read') === bookAccess),
+    () =>
+      managedBooks
+        .filter((book) => (book.access === 'rent' ? 'rent' : 'read') === bookAccess)
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
     [managedBooks, bookAccess],
   )
   const publishedBooks = sectionBooks.filter((book) => (book.status || 'published') === 'published').length
@@ -105,18 +101,18 @@ function AdminPage({
   const currentWarnings = getFormWarnings(adminBook)
   const previewBook = useMemo(() => createPreviewBook(adminBook), [adminBook])
   const filteredManagedBooks = sectionBooks.filter((book) => {
-    if (bookFilter === 'reader-ready') return isReaderReady(book)
-    if (bookFilter === 'missing-cover') return !hasCover(book)
-    if (bookFilter === 'missing-chapters') return !hasChapters(book)
+    if (bookFilter === 'draft') return book.status === 'draft'
+    if (bookFilter === 'published') return (book.status || 'published') === 'published'
+    if (bookFilter === 'incomplete') return getBookWarnings(book).length > 0
     return true
   })
 
-  const managerAccounts = staff.filter((item) => item.role === 'manager')
+  const managerAccounts = staff.filter((item) => item.role === 'manager' && !item.isResigned)
   const pendingRequests = rentalRequests.filter((item) => item.status === 'pending')
   const decidedRequests = rentalRequests.filter((item) => item.status !== 'pending').slice(0, 20)
-  const employeeAccounts = staff.filter((item) => item.role === 'employee')
+  const employeeAccounts = staff.filter((item) => item.role === 'employee' && !item.isResigned)
   const customerAccounts = users.filter((item) => normalizeRole(item.role) === 'customer')
-  const lockedCustomers = customerAccounts.filter((item) => item.locked).length
+  const lockedCustomers = customerAccounts.filter((item) => item.isRestricted).length
   const userTabsAvailable = isAdmin ? ['manager', 'employee', 'customer'] : ['employee', 'customer']
   const userTabLabels = { manager: 'Managers', employee: 'Employees', customer: 'Customers' }
 
@@ -172,13 +168,10 @@ function AdminPage({
   const [staffActionBusy, setStaffActionBusy] = useState('')
   const [newStaffCredential, setNewStaffCredential] = useState(null)
 
-  // Every staff mutation now goes through the backend (which checks the
-  // caller's real role from MongoDB, not the client-readable Firestore
-  // copy) and the backend mirrors the result back into Firestore itself.
-  // We deliberately do NOT touch local `staff` state here - the realtime
-  // onSnapshot listener will pick up the backend's write, and the
-  // Firestore rule for bookwormData/global now rejects any client write
-  // that changes the `staff` field directly.
+  // Every staff mutation goes through the backend (which checks the
+  // caller's real role from MongoDB) and returns the updated record.
+  // onRefreshStaff() re-fetches GET /api/users afterwards so the table
+  // reflects the change - there's no realtime listener anymore.
   function createStaffAccount(staffRole) {
     return async function submit(event) {
       event.preventDefault()
@@ -196,6 +189,7 @@ function AdminPage({
         if (data.temporaryPassword) {
           setNewStaffCredential({ email, password: data.temporaryPassword })
         }
+        await onRefreshStaff()
         event.currentTarget.reset()
       } catch (error) {
         setStaffActionError(error.message)
@@ -205,13 +199,16 @@ function AdminPage({
     }
   }
 
-  async function updateEmployeeSection(email, section) {
-    const member = staff.find((item) => item.email === email)
-    if (!member) return
+  async function updateEmployeeSection(member, section) {
+    if (!member?.id) return
     setStaffActionError('')
-    setStaffActionBusy(email)
+    setStaffActionBusy(member.email)
     try {
-      await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { name: member.name, email, role: 'employee', section } })
+      // Pass id, not email - the staff list's email is masked for display
+      // (see maskEmail.js) and can't be matched back to a real account by
+      // string on the backend.
+      await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { id: member.id, name: member.name, role: 'employee', section } })
+      await onRefreshStaff()
     } catch (error) {
       setStaffActionError(error.message)
     } finally {
@@ -228,6 +225,7 @@ function AdminPage({
     setStaffActionBusy(member.email)
     try {
       await apiFetch(`/api/users/${member.id}`, { method: 'DELETE' })
+      await onRefreshStaff()
     } catch (error) {
       setStaffActionError(error.message)
     } finally {
@@ -235,51 +233,43 @@ function AdminPage({
     }
   }
 
-  function handleBookSubmit(event) {
+  async function handleBookSubmit(event) {
     if (currentErrors.length) {
       event.preventDefault()
       return
     }
 
-    addManagedBook(event)
+    const saved = await addManagedBook(event)
+    if (saved) setShowBookModal(false)
   }
 
-  async function searchCatalog(event) {
-    event.preventDefault()
-    if (!catalogQuery.trim()) return
-
-    setCatalogLoading(true)
-    setCatalogError('')
-    try {
-      const data = await apiFetch(`/api/book-metadata?q=${encodeURIComponent(catalogQuery.trim())}&limit=8`)
-      setCatalogResults(data.results || [])
-    } catch (error) {
-      setCatalogError(error.message)
-    } finally {
-      setCatalogLoading(false)
-    }
+  function openAddBookModal() {
+    resetAdminBook()
+    setShowBookModal(true)
   }
 
-  // `entry` is a raw book_metadata document (see backend/models/BookMetadata.js).
-  // Note the Gutenberg catalog only carries bibliographic fields - it has no
-  // plot description, so `description` is intentionally left for staff to write.
-  function importCatalogBook(entry) {
-    const guessedCover = entry.etextNumber
-      ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg`
-      : ''
+  function openEditBookModal(book) {
+    editManagedBook(book)
+    setShowBookModal(true)
+  }
 
-    setAdminBook({
-      ...adminBook,
-      title: entry.title || adminBook.title,
-      author: entry.authors || adminBook.author,
-      subjects: entry.subjects || adminBook.subjects,
-      cover: adminBook.cover || guessedCover,
-      readerUrl: entry.readOnlineUrl || entry.plainTextUtf8Url || adminBook.readerUrl,
-      language: (entry.bookLanguage || 'en').toLowerCase(),
-      access: bookAccess,
-      sourceEtextNumber: entry.etextNumber ?? null,
-    })
-    setCatalogError('')
+  function closeBookModal() {
+    setShowBookModal(false)
+    resetAdminBook()
+  }
+
+  async function confirmBan(days, reason) {
+    if (!banTarget) return
+    setBanBusyId(banTarget.id)
+    const ok = await onBanUser(banTarget.id, { days, reason })
+    setBanBusyId('')
+    if (ok) setBanTarget(null)
+  }
+
+  async function handleUnban(user) {
+    setBanBusyId(user.id)
+    await onUnbanUser(user.id)
+    setBanBusyId('')
   }
 
   return (
@@ -323,12 +313,6 @@ function AdminPage({
                 {pendingRequests.length > 0 && <span className="tab-count-badge">{pendingRequests.length}</span>}
               </button>
             )}
-            {availableSections.includes('sync') && (
-              <button className={activeAdminSection === 'sync' ? 'active' : ''} onClick={() => setActiveAdminSection('sync')} type="button">
-                <i className="bi bi-arrow-repeat" />
-                Catalog Sync
-              </button>
-            )}
           </div>
         ) : (
           <div className="admin-section-tabs" style={{ gridTemplateColumns: '1fr' }}>
@@ -349,20 +333,21 @@ function AdminPage({
             <article><strong>{readerReadyBooks}</strong><span>Reader ready</span></article>
           </div>
 
-          <section className="admin-workspace">
+          <section className="admin-workspace admin-book-toolbar">
             <div className="section-heading">
               <div>
                 <p className="mono-eyebrow">Push Book</p>
-                <h2>{adminBook.id ? 'Edit book' : 'Push new book'}</h2>
+                <h2>{bookAccess === 'read' ? 'To Read shelf' : 'To Rent shelf'}</h2>
               </div>
               <span>{bookAccess === 'read' ? 'To Read - open to every reader, no rental needed' : 'To Rent - readers unlock this with a rental'}</span>
             </div>
-            {managedBooksError && (
+            {managedBooksError && !showBookModal && (
               <p className="admin-validation-error"><i className="bi bi-x-circle" /> {managedBooksError}</p>
             )}
 
-            <div className="admin-choice-grid admin-choice-grid-2" role="tablist" aria-label="Push Book shelf">
-              {availableBookSections.length === 2 ? accessChoices.map((choice) => (
+            <div className="admin-book-toolbar-row">
+              <div className="admin-choice-grid admin-choice-grid-2" role="tablist" aria-label="Push Book shelf">
+                {availableBookSections.length === 2 ? accessChoices.map((choice) => (
                 <button
                   className={bookAccess === choice.value ? 'active' : ''}
                   key={choice.value}
@@ -381,244 +366,17 @@ function AdminPage({
                   {choice.label}
                 </button>
               ))}
+              </div>
+              <button className="primary-button admin-add-book-button" onClick={openAddBookModal} type="button">
+                <i className="bi bi-plus-lg" />
+                Add new book
+              </button>
             </div>
             {isEmployee && (
               <p className="form-note">
                 You only manage the <strong>{mySection === 'read' ? 'To Read' : 'To Rent'}</strong> shelf. Ask a manager or admin to move you to the other one.
               </p>
             )}
-
-            <div className="admin-import-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="mono-eyebrow">MongoDB catalog - 75k+ books</p>
-                  <h2>Import instead of typing</h2>
-                </div>
-                <span>Search your synced Gutenberg catalog and prefill the form below in one click.</span>
-              </div>
-              <form className="admin-form compact-form" onSubmit={searchCatalog}>
-                <label className="wide-field">
-                  Search by title
-                  <input
-                    onChange={(event) => setCatalogQuery(event.target.value)}
-                    placeholder="Pride and Prejudice"
-                    value={catalogQuery}
-                  />
-                </label>
-                <button className="primary-button" disabled={catalogLoading} type="submit">
-                  <i className="bi bi-search" />
-                  {catalogLoading ? 'Searching...' : 'Search catalog'}
-                </button>
-              </form>
-              {catalogError && <p className="settings-error">{catalogError}</p>}
-              {adminBook.sourceEtextNumber && (
-                <p className="form-note">
-                  <i className="bi bi-link-45deg" /> This form is filled from Gutenberg #{adminBook.sourceEtextNumber}. Cover is a guess from the standard Gutenberg URL - check it loaded before pushing.
-                </p>
-              )}
-              {catalogResults.length > 0 && (
-                <section className="admin-table staff-table">
-                  {catalogResults.map((entry) => (
-                    <div className="table-row" key={entry.etextNumber}>
-                      <span>{entry.title || 'Untitled'}</span>
-                      <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
-                      <div className="admin-row-actions">
-                        <button className="ghost-button" onClick={() => importCatalogBook(entry)} type="button">
-                          Use this book
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </section>
-              )}
-            </div>
-
-            <div className="admin-validation-panel" aria-live="polite">
-              <strong>{currentErrors.length ? 'Cannot push yet' : currentWarnings.length ? 'Ready with notes' : 'Ready checklist'}</strong>
-              {currentErrors.length ? (
-                currentErrors.map((error) => (
-                  <span className="admin-validation-error" key={error.id}>
-                    <i className="bi bi-x-circle" />
-                    {error.message}
-                  </span>
-                ))
-              ) : currentWarnings.length ? (
-                currentWarnings.map((warning) => (
-                  <span className="admin-validation-warning" key={warning.id}>
-                    <i className="bi bi-exclamation-circle" />
-                    {warning.message}
-                  </span>
-                ))
-              ) : (
-                <span>
-                  <i className="bi bi-check-circle" />
-                  This book has the key Detail and Reader fields.
-                </span>
-              )}
-            </div>
-
-            <form className="admin-form admin-book-form" onSubmit={handleBookSubmit}>
-              <fieldset>
-                <legend>Detail information</legend>
-                {identityFields.map((field) => (
-                  <label key={field.name}>
-                    {field.label}
-                    <input
-                      type={field.type || 'text'}
-                      value={adminBook[field.name]}
-                      onChange={(event) => updateAdminBook(field.name, event.target.value)}
-                      placeholder={field.placeholder}
-                    />
-                  </label>
-                ))}
-                <label>
-                  Status
-                  <select value={adminBook.status} onChange={(event) => updateAdminBook('status', event.target.value)}>
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="hidden">Hidden</option>
-                  </select>
-                </label>
-                <div className="admin-choice-field">
-                  <span>Language</span>
-                  <div className="admin-choice-grid">
-                    {languageChoices.map((choice) => (
-                      <button
-                        className={adminBook.language === choice.value ? 'active' : ''}
-                        disabled={choice.disabled}
-                        key={choice.value}
-                        onClick={() => updateAdminBook('language', choice.value)}
-                        type="button"
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <label className="wide-field">
-                  Description
-                  <textarea
-                    value={adminBook.description}
-                    onChange={(event) => updateAdminBook('description', event.target.value)}
-                    placeholder="Short book description shown on the detail page."
-                  />
-                </label>
-                <label className="wide-field">
-                  Subjects
-                  <input
-                    value={adminBook.subjects}
-                    onChange={(event) => updateAdminBook('subjects', event.target.value)}
-                    placeholder="Adventure, Mystery, Classic"
-                  />
-                </label>
-              </fieldset>
-
-              <fieldset>
-                <legend>Reader setup</legend>
-                <div className="admin-cover-picker wide-field">
-                  <img
-                    src={getAdminCover(adminBook)}
-                    alt=""
-                    onError={(event) => {
-                      event.currentTarget.src = NONE_COVER_URL
-                    }}
-                  />
-                  <div>
-                    <label>
-                      Cover URL
-                      <input
-                        value={adminBook.cover}
-                        onChange={(event) => updateAdminBook('cover', event.target.value)}
-                        placeholder="https://..."
-                      />
-                    </label>
-                    <label className="file-picker admin-cover-upload">
-                      <i className="bi bi-image" />
-                      Upload cover image
-                      <input accept="image/*" onChange={updateCoverFile} type="file" />
-                    </label>
-                  </div>
-                </div>
-                {mediaFields.map((field) => (
-                  <label key={field.name}>
-                    {field.label}
-                    <input
-                      type={field.type || 'text'}
-                      value={adminBook[field.name]}
-                      onChange={(event) => updateAdminBook(field.name, event.target.value)}
-                      placeholder={field.placeholder}
-                    />
-                  </label>
-                ))}
-                <label className="wide-field">
-                  Reader text
-                  <textarea
-                    value={adminBook.readerText}
-                    onChange={(event) => updateAdminBook('readerText', event.target.value)}
-                    placeholder="Optional full plain book text. Chapter content below is preferred."
-                  />
-                </label>
-              </fieldset>
-
-              <fieldset className="admin-chapter-fieldset">
-                <legend>Chapters</legend>
-                <div className="admin-chapter-list">
-                  {(adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : [createEmptyChapter(0)]).map((chapter, index) => (
-                    <article className="admin-chapter-editor" key={`${index}-${chapter.title}`}>
-                      <div className="admin-chapter-heading">
-                        <strong>Chapter {index + 1}</strong>
-                        <button className="ghost-button" onClick={() => removeChapter(index)} type="button">Remove</button>
-                      </div>
-                      <label>
-                        Title
-                        <input
-                          value={chapter.title}
-                          onChange={(event) => updateChapter(index, 'title', event.target.value)}
-                          placeholder={`Chapter ${index + 1}`}
-                        />
-                      </label>
-                      <label>
-                        Pages
-                        <input
-                          min="1"
-                          type="number"
-                          value={chapter.pages}
-                          onChange={(event) => updateChapter(index, 'pages', event.target.value)}
-                        />
-                      </label>
-                      <label className="wide-field">
-                        Content
-                        <textarea
-                          value={chapter.content}
-                          onChange={(event) => updateChapter(index, 'content', event.target.value)}
-                          placeholder="Paste this chapter content..."
-                        />
-                      </label>
-                    </article>
-                  ))}
-                </div>
-                <button className="ghost-button admin-add-chapter" onClick={addChapter} type="button">
-                  <i className="bi bi-plus-circle" />
-                  Add chapter
-                </button>
-              </fieldset>
-
-              <div className="admin-form-actions">
-                <button className="ghost-button" onClick={() => setShowPreview(true)} type="button">
-                  <i className="bi bi-eye" />
-                  Preview as Detail
-                </button>
-                {adminBook.id && (
-                  <button className="ghost-button" onClick={resetAdminBook} type="button">
-                    Cancel edit
-                  </button>
-                )}
-                <button className="primary-button" disabled={currentErrors.length > 0} type="submit">
-                  <i className="bi bi-cloud-upload" />
-                  {adminBook.id ? 'Update book' : `Push to ${bookAccess === 'read' ? 'To Read' : 'To Rent'}`}
-                </button>
-              </div>
-            </form>
 
             <div className="admin-filter-bar" aria-label="Filter admin books">
               {adminBookFilters.map((filter) => (
@@ -653,7 +411,7 @@ function AdminPage({
                         <small>{getAuthor(book)} - {getCategory(book)} - {chapters.length} chapters</small>
                         <div className="admin-row-actions">
                           {warnings.length > 0 && <strong>{warnings.length} warnings</strong>}
-                          <button className="ghost-button" onClick={() => editManagedBook(book)} type="button">Edit</button>
+                          <button className="ghost-button" onClick={() => openEditBookModal(book)} type="button">Edit</button>
                           <button className="ghost-button" onClick={() => removeManagedBook(book.id)} type="button">Remove</button>
                         </div>
                       </div>
@@ -742,7 +500,10 @@ function AdminPage({
                   {managerAccounts.length ? (
                     managerAccounts.map((member) => (
                       <div className="table-row" key={member.email}>
-                        <span>{member.name}</span>
+                        <span>
+                          {member.name}
+                          {member.displayId && <em className="admin-display-id">{member.displayId}</em>}
+                        </span>
                         <small>{maskEmail(member.email)}</small>
                         <div className="admin-row-actions">
                           <button
@@ -787,12 +548,15 @@ function AdminPage({
                   {employeeAccounts.length ? (
                     employeeAccounts.map((member) => (
                       <div className="table-row" key={member.email}>
-                        <span>{member.name}</span>
+                        <span>
+                          {member.name}
+                          {member.displayId && <em className="admin-display-id">{member.displayId}</em>}
+                        </span>
                         <small>{maskEmail(member.email)}</small>
                         <div className="admin-row-actions">
                           <select
                             disabled={staffActionBusy === member.email}
-                            onChange={(event) => updateEmployeeSection(member.email, event.target.value)}
+                            onChange={(event) => updateEmployeeSection(member, event.target.value)}
                             value={member.section === 'rent' ? 'rent' : 'read'}
                           >
                             <option value="read">To Read</option>
@@ -819,19 +583,40 @@ function AdminPage({
             {userTab === 'customer' && (
               <section className="admin-table staff-table">
                 <h2>Customer accounts</h2>
-                <p className="form-note">Customers create their own account from Login. Lock an account to flag it for review.</p>
+                <p className="form-note">Customers create their own account from Login. Ban an account to block their login, with a reason and a length of time.</p>
                 {customerAccounts.length ? (
                   customerAccounts.map((user) => (
                     <div className="table-row" key={user.email}>
-                      <span>{user.name}</span>
+                      <span>
+                        {user.name}
+                        {user.displayId && <em className="admin-display-id">{user.displayId}</em>}
+                      </span>
                       <small>{maskEmail(user.email)}</small>
                       <div className="admin-row-actions">
-                        <em className={`admin-status ${user.locked ? 'status-hidden' : 'status-published'}`}>
-                          {user.locked ? 'locked' : 'active'}
+                        <em
+                          className={`admin-status ${user.isRestricted ? 'status-hidden' : 'status-published'}`}
+                          title={
+                            user.isRestricted
+                              ? `${user.banExpiresAt ? `Until ${new Date(user.banExpiresAt).toLocaleDateString()}` : 'Permanent'} - ${user.banReason || 'No reason given'}`
+                              : undefined
+                          }
+                        >
+                          {user.isRestricted ? 'Banned' : 'Active'}
                         </em>
-                        <button className="ghost-button" onClick={() => onToggleUserLock(user.email)} type="button">
-                          {user.locked ? 'Unlock' : 'Lock'}
-                        </button>
+                        {user.isRestricted ? (
+                          <button
+                            className="ghost-button"
+                            disabled={banBusyId === user.id}
+                            onClick={() => handleUnban(user)}
+                            type="button"
+                          >
+                            {banBusyId === user.id ? 'Unbanning...' : 'Unban'}
+                          </button>
+                        ) : (
+                          <button className="ghost-button" onClick={() => setBanTarget(user)} type="button">
+                            Ban
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -848,9 +633,428 @@ function AdminPage({
         <RentalRequestsPanel decidedRequests={decidedRequests} onDecide={onDecideRentalRequest} pendingRequests={pendingRequests} />
       ) : null}
 
-      {activeAdminSection === 'sync' && canSyncCatalog ? <CatalogSyncPanel /> : null}
+      {showBookModal && (
+        <BookFormModal
+          adminBook={adminBook}
+          bookAccess={bookAccess}
+          currentErrors={currentErrors}
+          currentWarnings={currentWarnings}
+          managedBooksError={managedBooksError}
+          onClose={closeBookModal}
+          onPreview={() => setShowPreview(true)}
+          onSubmit={handleBookSubmit}
+          setAdminBook={setAdminBook}
+          updateAdminBook={updateAdminBook}
+          addChapter={addChapter}
+          removeChapter={removeChapter}
+          updateChapter={updateChapter}
+          updateCoverFile={updateCoverFile}
+        />
+      )}
 
       {showPreview && <AdminDetailPreview book={previewBook} onClose={() => setShowPreview(false)} />}
+
+      {banTarget && (
+        <BanUserModal
+          busy={banBusyId === banTarget.id}
+          onClose={() => setBanTarget(null)}
+          onConfirm={confirmBan}
+          user={banTarget}
+        />
+      )}
+    </div>
+  )
+}
+
+function BookFormModal({
+  adminBook,
+  addChapter,
+  bookAccess,
+  currentErrors,
+  currentWarnings,
+  managedBooksError,
+  onClose,
+  onPreview,
+  onSubmit,
+  removeChapter,
+  setAdminBook,
+  updateAdminBook,
+  updateChapter,
+  updateCoverFile,
+}) {
+  const isEditing = Boolean(adminBook.id)
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogResults, setCatalogResults] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogError, setCatalogError] = useState('')
+  const [publishBlockers, setPublishBlockers] = useState([])
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (currentErrors.length) return
+
+    if (adminBook.status === 'published') {
+      const missing = getPublishRequirements(adminBook)
+      if (missing.length) {
+        setPublishBlockers(missing)
+        return
+      }
+    }
+
+    setPublishBlockers([])
+    await onSubmit(event)
+  }
+
+  // Live-search the synced Gutenberg catalog as the admin types, so
+  // suggestions are the first thing they see instead of a bare form.
+  useEffect(() => {
+    const query = catalogQuery.trim()
+    if (query.length < 2) {
+      setCatalogLoading(false)
+      setCatalogResults([])
+      setCatalogError('')
+      return
+    }
+
+    setCatalogLoading(true)
+    const timeout = setTimeout(() => {
+      runCatalogSearch(query)
+    }, 350)
+
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogQuery])
+
+  async function runCatalogSearch(query) {
+    setCatalogError('')
+    try {
+      const data = await apiFetch(`/api/book-metadata?q=${encodeURIComponent(query)}&limit=6`)
+      setCatalogResults(data.results || [])
+    } catch (error) {
+      setCatalogError(error.message)
+      setCatalogResults([])
+    } finally {
+      setCatalogLoading(false)
+    }
+  }
+
+  function handleSearchSubmit(event) {
+    event.preventDefault()
+    const query = catalogQuery.trim()
+    if (query.length < 2) return
+    setCatalogLoading(true)
+    runCatalogSearch(query)
+  }
+
+  // `entry` is a raw book_metadata document (see backend/models/BookMetadata.js).
+  // Note the Gutenberg catalog only carries bibliographic fields - it has no
+  // plot description, so `description` is intentionally left for staff to write.
+  function importCatalogBook(entry) {
+    const guessedCover = entry.etextNumber
+      ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg`
+      : ''
+
+    setAdminBook({
+      ...adminBook,
+      title: entry.title || adminBook.title,
+      author: entry.authors || adminBook.author,
+      subjects: entry.subjects || adminBook.subjects,
+      cover: adminBook.cover || guessedCover,
+      readerUrl: entry.readOnlineUrl || entry.plainTextUtf8Url || adminBook.readerUrl,
+      language: (entry.bookLanguage || 'en').toLowerCase(),
+      access: bookAccess,
+      sourceEtextNumber: entry.etextNumber ?? null,
+    })
+    setCatalogQuery('')
+    setCatalogResults([])
+    setCatalogError('')
+  }
+
+  return (
+    <div className="reader-modal-backdrop admin-book-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-book-modal-title">
+      <div className="admin-book-modal">
+        <header className="admin-book-modal-header">
+          <div>
+            <p className="mono-eyebrow">{isEditing ? 'Edit book' : 'Push Book'}</p>
+            <h2 id="admin-book-modal-title">{isEditing ? (adminBook.title || 'Edit book') : 'Add a new book'}</h2>
+          </div>
+          <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+            <i className="bi bi-x-lg" />
+          </button>
+        </header>
+
+        <div className="admin-book-modal-body">
+          {managedBooksError && (
+            <p className="admin-validation-error admin-book-modal-error"><i className="bi bi-x-circle" /> {managedBooksError}</p>
+          )}
+
+          <div className="admin-search-hero">
+            <div className="admin-search-hero-label">
+              <i className="bi bi-stars" />
+              <div>
+                <strong>Find it in the Gutenberg catalog</strong>
+                <span>75k+ synced books - search and autofill the form in one click.</span>
+              </div>
+            </div>
+            <form className="admin-search-box" onSubmit={handleSearchSubmit}>
+              <i className="bi bi-search" />
+              <input
+                autoFocus
+                onChange={(event) => setCatalogQuery(event.target.value)}
+                placeholder="Search by title, e.g. Pride and Prejudice"
+                value={catalogQuery}
+              />
+              {catalogLoading && <span className="admin-search-spinner" aria-hidden="true" />}
+            </form>
+            {catalogError && <p className="settings-error">{catalogError}</p>}
+            {adminBook.sourceEtextNumber && (
+              <p className="form-note">
+                <i className="bi bi-link-45deg" /> Filled from Gutenberg #{adminBook.sourceEtextNumber}. Cover is a guess - check it loaded before pushing.
+              </p>
+            )}
+            {catalogResults.length > 0 && (
+              <ul className="admin-search-results">
+                {catalogResults.map((entry) => (
+                  <li key={entry.etextNumber}>
+                    <button className="admin-search-result" onClick={() => importCatalogBook(entry)} type="button">
+                      <img
+                        alt=""
+                        onError={(event) => {
+                          event.currentTarget.src = NONE_COVER_URL
+                        }}
+                        src={entry.etextNumber ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg` : NONE_COVER_URL}
+                      />
+                      <span>
+                        <strong>{entry.title || 'Untitled'}</strong>
+                        <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
+                      </span>
+                      <i className="bi bi-arrow-right-circle" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!catalogLoading && catalogQuery.trim().length >= 2 && catalogResults.length === 0 && !catalogError && (
+              <p className="form-note">No matches yet - keep typing, or fill the fields below by hand.</p>
+            )}
+          </div>
+
+          <div className="admin-validation-panel" aria-live="polite">
+            <strong>{currentErrors.length ? 'Cannot push yet' : currentWarnings.length ? 'Ready with notes' : 'Ready checklist'}</strong>
+            {currentErrors.length ? (
+              currentErrors.map((error) => (
+                <span className="admin-validation-error" key={error.id}>
+                  <i className="bi bi-x-circle" />
+                  {error.message}
+                </span>
+              ))
+            ) : currentWarnings.length ? (
+              currentWarnings.map((warning) => (
+                <span className="admin-validation-warning" key={warning.id}>
+                  <i className="bi bi-exclamation-circle" />
+                  {warning.message}
+                </span>
+              ))
+            ) : (
+              <span>
+                <i className="bi bi-check-circle" />
+                This book has the key Detail and Reader fields.
+              </span>
+            )}
+          </div>
+
+          <form className="admin-form admin-book-form" id="admin-book-form" onSubmit={handleSubmit}>
+            <fieldset>
+              <legend>Detail information</legend>
+              {identityFields.map((field) => (
+                <label key={field.name}>
+                  {field.label}
+                  <input
+                    type={field.type || 'text'}
+                    value={adminBook[field.name]}
+                    onChange={(event) => updateAdminBook(field.name, event.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                </label>
+              ))}
+              <label>
+                Status
+                <select value={adminBook.status} onChange={(event) => updateAdminBook('status', event.target.value)}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </label>
+              <div className="admin-choice-field">
+                <span>Language</span>
+                <div className="admin-choice-grid">
+                  {languageChoices.map((choice) => (
+                    <button
+                      className={adminBook.language === choice.value ? 'active' : ''}
+                      disabled={choice.disabled}
+                      key={choice.value}
+                      onClick={() => updateAdminBook('language', choice.value)}
+                      type="button"
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="wide-field">
+                Description
+                <textarea
+                  value={adminBook.description}
+                  onChange={(event) => updateAdminBook('description', event.target.value)}
+                  placeholder="Short book description shown on the detail page."
+                />
+              </label>
+              <label className="wide-field">
+                Subjects
+                <input
+                  value={adminBook.subjects}
+                  onChange={(event) => updateAdminBook('subjects', event.target.value)}
+                  placeholder="Adventure, Mystery, Classic"
+                />
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Reader setup</legend>
+              <div className="admin-cover-picker wide-field">
+                <img
+                  src={getAdminCover(adminBook)}
+                  alt=""
+                  onError={(event) => {
+                    event.currentTarget.src = NONE_COVER_URL
+                  }}
+                />
+                <div>
+                  <label>
+                    Cover URL
+                    <input
+                      value={adminBook.cover}
+                      onChange={(event) => updateAdminBook('cover', event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </label>
+                  <label className="file-picker admin-cover-upload">
+                    <i className="bi bi-image" />
+                    Upload cover image
+                    <input accept="image/*" onChange={updateCoverFile} type="file" />
+                  </label>
+                </div>
+              </div>
+              {mediaFields.map((field) => (
+                <label key={field.name}>
+                  {field.label}
+                  <input
+                    type={field.type || 'text'}
+                    value={adminBook[field.name]}
+                    onChange={(event) => updateAdminBook(field.name, event.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                </label>
+              ))}
+              <label className="wide-field">
+                Reader text
+                <textarea
+                  value={adminBook.readerText}
+                  onChange={(event) => updateAdminBook('readerText', event.target.value)}
+                  placeholder="Optional full plain book text. Chapter content below is preferred."
+                />
+              </label>
+            </fieldset>
+
+            <fieldset className="admin-chapter-fieldset">
+              <legend>Chapters</legend>
+              <div className="admin-chapter-list">
+                {(adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : [createEmptyChapter(0)]).map((chapter, index) => (
+                  <article className="admin-chapter-editor" key={`${index}-${chapter.title}`}>
+                    <div className="admin-chapter-heading">
+                      <strong>Chapter {index + 1}</strong>
+                      <button className="ghost-button" onClick={() => removeChapter(index)} type="button">Remove</button>
+                    </div>
+                    <label>
+                      Title
+                      <input
+                        value={chapter.title}
+                        onChange={(event) => updateChapter(index, 'title', event.target.value)}
+                        placeholder={`Chapter ${index + 1}`}
+                      />
+                    </label>
+                    <label>
+                      Pages
+                      <input
+                        min="1"
+                        type="number"
+                        value={chapter.pages}
+                        onChange={(event) => updateChapter(index, 'pages', event.target.value)}
+                      />
+                    </label>
+                    <label className="wide-field">
+                      Content
+                      <textarea
+                        value={chapter.content}
+                        onChange={(event) => updateChapter(index, 'content', event.target.value)}
+                        placeholder="Paste this chapter content..."
+                      />
+                    </label>
+                  </article>
+                ))}
+              </div>
+              <button className="ghost-button admin-add-chapter" onClick={addChapter} type="button">
+                <i className="bi bi-plus-circle" />
+                Add chapter
+              </button>
+            </fieldset>
+          </form>
+        </div>
+
+        <footer className="admin-book-modal-footer">
+          <button className="ghost-button" onClick={onPreview} type="button">
+            <i className="bi bi-eye" />
+            Preview as Detail
+          </button>
+          <button className="ghost-button" onClick={onClose} type="button">
+            {isEditing ? 'Cancel edit' : 'Cancel'}
+          </button>
+          <button className="primary-button" disabled={currentErrors.length > 0} form="admin-book-form" type="submit">
+            <i className="bi bi-cloud-upload" />
+            {isEditing ? 'Update book' : `Push to ${bookAccess === 'read' ? 'To Read' : 'To Rent'}`}
+          </button>
+        </footer>
+
+        {publishBlockers.length > 0 && (
+          <div className="admin-publish-alert-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="admin-publish-alert-title">
+            <div className="admin-publish-alert">
+              <i className="bi bi-exclamation-triangle" />
+              <h3 id="admin-publish-alert-title">You're missing a few things</h3>
+              <p>This book can't go live as Published yet. You're missing:</p>
+              <ul>
+                {publishBlockers.map((item) => (
+                  <li key={item.id}>{item.message}</li>
+                ))}
+              </ul>
+              <div className="admin-form-actions">
+                <button
+                  className="ghost-button"
+                  onClick={() => {
+                    updateAdminBook('status', 'draft')
+                    setPublishBlockers([])
+                  }}
+                  type="button"
+                >
+                  Switch to Draft instead
+                </button>
+                <button className="primary-button" onClick={() => setPublishBlockers([])} type="button">
+                  Go back and fill it in
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -893,7 +1097,7 @@ function ExistingAccountPicker({ onPick }) {
   return (
     <div className="admin-import-panel">
       <p className="form-note">
-        Search for someone who already has an account (synced via Catalog Sync) instead of typing a brand new person.
+        Search for someone who already has an account instead of typing a brand new person.
       </p>
       <form className="admin-form compact-form" onSubmit={search}>
         <label className="wide-field">
@@ -1014,182 +1218,78 @@ function RentalRequestsPanel({ decidedRequests, onDecide, pendingRequests }) {
   )
 }
 
-function CatalogSyncPanel() {
-  const [status, setStatus] = useState(null)
-  const [statusError, setStatusError] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [migrating, setMigrating] = useState(false)
-  const [migrationResult, setMigrationResult] = useState(null)
+function BanUserModal({ busy, onClose, onConfirm, user }) {
+  const [days, setDays] = useState('7')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
 
-  const [query, setQuery] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState('')
-  const [tagBusyId, setTagBusyId] = useState('')
-
-  async function checkStatus() {
-    setChecking(true)
-    setStatusError('')
-    try {
-      const data = await apiFetch('/api/migrate/status')
-      setStatus(data)
-    } catch (error) {
-      setStatusError(error.message)
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  async function runMigration() {
-    setMigrating(true)
-    setMigrationResult(null)
-    setStatusError('')
-    try {
-      const data = await apiFetch('/api/migrate/run', { method: 'POST' })
-      setMigrationResult(data.summary)
-      checkStatus()
-    } catch (error) {
-      setStatusError(error.message)
-    } finally {
-      setMigrating(false)
-    }
-  }
-
-  async function searchCatalog(event) {
+  function handleSubmit(event) {
     event.preventDefault()
-    setSearching(true)
-    setSearchError('')
-    try {
-      const data = await apiFetch(`/api/books?q=${encodeURIComponent(query)}`)
-      setSearchResults(data.books || [])
-    } catch (error) {
-      setSearchError(error.message)
-    } finally {
-      setSearching(false)
+    if (!reason.trim()) {
+      setError('A reason is required.')
+      return
     }
-  }
-
-  async function tagBook(id, usageType) {
-    setTagBusyId(id)
-    try {
-      await apiFetch(`/api/books/${id}/usage-type`, { method: 'PATCH', body: { usageType } })
-      setSearchResults((current) => current.map((book) => (book._id === id ? { ...book, usageType } : book)))
-    } catch (error) {
-      setSearchError(error.message)
-    } finally {
-      setTagBusyId('')
+    const numDays = Number(days)
+    if (!Number.isFinite(numDays) || numDays < 0) {
+      setError('Days must be 0 (permanent) or a positive number.')
+      return
     }
+    setError('')
+    onConfirm(numDays, reason.trim())
   }
 
   return (
-    <section className="admin-workspace">
-      <div className="section-heading">
-        <div>
-          <p className="mono-eyebrow">MongoDB</p>
-          <h2>Catalog sync</h2>
-        </div>
-        <span>Move BookWorm's Firebase data into MongoDB, and tag imported books with a usage type.</span>
-      </div>
-
-      <div className="admin-validation-panel" aria-live="polite">
-        <strong>Connection status</strong>
-        {status ? (
-          <>
-            <span>
-              <i className={`bi ${status.mongoConnected ? 'bi-check-circle' : 'bi-x-circle'}`} />
-              MongoDB: {status.mongoConnected ? 'connected' : 'not connected'}
-            </span>
-            <span>
-              <i className="bi bi-info-circle" />
-              {status.counts.users} users, {status.counts.books} books in Mongo right now.
-            </span>
-            <span>
-              <i className="bi bi-signpost" />
-              {status.recommendation === 'run-migration' && 'Mongo is empty - run the migration to pull data from Firebase.'}
-              {status.recommendation === 'use-mongo-directly' && 'Mongo already has data - safe to use it directly.'}
-              {status.recommendation === 'mongo-unavailable' && 'Mongo is not reachable right now - check MONGODB_URI on the server.'}
-            </span>
-          </>
-        ) : (
-          <span>Press "Check connection" to see whether the app should keep using Firebase or switch to MongoDB.</span>
-        )}
-        {statusError && (
-          <span className="admin-validation-error">
-            <i className="bi bi-x-circle" />
-            {statusError}
-          </span>
-        )}
-      </div>
-
-      <div className="admin-form-actions">
-        <button className="ghost-button" disabled={checking} onClick={checkStatus} type="button">
-          <i className="bi bi-arrow-repeat" />
-          {checking ? 'Checking...' : 'Check connection'}
+    <div
+      aria-labelledby="admin-ban-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <form className="admin-ban-modal" onSubmit={handleSubmit}>
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
         </button>
-        <button className="primary-button" disabled={migrating} onClick={runMigration} type="button">
-          <i className="bi bi-cloud-arrow-up" />
-          {migrating ? 'Migrating...' : 'Migrate Firebase -> MongoDB'}
-        </button>
-      </div>
+        <p className="mono-eyebrow">Ban customer</p>
+        <h2 id="admin-ban-title">{user.name}</h2>
+        <p className="form-note">{user.displayId ? `${user.displayId} - ` : ''}{user.email}</p>
 
-      {migrationResult && (
-        <div className="admin-validation-panel" aria-live="polite">
-          <strong>Migration finished</strong>
-          <span><i className="bi bi-check-circle" />{migrationResult.usersUpserted} users upserted.</span>
-          <span><i className="bi bi-check-circle" />{migrationResult.booksUpserted} books upserted.</span>
-          {migrationResult.errors?.length > 0 && (
-            <span className="admin-validation-warning">
-              <i className="bi bi-exclamation-circle" />
-              {migrationResult.errors.length} rows skipped - open the browser console/network tab for details.
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="section-heading">
-        <div>
-          <p className="mono-eyebrow">MongoDB books</p>
-          <h2>Tag a book's usage type</h2>
-        </div>
-        <span>Search the "books" collection and set read / rent / both / none.</span>
-      </div>
-
-      <form className="admin-form compact-form" onSubmit={searchCatalog}>
-        <label className="wide-field">
-          Search by title
-          <input onChange={(event) => setQuery(event.target.value)} placeholder="The Declaration of Independence" value={query} />
+        <label>
+          Ban length
+          <select onChange={(event) => setDays(event.target.value)} value={days}>
+            <option value="1">1 day</option>
+            <option value="3">3 days</option>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="0">Permanent (until manually unbanned)</option>
+          </select>
         </label>
-        <button className="primary-button" disabled={searching} type="submit">
-          <i className="bi bi-search" />
-          {searching ? 'Searching...' : 'Search'}
-        </button>
-      </form>
-      {searchError && <p className="settings-error">{searchError}</p>}
-
-      <section className="admin-table staff-table">
-        {searchResults.length ? (
-          searchResults.map((book) => (
-            <div className="table-row" key={book._id}>
-              <span>{book.title || book.Title || 'Untitled'}</span>
-              <small>{book.author || book.Authors || 'Unknown author'}</small>
-              <div className="admin-row-actions">
-                <select
-                  disabled={tagBusyId === book._id}
-                  onChange={(event) => tagBook(book._id, event.target.value)}
-                  value={book.usageType || 'none'}
-                >
-                  {usageTypeChoices.map((choice) => (
-                    <option key={choice.value} value={choice.value}>{choice.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p>No results yet - search above to tag books.</p>
+        <label className="wide-field">
+          Reason
+          <textarea
+            autoFocus
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Why is this account being banned?"
+            value={reason}
+          />
+        </label>
+        {error && (
+          <p className="admin-validation-error">
+            <i className="bi bi-x-circle" />
+            {error}
+          </p>
         )}
-      </section>
-    </section>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" onClick={onClose} type="button">Cancel</button>
+          <button className="primary-button" disabled={busy} type="submit">
+            {busy ? 'Banning...' : 'Confirm ban'}
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -1198,7 +1298,15 @@ function AdminDetailPreview({ book, onClose }) {
   const chapters = getBookChapters(book, totalPages)
 
   return (
-    <div className="reader-modal-backdrop admin-preview-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-preview-title">
+    <div
+      aria-labelledby="admin-preview-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-preview-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
       <div className="admin-preview-modal">
         <button aria-label="Close preview" className="admin-preview-close" onClick={onClose} type="button">
           <i className="bi bi-x-lg" />
@@ -1288,6 +1396,8 @@ function getFormWarnings(book) {
   ].filter(Boolean).filter((warning) => !errors.has(warning.id))
 }
 
+// Base rules that block saving in ANY status, including Draft: the record
+// must at least be identifiable and not contain malformed data.
 function getFormErrors(book, managedBooks = []) {
   const duplicateTitle = managedBooks.some((managedBook) => (
     managedBook.id !== book.id && managedBook.title?.trim().toLowerCase() === book.title.trim().toLowerCase()
@@ -1298,12 +1408,20 @@ function getFormErrors(book, managedBooks = []) {
     duplicateTitle && { id: 'duplicate-title', message: 'A managed book already uses this title.' },
     !hasText(book.author) && { id: 'author', message: 'Add an author.' },
     !hasText(book.category) && { id: 'category', message: 'Choose a category or shelf.' },
-    !hasText(book.cover) && { id: 'cover', message: 'Add a cover URL or upload a cover image.' },
-    !isValidImageSource(book.cover) && { id: 'cover-url', message: 'Cover must be an http(s) image URL or an uploaded image.' },
-    !hasText(book.description) && { id: 'description', message: 'Add a description for the detail page.' },
-    !hasReaderSource(book) && { id: 'reader', message: 'Add a reader URL, full reader text, or chapter content.' },
+    hasText(book.cover) && !isValidImageSource(book.cover) && { id: 'cover-url', message: 'Cover must be an http(s) image URL or an uploaded image.' },
     hasText(book.readerUrl) && !isValidHttpUrl(book.readerUrl) && { id: 'reader-url', message: 'Reader URL must start with http:// or https://.' },
-    !hasValidChapterDraft(book) && { id: 'chapters', message: 'Add at least one chapter with a title and page count above 0.' },
+  ].filter(Boolean)
+}
+
+// Content-completeness rules - fine to leave blank while a book is still a
+// Draft, but required before it can go out as Published. Shown as a popup
+// on submit rather than a permanently disabled button, so drafting stays fast.
+function getPublishRequirements(book) {
+  return [
+    !hasText(book.cover) && { id: 'cover', message: 'a cover image (URL or upload)' },
+    !hasText(book.description) && { id: 'description', message: 'a description' },
+    !hasReaderSource(book) && { id: 'reader', message: 'reader content - a URL, full text, or at least one chapter with text' },
+    !hasValidChapterDraft(book) && { id: 'chapters', message: 'at least one chapter with a title and page count' },
   ].filter(Boolean)
 }
 

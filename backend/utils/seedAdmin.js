@@ -1,5 +1,6 @@
 const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
+const generateDisplayId = require('./generateDisplayId');
 
 let seeded = global._adminSeeded || false;
 
@@ -34,6 +35,7 @@ async function seedAdmin() {
     name,
     email,
     role: 'admin',
+    displayId: await generateDisplayId('admin'),
   });
 
   console.log(`Default admin account ready: ${email}`);

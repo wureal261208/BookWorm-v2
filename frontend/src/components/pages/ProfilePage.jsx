@@ -12,11 +12,11 @@ function ProfilePage({
   account,
   books = [],
   favorites = [],
+  onChangePassword,
   onDetail,
   onFavorite,
   onProfileUpdate,
   onRead,
-  onResetPassword,
   progress = {},
   readerFontSize,
   readerTheme,
@@ -33,11 +33,11 @@ function ProfilePage({
         account={account}
         books={books}
         favorites={favorites}
+        onChangePassword={onChangePassword}
         onDetail={onDetail}
         onFavorite={onFavorite}
         onProfileUpdate={onProfileUpdate}
         onRead={onRead}
-        onResetPassword={onResetPassword}
         progress={progress}
         readerFontSize={readerFontSize}
         readerTheme={readerTheme}
@@ -55,11 +55,11 @@ function ProfileSettings({
   account,
   books = [],
   favorites = [],
+  onChangePassword,
   onDetail,
   onFavorite,
   onProfileUpdate,
   onRead,
-  onResetPassword,
   progress = {},
   readerFontSize,
   readerTheme,
@@ -73,6 +73,11 @@ function ProfileSettings({
   const [displayName, setDisplayName] = useState(account?.name || 'Reader')
   const [settingsError, setSettingsError] = useState('')
   const [settingsLoading, setSettingsLoading] = useState(false)
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
   const roleLabel = (account?.role || 'customer').charAt(0).toUpperCase() + (account?.role || 'customer').slice(1)
   const continueReading = books
     .filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100)
@@ -129,15 +134,42 @@ function ProfileSettings({
     }
   }
 
-  async function sendResetPassword() {
-    setSettingsLoading(true)
-    setSettingsError('')
+  async function handleChangePassword(event) {
+    event.preventDefault()
+    setPasswordError('')
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation don't match.")
+      return
+    }
+    if (newPassword === oldPassword) {
+      setPasswordError('New password must be different from your current password.')
+      return
+    }
+
+    setPasswordLoading(true)
     try {
-      await onResetPassword()
-    } catch {
-      setSettingsError('Could not send reset email right now.')
+      await onChangePassword({ oldPassword, newPassword })
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      const code = error?.code || ''
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+        setPasswordError('Current password is incorrect.')
+      } else if (code === 'auth/too-many-requests') {
+        setPasswordError('Too many attempts. Please wait a bit and try again.')
+      } else if (code === 'auth/weak-password') {
+        setPasswordError('New password is too weak - use at least 8 characters.')
+      } else {
+        setPasswordError('Could not change your password. Please try again.')
+      }
     } finally {
-      setSettingsLoading(false)
+      setPasswordLoading(false)
     }
   }
 
@@ -174,6 +206,10 @@ function ProfileSettings({
               <div>
                 <span>Role</span>
                 <strong>{roleLabel}</strong>
+              </div>
+              <div>
+                <span>Account ID</span>
+                <strong>{account?.displayId || '—'}</strong>
               </div>
               <div>
                 <span>Status</span>
@@ -276,14 +312,52 @@ function ProfileSettings({
           )}
         </div>
 
-        <div className="account-settings-card">
-          <SettingsHeading icon="bi-shield-lock" kicker="Security" title="Password" />
-          <p className="settings-copy">Send a reset link to {safeMaskedEmail}.</p>
-          <button className="ghost-button" disabled={settingsLoading} onClick={sendResetPassword} type="button">
-            <i className="bi bi-envelope-arrow-up" />
-            Send reset email
+        <form className="account-settings-card" onSubmit={handleChangePassword}>
+          <SettingsHeading icon="bi-shield-lock" kicker="Security" title="Change password" />
+          <p className="settings-copy">Enter your current password, then your new one twice. We'll email {safeMaskedEmail} to confirm the change.</p>
+          <label>
+            Old password
+            <input
+              autoComplete="current-password"
+              onChange={(event) => {
+                setOldPassword(event.target.value)
+                setPasswordError('')
+              }}
+              type="password"
+              value={oldPassword}
+            />
+          </label>
+          <label>
+            New password
+            <input
+              autoComplete="new-password"
+              onChange={(event) => {
+                setNewPassword(event.target.value)
+                setPasswordError('')
+              }}
+              type="password"
+              value={newPassword}
+            />
+            <span className="field-hint">At least 8 characters.</span>
+          </label>
+          <label>
+            Confirm new password
+            <input
+              autoComplete="new-password"
+              onChange={(event) => {
+                setConfirmPassword(event.target.value)
+                setPasswordError('')
+              }}
+              type="password"
+              value={confirmPassword}
+            />
+          </label>
+          {passwordError && <p className="settings-error">{passwordError}</p>}
+          <button className="primary-button" disabled={passwordLoading || !oldPassword || !newPassword || !confirmPassword} type="submit">
+            <i className="bi bi-shield-check" />
+            {passwordLoading ? 'Changing...' : 'Change password'}
           </button>
-        </div>
+        </form>
 
         <div className="account-settings-card reader-preview-card">
           <SettingsHeading icon="bi-book" kicker="Reader" title="Preview mode" />

@@ -2,10 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, us
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
   updateProfile,
 } from 'firebase/auth'
 import AuthPage from './components/auth/AuthPage'
@@ -134,7 +137,7 @@ function App() {
   const [highlights, setHighlights] = useState(userDataDefaults.highlights)
   const [comments, setComments] = useState(globalDataDefaults.comments)
   const [searchHistory, setSearchHistory] = useState(userDataDefaults.searchHistory)
-  const [staff, setStaff] = useState(globalDataDefaults.staff)
+  const [staff, setStaff] = useState([])
   const [accountSettings, setAccountSettings] = useState(userDataDefaults.accountSettings)
   const [selectedBook, setSelectedBook] = useState(null)
   const [readerStartPage, setReaderStartPage] = useState(null)
@@ -145,13 +148,11 @@ function App() {
   const [websiteTheme, setWebsiteTheme] = useState(userDataDefaults.websiteTheme)
   const [authForm, setAuthForm] = useState(emptyAuthForm)
   const [adminBook, setAdminBook] = useState(emptyAdminBook)
-  const [knownUsers, setKnownUsers] = useState(globalDataDefaults.knownUsers)
   const [rentalRequests, setRentalRequests] = useState(globalDataDefaults.rentalRequests)
   const [notifications, setNotifications] = useState(globalDataDefaults.notifications)
   const [globalDataReady, setGlobalDataReady] = useState(false)
   const [userDataReady, setUserDataReady] = useState(false)
   const accountSettingsRef = useRef(accountSettings)
-  const knownUsersRef = useRef(knownUsers)
   const globalDataSnapshotRef = useRef('')
   const userDataSnapshotRef = useRef('')
   const pendingFavoriteUpdatesRef = useRef([])
@@ -159,20 +160,27 @@ function App() {
   const migratedLegacyCommentsRef = useRef(false)
   const activePage = pageState.activePage
 
-  // Role is resolved from the backend (verified Firebase ID token -> role
+  // Role is resolved from the backend (verified Firebase ID token -> profile
   // stored in MongoDB), never from the Firestore `staff` array directly -
   // that array is only readable/writable by the backend now, but the app
   // still shouldn't trust client-visible data for something as sensitive as
   // "is this person an admin". Any failure to reach the backend defaults to
   // 'customer' (fail closed): worse case an admin briefly can't reach
-  // /admin, never the other way around.
-  const resolveTrustedRole = useCallback(async () => {
+  // /admin, never the other way around. Also carries `id` (Mongo _id) and
+  // `displayId` (AD-000001 / 000001 style ID) - matching against the /api/users
+  // list has to use this Mongo id, not the Firebase uid, and not email
+  // (masked in list responses).
+  const resolveTrustedProfile = useCallback(async () => {
     try {
       const data = await apiFetch('/api/users/me')
-      return normalizeRole(data.user?.role) || 'customer'
+      return {
+        role: normalizeRole(data.user?.role) || 'customer',
+        id: data.user?.id || '',
+        displayId: data.user?.displayId || '',
+      }
     } catch (error) {
       console.warn('Could not verify account role from server, defaulting to customer:', error.message)
-      return 'customer'
+      return { role: 'customer', id: '', displayId: '' }
     }
   }, [])
 
@@ -272,10 +280,6 @@ function App() {
   }, [accountSettings])
 
   useEffect(() => {
-    knownUsersRef.current = knownUsers
-  }, [knownUsers])
-
-  useEffect(() => {
     if (typeof window === 'undefined') return
 
     const nextRentals = account.role === 'guest' ? [] : readStoredRentals(account)
@@ -297,14 +301,30 @@ function App() {
     window.localStorage.setItem(storageKey, JSON.stringify(rentals))
   }, [account.email, account.id, account.role, rentals])
 
+  // Managers/employees/customers used to come from the same demo global-data
+  // stub as comments/notifications (see utils/firebaseData.js) - that stub
+  // always returned an empty list for these, which is why "Users" looked
+  // empty even with real accounts in Mongo. This is the real fetch.
+  const refreshStaffDirectory = useCallback(async () => {
+    if (!hasAccess(account.role, 'manager')) return
+    try {
+      const data = await apiFetch('/api/users')
+      setStaff(Array.isArray(data.users) ? data.users : [])
+    } catch (error) {
+      handleDataSyncError(error, 'refresh-staff-directory')
+    }
+  }, [account.role, handleDataSyncError])
+
+  useEffect(() => {
+    refreshStaffDirectory()
+  }, [refreshStaffDirectory])
+
   useEffect(() => {
     return subscribeGlobalData(
       (data) => {
         const nextData = {
           viewCounts: data.viewCounts || {},
           bookReaders: data.bookReaders || {},
-          staff: data.staff || [],
-          knownUsers: data.knownUsers || [],
           rentalRequests: data.rentalRequests || [],
           notifications: data.notifications || [],
         }
@@ -319,8 +339,6 @@ function App() {
             migrateLegacyComments(data.comments).catch((error) => handleDataSyncError(error, 'migrate-legacy-comments'))
           }
         }
-        setStaff(nextData.staff)
-        setKnownUsers(nextData.knownUsers)
         setRentalRequests(nextData.rentalRequests)
         setNotifications(nextData.notifications)
         setGlobalDataReady(true)
@@ -446,27 +464,34 @@ function App() {
       }
 
       const email = user.email?.toLowerCase() || ''
-      const lockedRecord = knownUsersRef.current.find((item) => item.email === email)
-      if (lockedRecord?.locked) {
+
+      const savedSettings = accountSettingsRef.current[user.uid] || accountSettingsRef.current[email] || {}
+      if (savedSettings.websiteTheme) setWebsiteTheme(savedSettings.websiteTheme)
+      const trustedProfile = await resolveTrustedProfile()
+
+      // A banned/restricted account still holds a valid Firebase session
+      // token for up to an hour, but the backend rejects every API call for
+      // it (see middleware/auth.js `protect`) - resolveTrustedProfile falls
+      // back to 'customer' + no id on any such failure, so this is also the
+      // fail-closed path for "couldn't verify, don't trust this session".
+      if (!trustedProfile.id) {
         await signOut(auth)
-        setToast({ type: 'error', message: 'This account has been locked. Contact a manager or admin.' })
+        setToast({ type: 'error', message: "We couldn't verify this account. If it was banned or restricted, contact a manager or admin." })
         setAuthReady(true)
         return
       }
 
-      const savedSettings = accountSettingsRef.current[user.uid] || accountSettingsRef.current[email] || {}
-      if (savedSettings.websiteTheme) setWebsiteTheme(savedSettings.websiteTheme)
-      const trustedRole = await resolveTrustedRole()
       const nextAccount = {
-        id: user.uid,
+        id: trustedProfile.id,
+        firebaseUid: user.uid,
+        displayId: trustedProfile.displayId,
         name: savedSettings.displayName || user.displayName || email.split('@')[0] || 'Reader',
         email,
         avatar: savedSettings.avatar || user.photoURL || '',
-        role: trustedRole,
+        role: trustedProfile.role,
       }
 
       setAccount(nextAccount)
-      setKnownUsers((current) => upsertUser(current, nextAccount))
       const canAccessAdmin = hasAccess(nextAccount.role, 'employee')
 
       if (currentRoute === 'auth') {
@@ -478,21 +503,21 @@ function App() {
     })
 
     return unsubscribe
-  }, [navigateTo, resolveTrustedRole])
+  }, [navigateTo, resolveTrustedProfile])
 
   useEffect(() => {
     if (account.role === 'guest' || !account.email) return
 
     let isCurrent = true
-    resolveTrustedRole().then((nextRole) => {
-      if (!isCurrent || nextRole === account.role) return
-      setAccount((current) => ({ ...current, role: nextRole }))
+    resolveTrustedProfile().then((next) => {
+      if (!isCurrent || next.role === account.role) return
+      setAccount((current) => ({ ...current, role: next.role, displayId: next.displayId || current.displayId }))
     })
 
     return () => {
       isCurrent = false
     }
-  }, [account.email, account.role, resolveTrustedRole])
+  }, [account.email, account.role, resolveTrustedProfile])
 
   useEffect(() => {
     if (!['admin', 'manager', 'employee'].includes(account.role)) {
@@ -513,24 +538,6 @@ function App() {
       ignore = true
     }
   }, [account.email, account.role])
-
-  useEffect(() => {
-    if (account.role === 'guest' || !account.email) return
-    const lockedRecord = knownUsers.find((item) => item.email === account.email)
-    if (!lockedRecord?.locked) return
-
-    signOut(auth)
-    queueMicrotask(() => {
-      setToast({ type: 'error', message: 'This account has been locked. Contact a manager or admin.' })
-    })
-  }, [account.email, account.role, knownUsers])
-
-  useEffect(() => {
-    if (!globalDataReady || account.role === 'guest') return
-    queueMicrotask(() => {
-      setKnownUsers((current) => upsertUser(current, account))
-    })
-  }, [account, globalDataReady])
 
   useEffect(() => {
     let ignore = false
@@ -568,8 +575,6 @@ function App() {
     const nextGlobalData = {
       viewCounts,
       bookReaders,
-      staff,
-      knownUsers,
       rentalRequests,
       notifications,
     }
@@ -578,7 +583,7 @@ function App() {
 
     globalDataSnapshotRef.current = nextSnapshot
     saveGlobalData(nextGlobalData).catch((error) => handleDataSyncError(error, 'save-global-data'))
-  }, [bookReaders, globalDataReady, handleDataSyncError, knownUsers, notifications, rentalRequests, staff, viewCounts])
+  }, [bookReaders, globalDataReady, handleDataSyncError, notifications, rentalRequests, viewCounts])
 
   useEffect(() => {
     if (account.role === 'guest' || !userDataReady) return
@@ -676,14 +681,31 @@ function App() {
 
     setAccount((current) => ({ ...current, avatar, name: trimmedName }))
     setAccountSettings((current) => ({ ...current, [account.id]: nextSettings }))
-    setKnownUsers((current) => upsertUser(current, { ...account, avatar, name: trimmedName }))
     setToast({ type: 'success', message: 'Account profile updated.' })
   }
 
-  async function resetAccountPassword() {
-    if (!account.email) return
-    await sendPasswordResetEmail(auth, account.email)
-    setToast({ type: 'success', message: `Password reset email sent to ${account.email}.` })
+  // Old/New/Confirm change from inside Profile - distinct from the "forgot
+  // password" email link, which stays login-page-only (see handleForgotPassword
+  // below). Firebase requires re-proving the current password before it will
+  // accept a new one (reauthenticateWithCredential), which is also our "is
+  // the old password actually correct" check - no separate backend call
+  // needed for that part. The backend call after is just to record the change
+  // and email a notice; if that fails, the password change itself has
+  // already succeeded, so we don't treat it as an error.
+  async function changeAccountPassword({ oldPassword, newPassword }) {
+    if (!auth.currentUser?.email) throw new Error('No signed-in account.')
+
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, oldPassword)
+    await reauthenticateWithCredential(auth.currentUser, credential)
+    await updatePassword(auth.currentUser, newPassword)
+
+    try {
+      await apiFetch('/api/users/me/password-changed', { method: 'POST' })
+    } catch (error) {
+      console.warn('Password changed, but the confirmation email could not be recorded/sent:', error.message)
+    }
+
+    setToast({ type: 'success', message: 'Password updated. A confirmation email has been sent.' })
   }
 
   async function handleForgotPassword(email) {
@@ -954,10 +976,28 @@ function App() {
     )))
   }
 
-  function toggleUserLock(email) {
-    setKnownUsers((current) => current.map((item) => (
-      item.email === email ? { ...item, locked: !item.locked } : item
-    )))
+  async function banUser(id, { days, reason }) {
+    try {
+      await apiFetch(`/api/users/${id}/ban`, { method: 'PATCH', body: { days, reason } })
+      await refreshStaffDirectory()
+      setToast({ type: 'success', message: days > 0 ? `Customer banned for ${days} day(s).` : 'Customer banned permanently.' })
+      return true
+    } catch (error) {
+      setToast({ type: 'error', message: error.message })
+      return false
+    }
+  }
+
+  async function unbanUser(id) {
+    try {
+      await apiFetch(`/api/users/${id}/unban`, { method: 'PATCH' })
+      await refreshStaffDirectory()
+      setToast({ type: 'success', message: 'Customer unbanned.' })
+      return true
+    } catch (error) {
+      setToast({ type: 'error', message: error.message })
+      return false
+    }
   }
 
   async function addManagedBook(event) {
@@ -965,7 +1005,7 @@ function App() {
     const validationErrors = validateAdminBook(adminBook, managedBooks)
     if (validationErrors.length) {
       setToast({ type: 'error', message: validationErrors.slice(0, 2).join(' ') })
-      return
+      return false
     }
 
     const record = createAdminBookRecord(adminBook)
@@ -981,9 +1021,11 @@ function App() {
       })
       setAdminBook(emptyAdminBook)
       setToast({ type: 'success', message: book.status === 'published' ? 'Book published to the main site.' : 'Book saved in Admin.' })
+      return true
     } catch (error) {
       setManagedBooksError(error.message)
       setToast({ type: 'error', message: error.message })
+      return false
     }
   }
 
@@ -1155,7 +1197,7 @@ function App() {
         onProfileUpdate={updateAccountProfile}
         onRead={openBook}
         onRent={toggleRental}
-        onResetPassword={resetAccountPassword}
+        onChangePassword={changeAccountPassword}
         rentals={rentals}
         progress={progress}
         readingDays={readingActivity[getAccountKey(account)] || []}
@@ -1202,8 +1244,10 @@ function App() {
         resetAdminBook={() => setAdminBook(emptyAdminBook)}
         setAdminBook={setAdminBook}
         staff={staff}
-        users={knownUsers}
-        onToggleUserLock={toggleUserLock}
+        users={staff}
+        onBanUser={banUser}
+        onUnbanUser={unbanUser}
+        onRefreshStaff={refreshStaffDirectory}
         onDecideRentalRequest={decideRentalRequest}
         rentalRequests={rentalRequests}
       />
@@ -1222,13 +1266,7 @@ function App() {
   )
 }
 
-function upsertUser(users, user) {
-  const existing = users.find((item) => item.email === user.email)
-  const stored = { email: user.email, name: user.name, role: user.role, locked: existing?.locked || false }
-  if (existing && existing.name === stored.name && existing.role === stored.role && existing.locked === stored.locked) return users
 
-  return [stored, ...users.filter((item) => item.email !== user.email)]
-}
 
 function getAccountKey(account) {
   if (!account || account.role === 'guest') return 'guest'

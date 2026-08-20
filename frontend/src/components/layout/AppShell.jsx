@@ -47,7 +47,8 @@ function AppShell({
     ? 0
     : notifications.filter((item) => item.targetEmail === account?.email && !item.read).length
 
-  const myStaffRecord = staff.find((item) => (item.email || '').toLowerCase() === (account?.email || '').toLowerCase())
+  // staff[].email is masked by the backend - match by the trusted Mongo id instead.
+  const myStaffRecord = staff.find((item) => item.id === account?.id)
   const myShelfSection = myStaffRecord?.section === 'rent' ? 'rent' : myStaffRecord?.section === 'read' ? 'read' : null
   const isEmployeeOnly = normalizedRole === 'employee'
 

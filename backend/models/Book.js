@@ -20,6 +20,16 @@ const BookSchema = new mongoose.Schema(
     isAvailableToRent: { type: Boolean, default: true },
     totalCopies: { type: Number, default: 1, min: 0 },
     availableCopies: { type: Number, default: 1, min: 0 },
+    // Publishing state set from the admin "Status" dropdown. Hidden/draft
+    // books still live in Mongo (so staff can keep editing them) but should
+    // be filtered out of the public catalog - see listBooks below.
+    status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
+    // Which admin shelf this book is filed under - matches the frontend's
+    // "To Read" / "To Rent" toggle. Distinct from isAvailableToRent (which
+    // actually gates the rental flow) - this is just a catalog grouping.
+    access: { type: String, enum: ['read', 'rent'], default: 'read' },
+    subjects: { type: [String], default: [] },
+    language: { type: String, default: 'en' },
     // Staff member (admin/manager/employee) who pushed this book.
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     // Links this Book back to its BookMetadata entry (book_metadata.etextNumber)

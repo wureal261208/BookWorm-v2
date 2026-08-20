@@ -5,10 +5,13 @@ const { success } = require('../utils/response');
 function sanitizeUser(user) {
   return {
     id: user._id,
+    displayId: user.displayId || '',
     name: user.name,
     email: maskEmail(user.email),
     role: user.role,
     isRestricted: user.isRestricted,
+    banReason: user.banReason || '',
+    banExpiresAt: user.banExpiresAt,
     createdAt: user.createdAt,
   };
 }

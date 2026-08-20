@@ -1,110 +1,14 @@
 // DEMO UI ONLY – logic removed
-// Central mock data + tiny fake "backend" used by the stripped API layer
-// (firebase.js, mockFirebaseAuth.js, utils/apiClient.js, utils/firebaseData.js,
-// mongo-app/mongoApi.js). Nothing here ever leaves the browser: state is kept
-// in memory and mirrored to localStorage only so a page refresh keeps you
-// "logged in" during the demo, exactly like the real app used to feel.
-
-import { starterAccounts } from './data/bookData'
-
-const ACCOUNTS_KEY = 'demo_bw_accounts'
-const SESSION_KEY = 'demo_bw_session'
-
-function safeParse(json, fallback) {
-  try {
-    const value = JSON.parse(json)
-    return value ?? fallback
-  } catch {
-    return fallback
-  }
-}
-
-function readStorage(key, fallback) {
-  if (typeof window === 'undefined') return fallback
-  const raw = window.localStorage.getItem(key)
-  return raw ? safeParse(raw, fallback) : fallback
-}
-
-function writeStorage(key, value) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(key, JSON.stringify(value))
-}
-
-function seedAccounts() {
-  return starterAccounts.map((account, index) => ({
-    uid: `demo-${account.role}-${index}`,
-    name: account.name,
-    email: account.email,
-    password: account.password,
-    role: account.role,
-    avatar: '',
-  }))
-}
-
-export function loadAccounts() {
-  const stored = readStorage(ACCOUNTS_KEY, null)
-  if (Array.isArray(stored) && stored.length) return stored
-  const seeded = seedAccounts()
-  writeStorage(ACCOUNTS_KEY, seeded)
-  return seeded
-}
-
-export function saveAccounts(accounts) {
-  writeStorage(ACCOUNTS_KEY, accounts)
-}
-
-export function findAccountByEmail(email) {
-  return loadAccounts().find((item) => item.email === email.toLowerCase())
-}
-
-export function findAccountByUid(uid) {
-  return loadAccounts().find((item) => item.uid === uid)
-}
-
-export function upsertAccount(account) {
-  const accounts = loadAccounts()
-  const index = accounts.findIndex((item) => item.email === account.email)
-  if (index === -1) {
-    accounts.push(account)
-  } else {
-    accounts[index] = { ...accounts[index], ...account }
-  }
-  saveAccounts(accounts)
-  return account
-}
-
-export function removeAccountByUid(uid) {
-  saveAccounts(loadAccounts().filter((item) => item.uid !== uid))
-}
-
-export function getSessionUid() {
-  return readStorage(SESSION_KEY, null)
-}
-
-export function setSessionUid(uid) {
-  writeStorage(SESSION_KEY, uid)
-}
-
-export function clearSession() {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem(SESSION_KEY)
-}
-
-// A handful of extra "manager/admin curated" catalog rows so pages that read
-// from /api/books/mine or the admin dashboard have something to show.
-export const mockManagedBooks = [
-  {
-    id: 'demo-managed-1',
-    title: 'BookWorm Field Notes',
-    author: 'BookWorm Editorial',
-    category: 'Reference',
-    description: 'A short, hand-curated staff pick used only for this UI demo.',
-    status: 'published',
-    access: 'read',
-    cover: '',
-    chapters: [{ title: 'Chapter 1', pages: 10, content: '' }],
-  },
-]
+// Remaining stub data still actually wired into the live app via
+// utils/firebaseData.js (App.jsx) and components/pages/ReaderPage.jsx.
+// See utils/firebaseData.js for why: comments, notifications, and rental
+// requests there are not fetched from the backend yet (no endpoints/models
+// exist for them), so this file is the only source for them right now.
+//
+// NOTE: the demo account-management helpers (loadAccounts/saveAccounts/
+// findAccountByEmail/etc.) and mockFirebaseAuth.js that used to sit here
+// were removed - real Firebase Auth (firebase/auth SDK) replaced them and
+// nothing imports them anymore.
 
 export const mockComments = {
   84: [

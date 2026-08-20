@@ -1,5 +1,6 @@
 const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
+const generateDisplayId = require('../utils/generateDisplayId');
 const { fail } = require('../utils/response');
 
 function readTokenFromHeader(req) {
@@ -26,7 +27,32 @@ async function resolveUserFromToken(token) {
       name: decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Reader'),
       email: decoded.email,
       role: 'customer',
+      displayId: await generateDisplayId('customer'),
     });
+  }
+
+  // Self-heals accounts created before displayId existed (or via any path
+  // that skipped it) - runs at most once per account, then it's persisted.
+  if (!user.displayId) {
+    user.displayId = await generateDisplayId(user.role);
+    await user.save();
+  }
+
+  // A timed ban auto-lifts once it expires, checked lazily right here on
+  // the next authenticated request - no cron job needed.
+  if (user.isRestricted && user.banExpiresAt && user.banExpiresAt <= new Date()) {
+    user.isRestricted = false;
+    user.banReason = '';
+    user.banExpiresAt = null;
+    user.bannedBy = null;
+    user.bannedAt = null;
+    await user.save();
+
+    try {
+      await admin.auth().updateUser(user.firebaseUid, { disabled: false });
+    } catch (error) {
+      console.warn('Could not lift Firebase Auth disable after ban expiry:', error.message);
+    }
   }
 
   return user;
@@ -69,7 +95,8 @@ async function protect(req, res, next) {
     const user = await resolveUserFromToken(token);
 
     if (user.isRestricted) {
-      return fail(res, 403, 'Your account has been restricted. Please contact support.');
+      const until = user.banExpiresAt ? ` until ${user.banExpiresAt.toISOString().slice(0, 10)}` : '';
+      return fail(res, 403, `Your account has been banned${until}. Reason: ${user.banReason || 'not specified'}.`);
     }
 
     if (user.isResigned) {

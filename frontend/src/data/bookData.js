@@ -1,7 +1,3 @@
-import { publicApiFetch } from '../utils/apiClient'
-
-export const API_URL = 'https://gutendex.com/books'
-
 const buildGutenbergBook = ({ id, title, author, category, subjects = [], downloadCount = 1000 }) => ({
   id,
   title,
@@ -35,71 +31,11 @@ export const fallbackBooks = [
   buildGutenbergBook({ id: 1001, title: 'The Complete Works of William Shakespeare', author: 'William Shakespeare', category: 'Drama', subjects: ['Drama', 'Poetry'], downloadCount: 15204 }),
 ]
 
-// The static books above already use their real Gutenberg id (e.g. 84 =
-// Frankenstein) as `id`, and backend/models/BookMetadata.js keys its 75k+
-// imported rows by that same number as `etextNumber` - so linking them is
-// just a lookup, no manual mapping needed. Call this once (e.g. on the
-// Discover/Home page load) to pull real subjects/rights/plain-text links
-// from the imported Gutenberg catalog into the hardcoded list.
-// Returns the input books unchanged if the batch lookup fails or Mongo has
-// no matching rows yet.
-export async function enrichBooksWithMetadata(books) {
-  const ids = books.map((book) => book.id).filter(Boolean)
-  if (!ids.length) return books
-
-  let results = []
-  try {
-    const data = await publicApiFetch(`/api/book-metadata/batch?ids=${ids.join(',')}`)
-    results = data.results || []
-  } catch (error) {
-    return books
-  }
-
-  const byId = new Map(results.map((entry) => [entry.etextNumber, entry]))
-
-  return books.map((book) => {
-    const entry = byId.get(book.id)
-    if (!entry) return book
-
-    return {
-      ...book,
-      subjects: entry.subjects ? entry.subjects.split(/\s*--\s*|;\s*/).filter(Boolean) : book.subjects,
-      rights: entry.rights || book.rights,
-      formats: {
-        ...book.formats,
-        ...(entry.plainTextUtf8Url ? { 'text/plain': entry.plainTextUtf8Url } : {}),
-        ...(entry.readOnlineUrl ? { 'text/html': entry.readOnlineUrl } : {}),
-      },
-    }
-  })
-}
-
-export function mergeBookCatalogs(primaryBooks = [], secondaryBooks = fallbackBooks) {
-  const combinedBooks = [...secondaryBooks, ...primaryBooks]
-  const uniqueBooks = []
-  const seenIds = new Set()
-
-  for (const book of combinedBooks) {
-    if (!book?.id || seenIds.has(book.id)) continue
-    seenIds.add(book.id)
-    uniqueBooks.push(book)
-  }
-
-  return uniqueBooks
-}
-
-export const BOOK_ACCESS_LABELS = {
-  read: 'To Read',
-  rent: 'To Rent',
-}
-
-export const ROLE_LABELS = {
-  guest: 'Guest',
-  customer: 'Customer',
-  employee: 'Employee',
-  manager: 'Manager',
-  admin: 'Admin',
-}
+// NOTE: fallbackBooks is no longer used by the main app (App.jsx fetches
+// exclusively from GET /api/books now). It is still imported by
+// ../mongo-app/mongoApi.js for the separate /mongo-app demo route - keep it
+// here for that reason. If /mongo-app is ever removed, this + buildGutenbergBook
+// can go too.
 
 export const ROLE_LEVELS = {
   guest: 0,

@@ -5,7 +5,21 @@ const { success, fail } = require('../utils/response');
 // @route POST /api/books
 // @desc  Admin/manager/employee push a new book.
 const createBook = asyncHandler(async (req, res) => {
-  const { title, author, description, category, coverUrl, chapters, totalCopies, isAvailableToRent, sourceEtextNumber } = req.body;
+  const {
+    title,
+    author,
+    description,
+    category,
+    coverUrl,
+    chapters,
+    totalCopies,
+    isAvailableToRent,
+    sourceEtextNumber,
+    status,
+    access,
+    subjects,
+    language,
+  } = req.body;
 
   if (!title || !author) {
     return fail(res, 400, 'Title and author are required.');
@@ -33,6 +47,10 @@ const createBook = asyncHandler(async (req, res) => {
     availableCopies: copies,
     createdBy: req.user._id,
     sourceEtextNumber: Number.isFinite(Number(sourceEtextNumber)) ? Number(sourceEtextNumber) : null,
+    status: ['draft', 'published', 'hidden'].includes(status) ? status : 'draft',
+    access: access === 'rent' ? 'rent' : 'read',
+    subjects: Array.isArray(subjects) ? subjects : [],
+    language: language || 'en',
   });
 
   return success(res, 201, 'Book pushed successfully.', { book });
@@ -43,6 +61,15 @@ const createBook = asyncHandler(async (req, res) => {
 const listBooks = asyncHandler(async (req, res) => {
   const books = await Book.find().select('-chapters').sort({ createdAt: -1 });
   return success(res, 200, 'Books retrieved successfully.', { books });
+});
+
+// @route GET /api/books/mine
+// @desc  Full book records (including chapters) for the staff admin panel.
+//        Not scoped to req.user - admin/manager/employee share one catalog,
+//        this isn't just books that specific staffer personally pushed.
+const listMyBooks = asyncHandler(async (req, res) => {
+  const books = await Book.find().sort({ createdAt: -1 });
+  return success(res, 200, 'Managed books retrieved successfully.', { books });
 });
 
 // @route GET /api/books/:id
@@ -96,6 +123,10 @@ const updateBook = asyncHandler(async (req, res) => {
     'totalCopies',
     'availableCopies',
     'sourceEtextNumber',
+    'status',
+    'access',
+    'subjects',
+    'language',
   ];
 
   allowedFields.forEach((field) => {
@@ -119,4 +150,4 @@ const deleteBook = asyncHandler(async (req, res) => {
   return success(res, 200, 'Book deleted successfully.', null);
 });
 
-module.exports = { createBook, listBooks, getBook, updateBook, deleteBook };
+module.exports = { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook };
