@@ -6,8 +6,6 @@ const mongoose = require('mongoose');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const bookRoutes = require('./routes/bookRoutes');
-const rentalRoutes = require('./routes/rentalRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bookMetadataRoutes = require('./routes/bookMetadataRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -44,8 +42,6 @@ app.get('/api/health/db', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/books', bookRoutes);
-app.use('/api/rentals', rentalRoutes);
-app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/book-metadata', bookMetadataRoutes);
 

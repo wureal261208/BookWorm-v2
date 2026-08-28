@@ -24,6 +24,14 @@ export function getBookChapters(book = {}, totalPages = getTotalPages(book)) {
   return createEvenChapters(book, totalPages)
 }
 
+// Whether the book has real, staff-entered chapter data - as opposed to the
+// evenly-split placeholder chapters getBookChapters() falls back to (which
+// exist purely so the reader has *some* pagination, not because the book
+// actually has that many chapters).
+export function hasExplicitChapters(book = {}) {
+  return Boolean(getExplicitChapterEntries(book)?.length)
+}
+
 export function getChapterIndex(page, chapters = []) {
   const safePage = Math.max(1, Number(page) || 1)
   const index = chapters.findIndex((chapter) => safePage >= chapter.startPage && safePage < chapter.startPage + chapter.pages)

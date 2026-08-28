@@ -21,7 +21,6 @@ import {
 import { NavigationProvider } from './context/NavigationContext'
 import { auth } from './features/auth-firebase/firebaseConfig'
 import { getAuthor, getCategory, getReaderUrl } from './utils/bookUtils'
-import { buildRentalRecord, formatDeliveryDate, formatRentalExpiry, getRentalStatus } from './utils/rentalUtils'
 import {
   globalDataDefaults,
   migrateLegacyComments,
@@ -43,7 +42,6 @@ const DiscoverPage = lazy(() => import('./components/pages/DiscoverPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
 const ReaderPage = lazy(() => import('./components/pages/ReaderPage'))
-const RentRequestPage = lazy(() => import('./components/pages/RentRequestPage'))
 
 const emptyAuthForm = { name: '', email: '', password: '' }
 const emptyAdminBook = {
@@ -56,13 +54,6 @@ const emptyAdminBook = {
   status: 'draft',
   readerUrl: '',
   cover: '',
-  pageCount: '',
-  chapterCount: '',
-  chapterTitles: '',
-  readerText: '',
-  chapterText: '',
-  chaptersDraft: [{ title: 'Chapter 1', pages: '10', content: '' }],
-  access: 'read',
   // Set when the form was filled from the Gutenberg catalog (book_metadata);
   // null for a manually typed book. Sent to the backend so the pushed Book
   // stays linked to its catalog entry.
@@ -103,29 +94,13 @@ function App() {
   const [authMode, setAuthMode] = useState('login')
   const [authReady, setAuthReady] = useState(false)
   const [toast, setToast] = useState(null)
+  const [banNotice, setBanNotice] = useState(null)
   const [pageState, dispatchPage] = useReducer(pageReducer, pageInitialState)
   const routeTimerRef = useRef(null)
   const [books, setBooks] = useState([])
   const [, setBooksLoading] = useState(false)
   const [managedBooks, setManagedBooks] = useState([])
   const [managedBooksError, setManagedBooksError] = useState('')
-  const [rentals, setRentals] = useState(() => {
-    if (typeof window === 'undefined') return []
-
-    if (account.role === 'guest') return []
-
-    const storageKey = `bookworm-rentals:${account.id || account.email || 'user'}`
-
-    try {
-      const storedValue = window.localStorage.getItem(storageKey)
-      if (!storedValue) return []
-
-      const parsed = JSON.parse(storedValue)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  })
   const [favorites, setFavorites] = useState(userDataDefaults.favorites)
   const [history, setHistory] = useState(userDataDefaults.history)
   const [readingActivity, setReadingActivity] = useState(userDataDefaults.readingActivity)
@@ -148,8 +123,7 @@ function App() {
   const [websiteTheme, setWebsiteTheme] = useState(userDataDefaults.websiteTheme)
   const [authForm, setAuthForm] = useState(emptyAuthForm)
   const [adminBook, setAdminBook] = useState(emptyAdminBook)
-  const [rentalRequests, setRentalRequests] = useState(globalDataDefaults.rentalRequests)
-  const [notifications, setNotifications] = useState(globalDataDefaults.notifications)
+  const [notifications, setNotifications] = useState([])
   const [globalDataReady, setGlobalDataReady] = useState(false)
   const [userDataReady, setUserDataReady] = useState(false)
   const accountSettingsRef = useRef(accountSettings)
@@ -180,7 +154,11 @@ function App() {
       }
     } catch (error) {
       console.warn('Could not verify account role from server, defaulting to customer:', error.message)
-      return { role: 'customer', id: '', displayId: '' }
+      // The backend's ban check (middleware/auth.js `protect`) returns a
+      // specific "Your account has been banned... Reason: ..." message -
+      // surface that verbatim in the ban popup instead of a generic toast.
+      const banMessage = /banned/i.test(error.message || '') ? error.message : ''
+      return { role: 'customer', id: '', displayId: '', banMessage }
     }
   }, [])
 
@@ -279,28 +257,6 @@ function App() {
     accountSettingsRef.current = accountSettings
   }, [accountSettings])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const nextRentals = account.role === 'guest' ? [] : readStoredRentals(account)
-    queueMicrotask(() => {
-      setRentals(nextRentals)
-    })
-  }, [account])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    if (account.role === 'guest') {
-      const guestKey = 'bookworm-rentals:guest'
-      window.localStorage.removeItem(guestKey)
-      return
-    }
-
-    const storageKey = `bookworm-rentals:${account.id || account.email || 'user'}`
-    window.localStorage.setItem(storageKey, JSON.stringify(rentals))
-  }, [account.email, account.id, account.role, rentals])
-
   // Managers/employees/customers used to come from the same demo global-data
   // stub as comments/notifications (see utils/firebaseData.js) - that stub
   // always returned an empty list for these, which is why "Users" looked
@@ -319,14 +275,32 @@ function App() {
     refreshStaffDirectory()
   }, [refreshStaffDirectory])
 
+  // Notifications now come straight from Mongo (see notificationController.js)
+  // instead of the firebaseData stub - refetched on login/logout and after
+  // marking one as read.
+  const refreshNotifications = useCallback(async () => {
+    if (account.role === 'guest') {
+      setNotifications([])
+      return
+    }
+    try {
+      const data = await apiFetch('/api/notifications')
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : [])
+    } catch (error) {
+      handleDataSyncError(error, 'refresh-notifications')
+    }
+  }, [account.role, handleDataSyncError])
+
+  useEffect(() => {
+    refreshNotifications()
+  }, [refreshNotifications])
+
   useEffect(() => {
     return subscribeGlobalData(
       (data) => {
         const nextData = {
           viewCounts: data.viewCounts || {},
           bookReaders: data.bookReaders || {},
-          rentalRequests: data.rentalRequests || [],
-          notifications: data.notifications || [],
         }
 
         globalDataSnapshotRef.current = stableStringify(nextData)
@@ -339,8 +313,6 @@ function App() {
             migrateLegacyComments(data.comments).catch((error) => handleDataSyncError(error, 'migrate-legacy-comments'))
           }
         }
-        setRentalRequests(nextData.rentalRequests)
-        setNotifications(nextData.notifications)
         setGlobalDataReady(true)
       },
       (error) => {
@@ -476,7 +448,11 @@ function App() {
       // fail-closed path for "couldn't verify, don't trust this session".
       if (!trustedProfile.id) {
         await signOut(auth)
-        setToast({ type: 'error', message: "We couldn't verify this account. If it was banned or restricted, contact a manager or admin." })
+        if (trustedProfile.banMessage) {
+          setBanNotice(trustedProfile.banMessage)
+        } else {
+          setToast({ type: 'error', message: "We couldn't verify this account. If it was banned or restricted, contact a manager or admin." })
+        }
         setAuthReady(true)
         return
       }
@@ -510,7 +486,13 @@ function App() {
 
     let isCurrent = true
     resolveTrustedProfile().then((next) => {
-      if (!isCurrent || next.role === account.role) return
+      if (!isCurrent) return
+      if (next.banMessage) {
+        signOut(auth)
+        setBanNotice(next.banMessage)
+        return
+      }
+      if (next.role === account.role) return
       setAccount((current) => ({ ...current, role: next.role, displayId: next.displayId || current.displayId }))
     })
 
@@ -575,15 +557,13 @@ function App() {
     const nextGlobalData = {
       viewCounts,
       bookReaders,
-      rentalRequests,
-      notifications,
     }
     const nextSnapshot = stableStringify(nextGlobalData)
     if (nextSnapshot === globalDataSnapshotRef.current) return
 
     globalDataSnapshotRef.current = nextSnapshot
     saveGlobalData(nextGlobalData).catch((error) => handleDataSyncError(error, 'save-global-data'))
-  }, [bookReaders, globalDataReady, handleDataSyncError, notifications, rentalRequests, viewCounts])
+  }, [bookReaders, globalDataReady, handleDataSyncError, viewCounts])
 
   useEffect(() => {
     if (account.role === 'guest' || !userDataReady) return
@@ -838,139 +818,13 @@ function App() {
     setFavorites((current) => applyFavoriteUpdates(current, [{ action, bookId }]))
   }
 
-  function toggleRental(book) {
-    if (!book?.id) return
-
-    if (account.role === 'guest') {
-      setToast({ type: 'error', message: 'Create an account to rent books and unlock reading access.' })
-      navigateTo('auth')
-      return
-    }
-
-    const existingRental = rentals.find((item) => item.id === book.id)
-    if (existingRental && getRentalStatus(existingRental) === 'active') {
-      setRentals((current) => current.filter((item) => item.id !== book.id))
-      setToast({ type: 'success', message: `${book.title} rental removed from your shelf.` })
-      return
-    }
-
-    const nextRental = buildRentalRecord(book)
-    setRentals((current) => [nextRental, ...current.filter((item) => item.id !== book.id)])
-    setToast({ type: 'success', message: `${book.title} is now rented for reading. ${formatRentalExpiry(nextRental)}` })
-  }
-
-  function submitRentalRequest(book, details = {}) {
-    if (!book?.id) return
-
-    if (account.role === 'guest') {
-      setToast({ type: 'error', message: 'Login to request a rental.' })
-      navigateTo('auth')
-      return
-    }
-
-    const alreadyPending = rentalRequests.some((item) => (
-      item.bookId === book.id && item.customerEmail === account.email && item.status === 'pending'
-    ))
-    if (alreadyPending) {
-      setToast({ type: 'error', message: `You already have a pending order for ${book.title}.` })
-      return
-    }
-
-    const nextRequest = {
-      id: `request-${Date.now()}`,
-      bookId: book.id,
-      bookTitle: book.title,
-      customerEmail: account.email,
-      customerName: account.name || account.email,
-      recipientName: (details.recipientName || account.name || '').trim(),
-      phone: (details.phone || '').trim(),
-      address: (details.address || '').trim(),
-      paymentMethod: details.paymentMethod || 'cod',
-      note: (details.note || '').trim(),
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      deliveryAt: null,
-      decidedAt: null,
-      decidedBy: null,
-    }
-    setRentalRequests((current) => [nextRequest, ...current])
-    setToast({ type: 'success', message: `Order placed for ${book.title}. A manager will confirm the delivery date.` })
-    syncRentalToMongo(nextRequest)
-  }
-
-  async function syncRentalToMongo(request) {
+  async function markNotificationRead(notificationId) {
     try {
-      const data = await apiFetch('/api/rentals', {
-        method: 'POST',
-        body: {
-          bookId: request.bookId,
-          bookTitle: request.bookTitle,
-          recipientName: request.recipientName,
-          phone: request.phone,
-          address: request.address,
-          note: request.note,
-        },
-      })
-      setRentalRequests((current) => current.map((item) => (
-        item.id === request.id ? { ...item, mongoRentalId: data.rental.id } : item
-      )))
+      await apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PATCH' })
     } catch (error) {
-      // Firestore already has the order (that's what the live UI reads), so
-      // a Mongo sync failure here is non-fatal - just log it quietly.
-      console.warn('Could not sync rental to MongoDB:', error.message)
-    }
-  }
-
-  async function decideRentalRequest(requestId, { status, deliveryAt = null, responseNote = '' }) {
-    const request = rentalRequests.find((item) => item.id === requestId)
-    if (!request) return
-
-    // The backend route (admin/manager only, enforced server-side) is the
-    // real authorization check now - it must succeed before we show the
-    // decision as final. If this specific order never made it into MongoDB
-    // (e.g. the backend was briefly unreachable when it was placed), we
-    // refuse rather than silently approve/decline with no server check at
-    // all.
-    if (!request.mongoRentalId) {
-      setToast({ type: 'error', message: 'This order has no matching MongoDB record, so it cannot be approved/declined safely. Ask an admin to check the backend logs.' })
+      handleDataSyncError(error, 'mark-notification-read')
       return
     }
-
-    try {
-      const path = status === 'approved' ? `/api/rentals/${request.mongoRentalId}/approve` : `/api/rentals/${request.mongoRentalId}/decline`
-      const body = status === 'approved' ? { deliveryAt } : undefined
-      await apiFetch(path, { method: 'PATCH', body })
-    } catch (error) {
-      setToast({ type: 'error', message: error.message })
-      return
-    }
-
-    setRentalRequests((current) => current.map((item) => (
-      item.id === requestId
-        ? { ...item, status, deliveryAt, decidedAt: new Date().toISOString(), decidedBy: account.email }
-        : item
-    )))
-
-    const message = status === 'approved'
-      ? `Your order for "${request.bookTitle}" was approved. Expected delivery: ${deliveryAt ? formatDeliveryDate(deliveryAt) : 'to be confirmed'}. Pay cash on delivery.${responseNote ? ` Note: ${responseNote}` : ''}`
-      : `Your order for "${request.bookTitle}" was declined.${responseNote ? ` Reason: ${responseNote}` : ''}`
-
-    setNotifications((current) => [
-      {
-        id: `notification-${Date.now()}`,
-        targetEmail: request.customerEmail,
-        type: status === 'approved' ? 'rental-approved' : 'rental-declined',
-        message,
-        bookTitle: request.bookTitle,
-        deliveryAt,
-        createdAt: new Date().toISOString(),
-        read: false,
-      },
-      ...current,
-    ])
-  }
-
-  function markNotificationRead(notificationId) {
     setNotifications((current) => current.map((item) => (
       item.id === notificationId ? { ...item, read: true } : item
     )))
@@ -1030,10 +884,23 @@ function App() {
   }
 
   async function removeManagedBook(id) {
+    if (!id) {
+      setToast({ type: 'error', message: 'This book has no id yet - refresh the admin book list and try again.' })
+      return
+    }
     try {
       await apiFetch(`/api/books/${id}`, { method: 'DELETE' })
       setManagedBooks((current) => current.filter((book) => book.id !== id))
     } catch (error) {
+      // The backend already returned 404 because the book is already gone
+      // from MongoDB (e.g. deleted directly in Compass/mongosh, or this row
+      // was stale leftover state) - the goal (book removed) is already true,
+      // so just drop the stale row instead of leaving it stuck with an error.
+      if (/not found/i.test(error.message)) {
+        setManagedBooks((current) => current.filter((book) => book.id !== id))
+        setToast({ type: 'success', message: 'That book was already removed from the database - cleared it from this list too.' })
+        return
+      }
       setToast({ type: 'error', message: error.message })
     }
   }
@@ -1044,14 +911,16 @@ function App() {
       ...book,
       author: getAuthor(book),
       category: getCategory(book),
-      cover: book.formats?.['image/jpeg'] || book.cover || '',
-      readerUrl: getReaderUrl(book),
+      // Real Mongo documents store these as coverUrl/readerUrl (see
+      // Book.js) - book.cover/book.formats only exist on the Gutendex-shaped
+      // catalog-search preview objects, never on a saved book. Checking
+      // those first here meant editing a real book always showed a blank
+      // cover and reader URL, even though the data was saved correctly.
+      cover: book.coverUrl || book.formats?.['image/jpeg'] || book.cover || '',
+      readerUrl: book.readerUrl || getReaderUrl(book),
       subjects: Array.isArray(book.subjects) ? book.subjects.join(', ') : book.subjects || '',
       language: book.languages?.[0] || book.language || 'en',
       status: book.status || 'published',
-      chapterTitles: Array.isArray(book.chapterList) ? book.chapterList.map((chapter) => chapter.title).join('\n') : book.chapterTitles || '',
-      chapterText: Array.isArray(book.chapterList) ? book.chapterList.map((chapter) => chapter.content).filter(Boolean).join('\n--- chapter ---\n') : book.chapterText || '',
-      chaptersDraft: getEditableChapters(book),
     })
     setToast({ type: 'success', message: 'Book loaded into the editor.' })
   }
@@ -1079,6 +948,7 @@ function App() {
           setAuthMode={updateAuthMode}
         />
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
+        {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
       </>
     )
   }
@@ -1093,8 +963,6 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
-        onRent={toggleRental}
-        rentals={rentals}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}
@@ -1109,8 +977,6 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
-        onRent={toggleRental}
-        rentals={rentals}
         query={query}
         searchableBooks={allBooks}
         searchHistory={searchHistory}
@@ -1138,8 +1004,6 @@ function App() {
         onHome={() => navigateTo('home')}
         onAuth={goAuth}
         onRead={openBook}
-        onRent={toggleRental}
-        rentals={rentals}
         viewCount={selectedBook ? viewCounts[selectedBook.id] || 0 : 0}
         viewCounts={viewCounts}
         viewerCount={selectedBook ? bookReaders[selectedBook.id]?.length || 0 : 0}
@@ -1177,8 +1041,6 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
-        onRent={toggleRental}
-        rentals={rentals}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}
@@ -1196,9 +1058,8 @@ function App() {
         onFavorite={toggleFavorite}
         onProfileUpdate={updateAccountProfile}
         onRead={openBook}
-        onRent={toggleRental}
         onChangePassword={changeAccountPassword}
-        rentals={rentals}
+        onToast={setToast}
         progress={progress}
         readingDays={readingActivity[getAccountKey(account)] || []}
         readerFontSize={readerFontSize}
@@ -1209,26 +1070,6 @@ function App() {
         viewCounts={viewCounts}
         viewerCounts={getViewerCounts(bookReaders)}
         websiteTheme={websiteTheme}
-      />
-    ),
-    requests: account.role === 'guest' ? (
-      <div className="section-block guest-prompt">
-        <p className="mono-eyebrow">Rental requests</p>
-        <h2>Login to request a rental</h2>
-        <p>Create an account or log in to send a rental request and track its status.</p>
-        <button className="primary-button" onClick={() => navigateTo('auth')} type="button">
-          <i className="bi bi-box-arrow-in-right" />
-          Go to login
-        </button>
-      </div>
-    ) : (
-      <RentRequestPage
-        account={account}
-        books={allBooks}
-        notifications={notifications}
-        onMarkNotificationRead={markNotificationRead}
-        onSubmitRequest={submitRentalRequest}
-        rentalRequests={rentalRequests}
       />
     ),
     admin: hasAccess(account.role, 'employee') ? (
@@ -1248,8 +1089,6 @@ function App() {
         onBanUser={banUser}
         onUnbanUser={unbanUser}
         onRefreshStaff={refreshStaffDirectory}
-        onDecideRentalRequest={decideRentalRequest}
-        rentalRequests={rentalRequests}
       />
     ) : null,
   }
@@ -1258,9 +1097,10 @@ function App() {
 
   return (
     <NavigationProvider value={navigation}>
-      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onOpenRequests={() => navigateTo('requests')} rentalRequests={rentalRequests} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
+      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkNotificationRead={markNotificationRead} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
         <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
+        {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
       </AppShell>
     </NavigationProvider>
   )
@@ -1271,22 +1111,6 @@ function App() {
 function getAccountKey(account) {
   if (!account || account.role === 'guest') return 'guest'
   return account.id || account.email || 'user'
-}
-
-function readStoredRentals(account) {
-  if (!account || account.role === 'guest') return []
-
-  const storageKey = `bookworm-rentals:${account.id || account.email || 'user'}`
-
-  try {
-    const storedValue = window.localStorage.getItem(storageKey)
-    if (!storedValue) return []
-
-    const parsed = JSON.parse(storedValue)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
 }
 
 function getViewerCounts(bookReaders) {
@@ -1333,11 +1157,6 @@ function getGuestCommentName(bookId, commentIndex) {
   return names[index]
 }
 
-function getPositiveInteger(value) {
-  const number = Number(value)
-  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null
-}
-
 function validateAdminBook(adminBook, managedBooks = []) {
   const duplicateTitle = managedBooks.some((book) => (
     book.id !== adminBook.id && book.title?.trim().toLowerCase() === adminBook.title.trim().toLowerCase()
@@ -1347,29 +1166,14 @@ function validateAdminBook(adminBook, managedBooks = []) {
     !hasText(adminBook.title) && 'Add a title.',
     duplicateTitle && 'A managed book already uses this title.',
     !hasText(adminBook.author) && 'Add an author.',
-    !hasText(adminBook.category) && 'Choose a category.',
-    !hasText(adminBook.cover) && 'Add a cover image.',
-    !isValidImageSource(adminBook.cover) && 'Cover must be an http(s) image URL or an uploaded image.',
-    !hasText(adminBook.description) && 'Add a description.',
-    !hasAdminReaderSource(adminBook) && 'Add a reader URL, reader text, or chapter content.',
+    hasText(adminBook.cover) && !isValidImageSource(adminBook.cover) && 'Cover must be an http(s) image URL or an uploaded image.',
     hasText(adminBook.readerUrl) && !isValidHttpUrl(adminBook.readerUrl) && 'Reader URL must start with http:// or https://.',
-    !hasValidAdminChapter(adminBook) && 'Add at least one chapter with a title and page count above 0.',
   ].filter(Boolean)
 }
 
 function createAdminBookRecord(adminBook) {
   const cover = adminBook.cover.trim()
-  const readerText = adminBook.readerText.trim()
-  const chapterText = adminBook.chapterText.trim()
   const readerUrl = adminBook.readerUrl.trim()
-  const explicitChapters = normalizeAdminDraftChapters(adminBook.chaptersDraft)
-  const fallbackPageCount = getPositiveInteger(adminBook.pageCount)
-  const fallbackChapterCount = getPositiveInteger(adminBook.chapterCount)
-  const chapterList = explicitChapters.length
-    ? explicitChapters
-    : createAdminChapters(adminBook.chapterTitles, chapterText, fallbackPageCount, fallbackChapterCount)
-  const pageCount = chapterList.reduce((total, chapter) => total + chapter.pages, 0) || fallbackPageCount
-  const chapterCount = chapterList.length || fallbackChapterCount
   const subjects = adminBook.subjects
     .split(',')
     .map((subject) => subject.trim())
@@ -1381,7 +1185,6 @@ function createAdminBookRecord(adminBook) {
   return {
     ...adminBook,
     title: adminBook.title.trim(),
-    access: adminBook.access === 'rent' ? 'rent' : 'read',
     author,
     category,
     authors: [{ name: author }],
@@ -1390,10 +1193,6 @@ function createAdminBookRecord(adminBook) {
     subjects,
     languages: [language || 'en'],
     status: adminBook.status || 'draft',
-    ...(pageCount ? { pageCount } : {}),
-    ...(chapterCount ? { chapterCount } : {}),
-    ...(chapterList.length ? { chapterList } : {}),
-    ...(readerText ? { readerText } : {}),
     download_count: adminBook.download_count || 0,
     formats: {
       ...(cover ? { 'image/jpeg': cover } : {}),
@@ -1401,93 +1200,14 @@ function createAdminBookRecord(adminBook) {
     },
     // Fields the real backend (backend/controllers/bookController.js) actually
     // reads off req.body - it only picks these exact keys, so the Gutendex-shaped
-    // fields above (cover/chapterList/authors[]/formats) are cosmetic only and
-    // get silently dropped by Mongo without these.
+    // fields above (cover/authors[]/formats) are cosmetic only and get
+    // silently dropped by Mongo without these. Reader text is fetched live
+    // from Gutenberg (see getBookReaderText), so chapters is always empty now.
     coverUrl: cover,
-    chapters: chapterList.map((chapter) => ({
-      order: chapter.number,
-      title: chapter.title,
-      content: chapter.content,
-    })),
-    totalCopies: getPositiveInteger(adminBook.totalCopies) || 1,
-    isAvailableToRent: adminBook.access === 'rent',
+    readerUrl,
+    chapters: [],
     sourceEtextNumber: adminBook.sourceEtextNumber || null,
   }
-}
-
-function createAdminChapters(titleSource, contentSource, pageCount, chapterCount) {
-  const titles = titleSource
-    .split('\n')
-    .map((title) => title.trim())
-    .filter(Boolean)
-  const contentBlocks = contentSource
-    .split(/\n-{3,}\s*(?:chapter)?\s*-{0,}\n/i)
-    .map((content) => content.trim())
-    .filter(Boolean)
-  const totalChapters = Math.max(titles.length, contentBlocks.length, chapterCount || 0)
-
-  if (!totalChapters) return []
-
-  const safePageCount = pageCount || totalChapters
-  const basePages = Math.max(1, Math.floor(safePageCount / totalChapters))
-  const extraPages = safePageCount % totalChapters
-  let startPage = 1
-
-  return Array.from({ length: totalChapters }, (_, index) => {
-    const pages = basePages + (index < extraPages ? 1 : 0)
-    const chapter = {
-      number: index + 1,
-      title: titles[index] || `Chapter ${index + 1}`,
-      startPage,
-      pages,
-      content: contentBlocks[index] || '',
-    }
-
-    startPage += pages
-    return chapter
-  })
-}
-
-function normalizeAdminDraftChapters(chapters = []) {
-  let startPage = 1
-
-  return chapters
-    .map((chapter, index) => {
-      const title = String(chapter.title || '').trim()
-      const content = String(chapter.content || '').trim()
-      const pages = getPositiveInteger(chapter.pages) || 1
-
-      if (!title && !content) return null
-
-      const nextChapter = {
-        number: index + 1,
-        title: title || `Chapter ${index + 1}`,
-        startPage,
-        pages,
-        content,
-      }
-
-      startPage += pages
-      return nextChapter
-    })
-    .filter(Boolean)
-}
-
-function getEditableChapters(book) {
-  if (Array.isArray(book.chapterList) && book.chapterList.length) {
-    return book.chapterList.map((chapter, index) => ({
-      title: chapter.title || `Chapter ${index + 1}`,
-      pages: String(chapter.pages || 1),
-      content: chapter.content || '',
-    }))
-  }
-
-  const count = getPositiveInteger(book.chapterCount) || 1
-  return Array.from({ length: count }, (_, index) => ({
-    title: `Chapter ${index + 1}`,
-    pages: String(Math.max(1, Math.floor((getPositiveInteger(book.pageCount) || count) / count))),
-    content: '',
-  }))
 }
 
 function getReaderFormatKey(readerUrl) {
@@ -1496,14 +1216,6 @@ function getReaderFormatKey(readerUrl) {
 
 function hasText(value) {
   return String(value || '').trim().length > 0
-}
-
-function hasAdminReaderSource(book) {
-  return Boolean(hasText(book.readerUrl) || hasText(book.readerText) || book.chaptersDraft?.some((chapter) => hasText(chapter.content)))
-}
-
-function hasValidAdminChapter(book) {
-  return Boolean(book.chaptersDraft?.some((chapter) => hasText(chapter.title) && Number(chapter.pages) > 0))
 }
 
 function isValidHttpUrl(value) {
@@ -1550,6 +1262,46 @@ function PageFallback() {
     <div className="page-fallback">
       <img src={logo} alt="BookWorm logo" />
       <span>Loading page...</span>
+    </div>
+  )
+}
+
+// Parses the backend's "Your account has been banned until YYYY-MM-DD.
+// Reason: ...." (or without the until-clause, for a permanent ban) into
+// separate pieces for a cleaner popup, falling back to the raw message
+// verbatim if the format ever changes.
+function parseBanMessage(message) {
+  const untilMatch = message.match(/banned until (\d{4}-\d{2}-\d{2})/i)
+  const reasonMatch = message.match(/Reason: (.+?)\.?$/i)
+  return {
+    until: untilMatch?.[1] || '',
+    reason: reasonMatch?.[1] || '',
+    raw: message,
+  }
+}
+
+function BanNoticeModal({ message, onClose }) {
+  const { until, reason, raw } = parseBanMessage(message)
+
+  return (
+    <div className="ban-notice-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="ban-notice-title">
+      <div className="ban-notice-modal">
+        <i className="bi bi-shield-exclamation" />
+        <h2 id="ban-notice-title">Your account has been banned</h2>
+        {reason ? (
+          <>
+            <p><strong>Reason:</strong> {reason}</p>
+            {until ? <p><strong>Banned until:</strong> {until}</p> : <p><strong>Duration:</strong> Permanent</p>}
+          </>
+        ) : (
+          <p>{raw}</p>
+        )}
+        <p className="ban-notice-help">If you believe this is a mistake, please contact a BookWorm manager or admin.</p>
+        <button className="primary-button" onClick={onClose} type="button">
+          <i className="bi bi-check-lg" />
+          I understand
+        </button>
+      </div>
     </div>
   )
 }

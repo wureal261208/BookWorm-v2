@@ -19,10 +19,7 @@ function RentRequestPage({ account, books = [], notifications = [], onMarkNotifi
     () => rentalRequests.filter((item) => (item.customerEmail || '').toLowerCase() === myEmail),
     [rentalRequests, myEmail],
   )
-  const myNotifications = useMemo(
-    () => notifications.filter((item) => (item.targetEmail || '').toLowerCase() === myEmail),
-    [notifications, myEmail],
-  )
+  const myNotifications = notifications
   const unreadCount = myNotifications.filter((item) => !item.read).length
 
   const searchResults = query.trim().length
@@ -143,7 +140,7 @@ function RentRequestPage({ account, books = [], notifications = [], onMarkNotifi
             {myNotifications.map((item) => (
               <li className={item.read ? '' : 'unread'} key={item.id}>
                 <div>
-                  <span>{item.message}</span>
+                  <span><strong>{item.title}</strong> {item.message}</span>
                   <small>{new Date(item.createdAt).toLocaleString()}</small>
                 </div>
                 {!item.read && (

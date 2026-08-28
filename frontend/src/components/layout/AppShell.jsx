@@ -7,7 +7,6 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 const navItems = [
   { id: 'home', label: 'Home', icon: 'bi-house' },
   { id: 'discover', label: 'Discover', icon: 'bi-compass' },
-  { id: 'requests', label: 'Rent a book', icon: 'bi-bag-plus', private: true },
   { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },
 ]
@@ -25,8 +24,7 @@ function AppShell({
   onAuth,
   onGuest,
   onLogout,
-  onOpenRequests,
-  rentalRequests = [],
+  onMarkNotificationRead,
   setWebsiteTheme,
   staff = [],
   websiteTheme = 'light',
@@ -45,22 +43,14 @@ function AppShell({
   const displayName = account?.name || 'None Account'
   const unreadNotifications = isGuest
     ? 0
-    : notifications.filter((item) => item.targetEmail === account?.email && !item.read).length
+    : notifications.filter((item) => !item.read).length
 
-  // staff[].email is masked by the backend - match by the trusted Mongo id instead.
-  const myStaffRecord = staff.find((item) => item.id === account?.id)
-  const myShelfSection = myStaffRecord?.section === 'rent' ? 'rent' : myStaffRecord?.section === 'read' ? 'read' : null
-  const isEmployeeOnly = normalizedRole === 'employee'
-
-  const pendingRentalRequests = isAdmin ? rentalRequests.filter((item) => item.status === 'pending') : []
   const recentPushedBooks = isAdmin
     ? [...managedBooks]
-        .filter((book) => !isEmployeeOnly || !myShelfSection || (book.access === 'rent' ? 'rent' : 'read') === myShelfSection)
         .sort((a, b) => getBookPushTimestamp(b.id) - getBookPushTimestamp(a.id))
         .slice(0, 4)
     : []
-  const staffNotificationCount = pendingRentalRequests.length + recentPushedBooks.length
-  const [showStaffNotifications, setShowStaffNotifications] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const visibleNavItems = navItems.filter((item) => {
     if (isManagementNavContext && !managementNavIds.includes(item.id)) return false
     if (item.admin && !canShowAdminNav) return false
@@ -125,82 +115,68 @@ function AppShell({
         </nav>
 
         <div className="header-account">
-          {!isGuest && isAdmin && (
+          {!isGuest && (
             <div className="mongo-notification" style={{ position: 'relative' }}>
               <button
-                aria-label={`Notifications${staffNotificationCount ? ` (${staffNotificationCount})` : ''}`}
+                aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications} unread)` : ''}`}
                 className="notification-bell"
-                onClick={() => setShowStaffNotifications((value) => !value)}
-                title="Rental requests and push activity"
+                onClick={() => setShowNotifications((value) => !value)}
+                title="Notifications"
                 type="button"
               >
                 <i className="bi bi-bell" />
-                {staffNotificationCount > 0 && <span className="notification-badge">{staffNotificationCount}</span>}
+                {unreadNotifications > 0 && <span className="notification-badge">{unreadNotifications}</span>}
               </button>
-              {showStaffNotifications && (
+              {showNotifications && (
                 <div className="mongo-notification-dropdown">
-                  <strong>Rental requests</strong>
-                  {pendingRentalRequests.length ? (
+                  <strong>Notifications</strong>
+                  {notifications.length ? (
                     <ul>
-                      {pendingRentalRequests.slice(0, 4).map((request) => (
-                        <li key={request.id}>
+                      {notifications.slice(0, 6).map((item) => (
+                        <li key={item.id}>
                           <button
-                            onClick={() => {
-                              setShowStaffNotifications(false)
-                              navigateTo('admin')
-                            }}
+                            className={item.read ? '' : 'unread'}
+                            onClick={() => onMarkNotificationRead?.(item.id)}
                             type="button"
                           >
-                            <i className="bi bi-bag-check" />
-                            <span>{request.customerName} wants to rent "{request.bookTitle}" - needs confirmation.</span>
+                            <i className={`bi ${item.read ? 'bi-envelope-open' : 'bi-envelope'}`} />
+                            <span><strong>{item.title}</strong> {item.message}</span>
                           </button>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="settings-copy">No pending rental requests.</p>
+                    <p className="settings-copy">No notifications yet.</p>
                   )}
 
-                  <strong style={{ marginTop: 10 }}>
-                    {isEmployeeOnly && myShelfSection ? `Recently pushed to ${myShelfSection === 'rent' ? 'To Rent' : 'To Read'}` : 'Recently pushed books'}
-                  </strong>
-                  {recentPushedBooks.length ? (
-                    <ul>
-                      {recentPushedBooks.map((book) => (
-                        <li key={book.id}>
-                          <button
-                            onClick={() => {
-                              setShowStaffNotifications(false)
-                              navigateTo('admin')
-                            }}
-                            type="button"
-                          >
-                            <i className="bi bi-journal-plus" />
-                            <span>
-                              "{book.title}" pushed to {book.access === 'rent' ? 'To Rent' : 'To Read'}.
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="settings-copy">No recent push activity.</p>
+                  {isAdmin && (
+                    <>
+                      <strong style={{ marginTop: 10 }}>Recently pushed books</strong>
+                      {recentPushedBooks.length ? (
+                        <ul>
+                          {recentPushedBooks.map((book) => (
+                            <li key={book.id}>
+                              <button
+                                onClick={() => {
+                                  setShowNotifications(false)
+                                  navigateTo('admin')
+                                }}
+                                type="button"
+                              >
+                                <i className="bi bi-journal-plus" />
+                                <span>"{book.title}" pushed to the catalog.</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="settings-copy">No recent push activity.</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
             </div>
-          )}
-          {!isGuest && !isAdmin && (
-            <button
-              aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications} unread)` : ''}`}
-              className="notification-bell"
-              onClick={() => (onOpenRequests ? onOpenRequests() : navigateTo('requests'))}
-              title="Rental requests and notifications"
-              type="button"
-            >
-              <i className="bi bi-bell" />
-              {unreadNotifications > 0 && <span className="notification-badge">{unreadNotifications}</span>}
-            </button>
           )}
           {typeof setWebsiteTheme === 'function' && (
             <div className="quick-theme-toggle">

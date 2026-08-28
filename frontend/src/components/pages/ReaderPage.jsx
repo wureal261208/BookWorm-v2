@@ -7,7 +7,7 @@ import { NextChapterModal, ReaderMemberModal } from '../reader/ReaderModals'
 import ReaderTopbar from '../reader/ReaderTopbar'
 import { getReaderUrl } from '../../utils/bookUtils'
 import { getBookChapters, getChapterIndex, getTotalPages } from '../../utils/chapterUtils'
-import { MOCK_READER_TEXT } from '../../mockData'
+import { publicApiFetch } from '../../utils/apiClient'
 
 const GUEST_CHAPTER_LIMIT = 3
 const READER_PAGE_TARGET_LENGTH = 1800
@@ -44,7 +44,6 @@ function ReaderPage({
   const [showMemberPrompt, setShowMemberPrompt] = useState(false)
   const activeBook = useMemo(() => book || { id: 'empty', title: '', formats: {} }, [book])
   const readerUrl = getReaderUrl(activeBook)
-  const readerTextUrl = getReaderTextUrl(activeBook)
   const metadataTotalPages = useMemo(() => getTotalPages(activeBook), [activeBook])
   const metadataChapters = useMemo(() => getBookChapters(activeBook, metadataTotalPages), [activeBook, metadataTotalPages])
   const readerModel = useMemo(
@@ -131,15 +130,7 @@ function ReaderPage({
       }
     }
 
-    const inlineText = getInlineBookText(activeBook)
     const hasChapterContent = metadataChapters.some((chapter) => chapter.content)
-
-    if (inlineText) {
-      commitReaderState(cleanBookText(inlineText), 'ready')
-      return () => {
-        isCurrentRequest = false
-      }
-    }
 
     if (hasChapterContent) {
       commitReaderState('', 'ready')
@@ -148,23 +139,28 @@ function ReaderPage({
       }
     }
 
-    if (!readerTextUrl) {
+    if (!book.id) {
       commitReaderState('', 'missing', 'This book does not include readable text for chapter pages.')
       return () => {
         isCurrentRequest = false
       }
     }
 
-    // DEMO UI ONLY – logic removed: this used to `fetch(getFetchableReaderUrl(...))`
-    // against /api/reader-text (a dev-server proxy to Project Gutenberg). It
-    // now just serves fixed placeholder text so the reader UI, pagination,
-    // and theming can still be demoed without any network call.
-    function loadReaderText() {
+    async function loadReaderText() {
       commitReaderState('', 'loading')
-      console.log('demo only – reader text is local mock content, not fetched')
-
-      const text = cleanBookText(MOCK_READER_TEXT)
-      commitReaderState(text, 'ready', '')
+      try {
+        const data = await publicApiFetch(`/api/books/${book.id}/reader-text`)
+        if (!isCurrentRequest) return
+        const text = cleanBookText(data.text || '')
+        if (!text) {
+          commitReaderState('', 'missing', 'This book does not include readable text for chapter pages.')
+          return
+        }
+        commitReaderState(text, 'ready', '')
+      } catch (error) {
+        if (!isCurrentRequest) return
+        commitReaderState('', 'error', error.message || 'Could not load reader text.')
+      }
     }
 
     loadReaderText()
@@ -172,7 +168,7 @@ function ReaderPage({
     return () => {
       isCurrentRequest = false
     }
-  }, [activeBook, book, metadataChapters, readerTextUrl])
+  }, [activeBook, book, metadataChapters])
 
   useEffect(() => {
     if (!book || isGuest) return
@@ -359,20 +355,6 @@ function getCheckpointKey(account, book) {
   return `${accountKey}:${book.id}`
 }
 
-function getReaderTextUrl(book) {
-  const formats = book.formats || {}
-
-  return (
-    getFormatUrl(formats, 'text/plain') ||
-    getProjectGutenbergTextUrl(book) ||
-    getFormatUrl(formats, 'text/html') ||
-    book.readerTextUrl ||
-    book.reader_text_url ||
-    book.readerUrl ||
-    ''
-  )
-}
-
 function getLatestComments(comments = []) {
   return [...comments].sort((first, second) => {
     const firstTime = new Date(first.createdAt).getTime()
@@ -380,34 +362,6 @@ function getLatestComments(comments = []) {
 
     return secondTime - firstTime
   })
-}
-
-function getFormatUrl(formats, mimePrefix) {
-  return Object.entries(formats).find(([mimeType, url]) => mimeType.startsWith(mimePrefix) && url)?.[1] || ''
-}
-
-function getProjectGutenbergTextUrl(book) {
-  const gutenbergId = getProjectGutenbergId(book)
-  return gutenbergId ? `https://www.gutenberg.org/cache/epub/${gutenbergId}/pg${gutenbergId}.txt` : ''
-}
-
-function getProjectGutenbergId(book) {
-  const directId = Number(book.id)
-  if (Number.isInteger(directId) && directId > 0) return directId
-
-  const sourceUrls = [book.readerUrl, ...(Object.values(book.formats || {}))]
-  const urlMatch = sourceUrls
-    .filter(Boolean)
-    .map((url) => String(url).match(/gutenberg\.org\/(?:ebooks|files|cache\/epub)\/(\d+)/i)?.[1])
-    .find(Boolean)
-
-  return urlMatch ? Number(urlMatch) : null
-}
-
-function getInlineBookText(book) {
-  return [book.readerText, book.reader_text, book.content, book.text, book.body].find(
-    (value) => typeof value === 'string' && value.trim(),
-  ) || ''
 }
 
 function buildReaderModel(book, text, metadataChapters, metadataTotalPages) {

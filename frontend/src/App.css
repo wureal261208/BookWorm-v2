@@ -577,11 +577,74 @@ textarea {
   animation: toastSlide 0.28s ease-out;
 }
 
+.ban-notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 12, 12, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.ban-notice-modal {
+  width: min(420px, 100%);
+  padding: 32px 28px 28px;
+  border-radius: 16px;
+  background: #ffffff;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+
+.ban-notice-modal > i {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fdecec;
+  color: #b3261e;
+  font-size: 26px;
+}
+
+.ban-notice-modal h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.ban-notice-modal p {
+  margin: 0 0 8px;
+  color: #333330;
+  line-height: 1.5;
+}
+
+.ban-notice-modal p strong {
+  color: #111111;
+}
+
+.ban-notice-help {
+  margin-top: 14px !important;
+  font-size: 13px;
+  color: #6f6f68 !important;
+}
+
+.ban-notice-modal .primary-button {
+  width: 100%;
+  margin-top: 18px;
+  justify-content: center;
+}
+
 .app-toast {
   position: fixed;
   top: 24px;
   right: 24px;
-  z-index: 30;
+  /* Must render above every modal backdrop (highest in this file is 90 -
+     see .admin-book-modal-backdrop/.reader-modal-backdrop), or a toast
+     fired while a modal is still open (e.g. a push-book error) renders
+     invisibly behind it. */
+  z-index: 200;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 30px;
   gap: 12px;
@@ -868,6 +931,8 @@ textarea {
   display: grid;
   grid-template-rows: 238px 1fr auto;
   overflow: hidden;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .book-card img {
@@ -882,7 +947,7 @@ textarea {
 }
 
 .category {
-  display: inline-flex;
+  display: inline-block;
   max-width: 100%;
   padding: 6px 10px;
   overflow: hidden;
@@ -891,6 +956,7 @@ textarea {
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .book-card h2,
@@ -903,6 +969,7 @@ textarea {
   font-size: 20px;
   line-height: 1.2;
   letter-spacing: 0;
+  overflow-wrap: break-word;
 }
 
 .book-card p,
@@ -1137,6 +1204,12 @@ progress {
 .admin-form,
 .admin-table {
   padding: 20px;
+  /* The book list sits in a 2-col split (.admin-two-col), so its rendered
+     width can be much narrower than the viewport even on a wide screen -
+     react to the panel's own width, not the window's, so long titles don't
+     get squeezed into an unreadable letter-stack at "desktop" sizes. */
+  container-type: inline-size;
+  container-name: admin-book-list;
 }
 
 .admin-form {
@@ -3898,6 +3971,15 @@ progress {
   font-weight: 850;
 }
 
+.settings-success {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #146b66;
+  font-weight: 850;
+}
+
 .admin-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4216,7 +4298,7 @@ progress {
 }
 
 .admin-book-row {
-  grid-template-columns: 48px minmax(0, 1fr) minmax(180px, 0.55fr) minmax(210px, auto);
+  grid-template-columns: 48px minmax(0, 1fr) minmax(140px, 0.45fr) minmax(150px, auto);
 }
 
 .admin-book-row img {
@@ -4230,11 +4312,16 @@ progress {
 .admin-book-row span {
   display: grid;
   gap: 6px;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .admin-status {
   width: fit-content;
-  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
   border-radius: 999px;
   background: #ecece8;
   color: #555550;
@@ -4242,6 +4329,16 @@ progress {
   font-style: normal;
   font-weight: 950;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.admin-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .status-published {
@@ -4250,8 +4347,52 @@ progress {
 }
 
 .status-hidden {
-  background: #f6ecec;
-  color: #9a2f2f;
+  background: #fbecec;
+  color: #b3261e;
+}
+
+.admin-row-actions .danger-button {
+  border: 1px solid #f0c4c4;
+  background: #fdf2f2;
+  color: #b3261e;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-row-actions .danger-button:hover:not(:disabled) {
+  background: #f9dede;
+  border-color: #e2a3a3;
+}
+
+.admin-row-actions .danger-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.admin-row-actions .unban-button {
+  border: 1px solid #b7ded8;
+  background: #eefaf8;
+  color: #146b66;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-row-actions .unban-button:hover:not(:disabled) {
+  background: #ddf3ef;
+  border-color: #8fc9c0;
+}
+
+.admin-row-actions .unban-button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .admin-row-actions {
@@ -4266,6 +4407,15 @@ progress {
   align-items: center;
   color: #9a6b14;
   font-size: 12px;
+}
+
+.admin-row-actions .admin-row-warning-broken {
+  color: #b3261e;
+}
+
+.admin-row-actions .ghost-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .admin-guidelines {
@@ -4396,6 +4546,11 @@ progress {
   justify-items: center;
   overflow: auto;
   padding: 24px 16px;
+  /* Stronger dim + blur than the shared reader-modal-backdrop default, so
+     the whole page behind clearly reads as "inactive" and the card is the
+     obvious single focus point. */
+  background: rgba(15, 15, 14, 0.6);
+  backdrop-filter: blur(10px);
 }
 
 .admin-book-modal {
@@ -4403,11 +4558,11 @@ progress {
   grid-template-rows: auto 1fr auto;
   width: min(880px, 100%);
   max-height: min(880px, calc(100svh - 48px));
-  border: 1px solid #d8d8d3;
-  border-radius: 10px;
+  border: 1px solid #e4e4df;
+  border-radius: 18px;
   background: #ffffff;
   color: #111111;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
   animation: pageRise 0.22s ease both;
   overflow: hidden;
 }
@@ -4466,6 +4621,19 @@ progress {
   padding: 18px 22px;
   border-bottom: 1px solid #e4e4df;
   background: linear-gradient(180deg, #eefaf8 0%, #fbfbf8 100%);
+}
+
+.admin-editing-notice {
+  background: linear-gradient(180deg, #fff7ea 0%, #fbfbf8 100%);
+}
+
+.admin-editing-notice .admin-search-hero-label i {
+  background: #fdecc8;
+  color: #9a6b14;
+}
+
+.admin-editing-notice .admin-search-hero-label span {
+  line-height: 1.4;
 }
 
 .admin-search-hero-label {
@@ -4935,7 +5103,6 @@ progress {
   .admin-book-form,
   .admin-book-form fieldset,
   .admin-cover-picker,
-  .admin-book-row,
   .admin-chapter-editor,
   .admin-preview-modal {
     grid-template-columns: 1fr;
@@ -5098,6 +5265,62 @@ progress {
 
   .reader-title-block {
     min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-book-row {
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      'cover title'
+      'cover author'
+      'actions actions';
+  }
+
+  .admin-book-row img {
+    grid-area: cover;
+  }
+
+  .admin-book-row span {
+    grid-area: title;
+  }
+
+  .admin-book-row small {
+    grid-area: author;
+  }
+
+  .admin-book-row .admin-row-actions {
+    grid-area: actions;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+}
+
+@container admin-book-list (max-width: 560px) {
+  .admin-book-row {
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      'cover title'
+      'cover author'
+      'actions actions';
+  }
+
+  .admin-book-row img {
+    grid-area: cover;
+  }
+
+  .admin-book-row span {
+    grid-area: title;
+  }
+
+  .admin-book-row small {
+    grid-area: author;
+  }
+
+  .admin-book-row .admin-row-actions {
+    grid-area: actions;
+    justify-content: flex-start;
+    margin-top: 6px;
   }
 }
 
@@ -5498,6 +5721,26 @@ progress {
 .app-theme-dark .status-draft {
   background: rgba(255, 200, 120, 0.16);
   color: #ffcd85;
+}
+
+.app-theme-dark .admin-row-actions .danger-button {
+  border-color: rgba(240, 100, 100, 0.35);
+  background: rgba(240, 100, 100, 0.14);
+  color: #ff8b8b;
+}
+
+.app-theme-dark .admin-row-actions .danger-button:hover:not(:disabled) {
+  background: rgba(240, 100, 100, 0.24);
+}
+
+.app-theme-dark .admin-row-actions .unban-button {
+  border-color: rgba(124, 140, 248, 0.35);
+  background: rgba(124, 140, 248, 0.14);
+  color: var(--app-accent);
+}
+
+.app-theme-dark .admin-row-actions .unban-button:hover:not(:disabled) {
+  background: rgba(124, 140, 248, 0.24);
 }
 
 .app-theme-dark .admin-validation-error {

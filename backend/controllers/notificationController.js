@@ -2,6 +2,25 @@ const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 
+// Matches the { id, ... } shape the frontend already expects from other
+// endpoints (see sanitizeUser in userController.js), and folds the
+// per-user readBy array down to a simple boolean for the current viewer.
+function sanitizeNotification(notification, viewerId) {
+  const isRead = viewerId
+    ? notification.readBy.some((id) => String(id) === String(viewerId))
+    : false;
+
+  return {
+    id: notification._id,
+    title: notification.title,
+    message: notification.message,
+    audience: notification.audience,
+    targetUser: notification.targetUser || null,
+    read: isRead,
+    createdAt: notification.createdAt,
+  };
+}
+
 // @route POST /api/notifications
 // @desc  Admin broadcasts a notification to all customers.
 const createNotification = asyncHandler(async (req, res) => {
@@ -19,7 +38,9 @@ const createNotification = asyncHandler(async (req, res) => {
     targetUser: targetUserId || null,
   });
 
-  return success(res, 201, 'Notification sent successfully.', { notification });
+  return success(res, 201, 'Notification sent successfully.', {
+    notification: sanitizeNotification(notification, req.user._id),
+  });
 });
 
 // @route GET /api/notifications
@@ -46,7 +67,7 @@ const getNotifications = asyncHandler(async (req, res) => {
   ).length;
 
   return success(res, 200, 'Notifications retrieved successfully.', {
-    notifications,
+    notifications: notifications.map((n) => sanitizeNotification(n, req.user._id)),
     unreadCount,
     requiresLogin: false,
   });
@@ -66,7 +87,9 @@ const markAsRead = asyncHandler(async (req, res) => {
     await notification.save();
   }
 
-  return success(res, 200, 'Notification marked as read.', { notification });
+  return success(res, 200, 'Notification marked as read.', {
+    notification: sanitizeNotification(notification, req.user._id),
+  });
 });
 
 module.exports = { createNotification, getNotifications, markAsRead };

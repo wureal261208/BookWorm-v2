@@ -6,7 +6,7 @@ import DetailRecommendations from '../detail/DetailRecommendations'
 import DetailTabs from '../detail/DetailTabs'
 import MembershipRequiredModal from '../detail/MembershipRequiredModal'
 import { getAuthor, getCategory } from '../../utils/bookUtils'
-import { getBookChapters, getTotalPages } from '../../utils/chapterUtils'
+import { getBookChapters, getTotalPages, hasExplicitChapters } from '../../utils/chapterUtils'
 
 function BookDetailPage({
   account,
@@ -23,8 +23,6 @@ function BookDetailPage({
   onHome,
   onAuth,
   onRead,
-  onRent,
-  rentals = [],
   viewCount = 0,
   viewCounts = {},
   viewerCounts = {},
@@ -48,6 +46,8 @@ function BookDetailPage({
   const totalPages = getTotalPages(book)
   const detailChapters = getBookChapters(book, totalPages)
   const totalChapters = detailChapters.length
+  const hasChapters = hasExplicitChapters(book)
+  const effectiveDetailTab = !hasChapters && activeDetailTab === 'chapters' ? 'comments' : activeDetailTab
   const language = book.languages?.join(', ').toUpperCase() || 'EN'
   const readingTime = Math.max(1, Math.round(totalPages * 2.2))
   const rating = Math.min(5, Math.max(3.8, (book.download_count || 1000) / 25000 + 3.6)).toFixed(1)
@@ -105,11 +105,10 @@ function BookDetailPage({
         book={book}
         checkpoint={checkpoint}
         favorites={favorites}
+        hasChapters={hasChapters}
         language={language}
         onAuth={onAuth}
         onRead={onRead}
-        onRent={onRent}
-        rental={rentals.find((item) => item.id === book.id)}
         onSaveBook={handleSaveBook}
         onToggleSavePrompt={setShowSavePrompt}
         rating={rating}
@@ -120,13 +119,13 @@ function BookDetailPage({
         totalReads={totalReads}
       />
 
-      <DetailTabs activeTab={activeDetailTab} onChange={setActiveDetailTab} />
+      <DetailTabs activeTab={effectiveDetailTab} onChange={setActiveDetailTab} showChapters={hasChapters} />
 
-      {activeDetailTab === 'chapters' && (
+      {hasChapters && effectiveDetailTab === 'chapters' && (
         <DetailChapters account={account} chapters={detailChapters} onChapterClick={handleChapterClick} />
       )}
 
-      {activeDetailTab === 'comments' && (
+      {effectiveDetailTab === 'comments' && (
         <DetailComments
           account={account}
           commentText={commentText}
@@ -140,15 +139,13 @@ function BookDetailPage({
         />
       )}
 
-      {activeDetailTab === 'more' && (
+      {effectiveDetailTab === 'more' && (
         <DetailRecommendations
           books={recommendations}
           favorites={favorites}
           onDetail={onDetail}
           onFavorite={onFavorite}
           onRead={onRead}
-          onRent={onRent}
-          rentals={rentals}
           viewCounts={viewCounts}
           viewerCounts={viewerCounts}
         />

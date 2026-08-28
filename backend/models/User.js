@@ -30,8 +30,6 @@ const UserSchema = new mongoose.Schema(
     bannedAt: { type: Date, default: null },
     // True when a manager/employee account has been resigned (revoked) by an admin/manager.
     isResigned: { type: Boolean, default: false },
-    // Which Push Book shelf an employee manages (ignored for other roles).
-    section: { type: String, enum: ['read', 'rent', null], default: null },
     // Who created this account (used for manager/employee accounts created via one-time code).
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     // Bumped whenever this account's password is changed from Profile -

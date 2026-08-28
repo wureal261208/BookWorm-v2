@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getAuthor, getCover, getInitials } from '../../utils/bookUtils'
 import { maskEmail } from '../../utils/maskEmail'
 
@@ -17,10 +17,10 @@ function ProfilePage({
   onFavorite,
   onProfileUpdate,
   onRead,
+  onToast,
   progress = {},
   readerFontSize,
   readerTheme,
-  rentals = [],
   setReaderFontSize,
   setReaderTheme,
   setWebsiteTheme,
@@ -38,10 +38,10 @@ function ProfilePage({
         onFavorite={onFavorite}
         onProfileUpdate={onProfileUpdate}
         onRead={onRead}
+        onToast={onToast}
         progress={progress}
         readerFontSize={readerFontSize}
         readerTheme={readerTheme}
-        rentals={rentals}
         setReaderFontSize={setReaderFontSize}
         setReaderTheme={setReaderTheme}
         setWebsiteTheme={setWebsiteTheme}
@@ -60,10 +60,10 @@ function ProfileSettings({
   onFavorite,
   onProfileUpdate,
   onRead,
+  onToast,
   progress = {},
   readerFontSize,
   readerTheme,
-  rentals = [],
   setReaderFontSize,
   setReaderTheme,
   setWebsiteTheme,
@@ -72,11 +72,13 @@ function ProfileSettings({
   const [avatarPreview, setAvatarPreview] = useState(account?.avatar || '')
   const [displayName, setDisplayName] = useState(account?.name || 'Reader')
   const [settingsError, setSettingsError] = useState('')
+  const [settingsSuccess, setSettingsSuccess] = useState('')
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordLoading, setPasswordLoading] = useState(false)
   const roleLabel = (account?.role || 'customer').charAt(0).toUpperCase() + (account?.role || 'customer').slice(1)
   const continueReading = books
@@ -88,6 +90,18 @@ function ProfileSettings({
   const safeEmail = account?.email || 'No email linked yet'
   const safeMaskedEmail = safeEmail === 'No email linked yet' ? safeEmail : maskEmail(safeEmail)
   const safeAvatar = avatarPreview || account?.avatar || ''
+
+  useEffect(() => {
+    if (!settingsSuccess) return undefined
+    const timer = window.setTimeout(() => setSettingsSuccess(''), 4000)
+    return () => window.clearTimeout(timer)
+  }, [settingsSuccess])
+
+  useEffect(() => {
+    if (!passwordSuccess) return undefined
+    const timer = window.setTimeout(() => setPasswordSuccess(''), 4000)
+    return () => window.clearTimeout(timer)
+  }, [passwordSuccess])
 
   function handleAvatarChange(event) {
     const file = event.target.files?.[0]
@@ -118,17 +132,22 @@ function ProfileSettings({
     const nameError = validateDisplayName(displayName)
     if (nameError) {
       setSettingsError(nameError)
+      setSettingsSuccess('')
       return
     }
 
     const normalizedDisplayName = normalizeDisplayName(displayName)
     setSettingsLoading(true)
     setSettingsError('')
+    setSettingsSuccess('')
     try {
       await onProfileUpdate({ avatar: safeAvatar, displayName: normalizedDisplayName })
       setDisplayName(normalizedDisplayName)
+      setSettingsSuccess('Profile updated.')
+      onToast?.({ type: 'success', message: 'Profile updated successfully.' })
     } catch {
       setSettingsError('Could not update your profile. Please try again.')
+      onToast?.({ type: 'error', message: 'Could not update your profile. Please try again.' })
     } finally {
       setSettingsLoading(false)
     }
@@ -137,9 +156,18 @@ function ProfileSettings({
   async function handleChangePassword(event) {
     event.preventDefault()
     setPasswordError('')
+    setPasswordSuccess('')
 
+    if (!oldPassword.trim()) {
+      setPasswordError('Enter your current password.')
+      return
+    }
     if (newPassword.length < 8) {
       setPasswordError('New password must be at least 8 characters.')
+      return
+    }
+    if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setPasswordError('New password must include at least one letter and one number.')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -157,17 +185,20 @@ function ProfileSettings({
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      setPasswordSuccess('Password changed. Check your inbox for the confirmation email.')
+      onToast?.({ type: 'success', message: 'Password changed successfully.' })
     } catch (error) {
       const code = error?.code || ''
+      let message = 'Could not change your password. Please try again.'
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
-        setPasswordError('Current password is incorrect.')
+        message = 'Current password is incorrect.'
       } else if (code === 'auth/too-many-requests') {
-        setPasswordError('Too many attempts. Please wait a bit and try again.')
+        message = 'Too many attempts. Please wait a bit and try again.'
       } else if (code === 'auth/weak-password') {
-        setPasswordError('New password is too weak - use at least 8 characters.')
-      } else {
-        setPasswordError('Could not change your password. Please try again.')
+        message = 'New password is too weak - use at least 8 characters.'
       }
+      setPasswordError(message)
+      onToast?.({ type: 'error', message })
     } finally {
       setPasswordLoading(false)
     }
@@ -247,25 +278,11 @@ function ProfileSettings({
           </label>
           <button className="primary-button" disabled={settingsLoading} type="submit">
             <i className="bi bi-check2-circle" />
-            Save profile
+            {settingsLoading ? 'Saving...' : 'Save profile'}
           </button>
+          {settingsError && <p className="settings-error"><i className="bi bi-exclamation-circle" /> {settingsError}</p>}
+          {settingsSuccess && <p className="settings-success"><i className="bi bi-check-circle" /> {settingsSuccess}</p>}
         </form>
-
-        <div className="account-settings-card">
-          <SettingsHeading icon="bi-bag-check" kicker="Rentals" title="Active rentals" />
-          {rentals?.length ? (
-            <ul className="rental-list">
-              {rentals.map((rental) => (
-                <li key={rental.id}>
-                  <strong>{rental.title}</strong>
-                  <span>{new Date(rental.expiresAt).toLocaleDateString()}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="settings-copy">No rentals yet. Rent a book from the library to see it here.</p>
-          )}
-        </div>
 
         <div className="account-settings-card">
           <SettingsHeading icon="bi-bookmark-star" kicker="Continue reading" title="Pick up where you left off" />
@@ -321,7 +338,7 @@ function ProfileSettings({
               autoComplete="current-password"
               onChange={(event) => {
                 setOldPassword(event.target.value)
-                setPasswordError('')
+                setPasswordError(''); setPasswordSuccess('')
               }}
               type="password"
               value={oldPassword}
@@ -333,12 +350,12 @@ function ProfileSettings({
               autoComplete="new-password"
               onChange={(event) => {
                 setNewPassword(event.target.value)
-                setPasswordError('')
+                setPasswordError(''); setPasswordSuccess('')
               }}
               type="password"
               value={newPassword}
             />
-            <span className="field-hint">At least 8 characters.</span>
+            <span className="field-hint">At least 8 characters, with letters and numbers.</span>
           </label>
           <label>
             Confirm new password
@@ -346,13 +363,14 @@ function ProfileSettings({
               autoComplete="new-password"
               onChange={(event) => {
                 setConfirmPassword(event.target.value)
-                setPasswordError('')
+                setPasswordError(''); setPasswordSuccess('')
               }}
               type="password"
               value={confirmPassword}
             />
           </label>
-          {passwordError && <p className="settings-error">{passwordError}</p>}
+          {passwordError && <p className="settings-error"><i className="bi bi-exclamation-circle" /> {passwordError}</p>}
+          {passwordSuccess && <p className="settings-success"><i className="bi bi-check-circle" /> {passwordSuccess}</p>}
           <button className="primary-button" disabled={passwordLoading || !oldPassword || !newPassword || !confirmPassword} type="submit">
             <i className="bi bi-shield-check" />
             {passwordLoading ? 'Changing...' : 'Change password'}
@@ -410,7 +428,6 @@ function ProfileSettings({
           </div>
         </div>
       </div>
-      {settingsError && <p className="settings-error">{settingsError}</p>}
     </section>
   )
 }

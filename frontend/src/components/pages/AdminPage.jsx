@@ -1,32 +1,62 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getAuthor, getCategory, getDescription, getReaderUrl } from '../../utils/bookUtils'
-import { getBookChapters, getTotalPages } from '../../utils/chapterUtils'
+import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
-import { formatDeliveryDate } from '../../utils/rentalUtils'
 import { maskEmail } from '../../utils/maskEmail'
 
 const identityFields = [
   { name: 'title', label: 'Title', placeholder: 'Book title' },
   { name: 'author', label: 'Author', placeholder: 'Author name' },
-  { name: 'category', label: 'Category', placeholder: 'Fantasy fiction' },
+  { name: 'category', label: 'Category (optional)', placeholder: 'Fantasy fiction - leave blank if unknown' },
 ]
 
 const mediaFields = [
   { name: 'readerUrl', label: 'Reader URL', placeholder: 'https://...', type: 'url' },
 ]
 
-const NONE_COVER_URL = 'https://icons.veryicon.com/png/o/miscellaneous/myicon-1/none-1.png'
+// Inline SVG instead of a third-party icon URL, so the placeholder always
+// renders clearly (no dependency on an external site staying reachable) -
+// previously a failed external fetch made this show as an unlabeled/blurry
+// "N/A" box instead of an actual readable placeholder.
+const NONE_COVER_URL = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280" viewBox="0 0 200 280">'
+  + '<rect width="200" height="280" fill="#e4e4de"/>'
+  + '<rect x="1" y="1" width="198" height="278" fill="none" stroke="#c7c7c0" stroke-width="2"/>'
+  + '<g fill="#9a9a90">'
+  + '<path d="M60 90h80v100H60z" fill="none" stroke="#9a9a90" stroke-width="4"/>'
+  + '<path d="M60 90v100M140 90v100" stroke="#9a9a90" stroke-width="2"/>'
+  + '</g>'
+  + '<text x="100" y="215" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#77776e" text-anchor="middle">No cover</text>'
+  + '</svg>'
+)
+
+// Gutenberg only auto-generates a "medium" cover for most books, and a
+// "small" one for some others - neither exists for every book. Cascade
+// through both before giving up, instead of a single guess that often 404s.
+function handleGutenbergCoverError(event, etextNumber) {
+  const img = event.currentTarget
+  const step = Number(img.dataset.coverStep || '0')
+  const candidates = etextNumber
+    ? [
+        `https://www.gutenberg.org/cache/epub/${etextNumber}/pg${etextNumber}.cover.medium.jpg`,
+        `https://www.gutenberg.org/cache/epub/${etextNumber}/pg${etextNumber}.cover.small.jpg`,
+      ]
+    : []
+  const next = candidates[step]
+
+  if (next) {
+    img.dataset.coverStep = String(step + 1)
+    img.src = next
+  } else {
+    img.src = NONE_COVER_URL
+  }
+}
 
 const languageChoices = [
   { value: 'en', label: 'English', disabled: false },
   { value: 'vi', label: 'Vietnamese - Coming soon', disabled: true },
   { value: 'jp', label: 'Japanese - Coming soon', disabled: true },
-]
-
-const accessChoices = [
-  { value: 'read', label: 'To Read - free to open' },
-  { value: 'rent', label: 'To Rent - needs a rental' },
 ]
 
 const adminBookFilters = [
@@ -52,32 +82,21 @@ function AdminPage({
   onBanUser,
   onUnbanUser,
   onRefreshStaff,
-  onDecideRentalRequest,
-  rentalRequests = [],
 }) {
   const role = normalizeRole(account?.role)
   const isAdmin = role === 'admin'
   const isManager = role === 'manager'
   const isEmployee = role === 'employee'
 
-  // staff[].email is masked by the backend (see maskEmail.js) - can't match
-  // by it. account.id is the trusted Mongo _id from resolveTrustedProfile.
-  const myStaffRecord = staff.find((item) => item.id === account?.id)
-  const mySection = myStaffRecord?.section === 'rent' ? 'rent' : 'read'
-
   const canPushBooks = isAdmin || isEmployee
   const canManageUsers = isAdmin || isManager
-  const canReviewRequests = isAdmin || isManager
-  const availableBookSections = isAdmin ? ['read', 'rent'] : isEmployee ? [mySection] : []
 
   const availableSections = [
     canPushBooks && 'book',
     canManageUsers && 'team',
-    canReviewRequests && 'requests',
   ].filter(Boolean)
 
   const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'book')
-  const [bookAccess, setBookAccess] = useState(availableBookSections[0] || 'read')
   const [userTab, setUserTab] = useState(isAdmin ? 'manager' : 'employee')
   const [bookFilter, setBookFilter] = useState('all')
   const [showPreview, setShowPreview] = useState(false)
@@ -88,11 +107,8 @@ function AdminPage({
   const [employeePrefill, setEmployeePrefill] = useState({ name: '', email: '' })
 
   const sectionBooks = useMemo(
-    () =>
-      managedBooks
-        .filter((book) => (book.access === 'rent' ? 'rent' : 'read') === bookAccess)
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
-    [managedBooks, bookAccess],
+    () => [...managedBooks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+    [managedBooks],
   )
   const publishedBooks = sectionBooks.filter((book) => (book.status || 'published') === 'published').length
   const detailReadyBooks = sectionBooks.filter((book) => !getBookWarnings(book).some((warning) => warning.id === 'description')).length
@@ -108,47 +124,14 @@ function AdminPage({
   })
 
   const managerAccounts = staff.filter((item) => item.role === 'manager' && !item.isResigned)
-  const pendingRequests = rentalRequests.filter((item) => item.status === 'pending')
-  const decidedRequests = rentalRequests.filter((item) => item.status !== 'pending').slice(0, 20)
   const employeeAccounts = staff.filter((item) => item.role === 'employee' && !item.isResigned)
   const customerAccounts = users.filter((item) => normalizeRole(item.role) === 'customer')
   const lockedCustomers = customerAccounts.filter((item) => item.isRestricted).length
   const userTabsAvailable = isAdmin ? ['manager', 'employee', 'customer'] : ['employee', 'customer']
   const userTabLabels = { manager: 'Managers', employee: 'Employees', customer: 'Customers' }
 
-  function selectBookAccess(value) {
-    setBookAccess(value)
-    if (!adminBook.id) updateAdminBook('access', value)
-  }
-
   function updateAdminBook(name, value) {
     setAdminBook({ ...adminBook, [name]: value })
-  }
-
-  function updateChapter(index, field, value) {
-    const chapters = adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : [createEmptyChapter(0)]
-    setAdminBook({
-      ...adminBook,
-      chaptersDraft: chapters.map((chapter, chapterIndex) => (
-        chapterIndex === index ? { ...chapter, [field]: value } : chapter
-      )),
-    })
-  }
-
-  function addChapter() {
-    const chapters = adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : []
-    setAdminBook({
-      ...adminBook,
-      chaptersDraft: [...chapters, createEmptyChapter(chapters.length)],
-    })
-  }
-
-  function removeChapter(index) {
-    const chapters = adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : [createEmptyChapter(0)]
-    setAdminBook({
-      ...adminBook,
-      chaptersDraft: chapters.length === 1 ? [createEmptyChapter(0)] : chapters.filter((_, chapterIndex) => chapterIndex !== index),
-    })
   }
 
   function updateCoverFile(event) {
@@ -180,12 +163,11 @@ function AdminPage({
       const email = (form.get('email') || '').trim().toLowerCase()
       if (!name || !email) return
 
-      const section = staffRole === 'employee' ? (form.get('section') === 'rent' ? 'rent' : 'read') : null
       setStaffActionError('')
       setNewStaffCredential(null)
       setStaffActionBusy(email)
       try {
-        const data = await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { name, email, role: staffRole, section } })
+        const data = await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { name, email, role: staffRole } })
         if (data.temporaryPassword) {
           setNewStaffCredential({ email, password: data.temporaryPassword })
         }
@@ -199,15 +181,15 @@ function AdminPage({
     }
   }
 
-  async function updateEmployeeSection(member, section) {
-    if (!member?.id) return
+  async function resignStaffAccount(member) {
+    if (!member?.id) {
+      setStaffActionError('This account was created before the account-management update - ask an admin to resign it from MongoDB directly.')
+      return
+    }
     setStaffActionError('')
     setStaffActionBusy(member.email)
     try {
-      // Pass id, not email - the staff list's email is masked for display
-      // (see maskEmail.js) and can't be matched back to a real account by
-      // string on the backend.
-      await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { id: member.id, name: member.name, role: 'employee', section } })
+      await apiFetch(`/api/users/${member.id}/resign`, { method: 'PATCH' })
       await onRefreshStaff()
     } catch (error) {
       setStaffActionError(error.message)
@@ -306,13 +288,6 @@ function AdminPage({
                 Users
               </button>
             )}
-            {availableSections.includes('requests') && (
-              <button className={activeAdminSection === 'requests' ? 'active' : ''} onClick={() => setActiveAdminSection('requests')} type="button">
-                <i className="bi bi-bell" />
-                Rental Requests
-                {pendingRequests.length > 0 && <span className="tab-count-badge">{pendingRequests.length}</span>}
-              </button>
-            )}
           </div>
         ) : (
           <div className="admin-section-tabs" style={{ gridTemplateColumns: '1fr' }}>
@@ -337,46 +312,20 @@ function AdminPage({
             <div className="section-heading">
               <div>
                 <p className="mono-eyebrow">Push Book</p>
-                <h2>{bookAccess === 'read' ? 'To Read shelf' : 'To Rent shelf'}</h2>
+                <h2>Book catalog</h2>
               </div>
-              <span>{bookAccess === 'read' ? 'To Read - open to every reader, no rental needed' : 'To Rent - readers unlock this with a rental'}</span>
+              <span>Every book here is free to open - readers just click Read.</span>
             </div>
             {managedBooksError && !showBookModal && (
               <p className="admin-validation-error"><i className="bi bi-x-circle" /> {managedBooksError}</p>
             )}
 
             <div className="admin-book-toolbar-row">
-              <div className="admin-choice-grid admin-choice-grid-2" role="tablist" aria-label="Push Book shelf">
-                {availableBookSections.length === 2 ? accessChoices.map((choice) => (
-                <button
-                  className={bookAccess === choice.value ? 'active' : ''}
-                  key={choice.value}
-                  onClick={() => selectBookAccess(choice.value)}
-                  type="button"
-                >
-                  {choice.label}
-                </button>
-              )) : accessChoices.map((choice) => (
-                <button
-                  className={bookAccess === choice.value ? 'active' : ''}
-                  disabled={!availableBookSections.includes(choice.value)}
-                  key={choice.value}
-                  type="button"
-                >
-                  {choice.label}
-                </button>
-              ))}
-              </div>
               <button className="primary-button admin-add-book-button" onClick={openAddBookModal} type="button">
                 <i className="bi bi-plus-lg" />
                 Add new book
               </button>
             </div>
-            {isEmployee && (
-              <p className="form-note">
-                You only manage the <strong>{mySection === 'read' ? 'To Read' : 'To Rent'}</strong> shelf. Ask a manager or admin to move you to the other one.
-              </p>
-            )}
 
             <div className="admin-filter-bar" aria-label="Filter admin books">
               {adminBookFilters.map((filter) => (
@@ -388,37 +337,40 @@ function AdminPage({
 
             <div className="admin-two-col">
               <section className="admin-table">
-                <h2>{bookAccess === 'read' ? 'To Read shelf' : 'To Rent shelf'}</h2>
+                <h2>Books</h2>
                 {filteredManagedBooks.length ? (
                   filteredManagedBooks.map((book) => {
-                    const totalPages = getTotalPages(book)
-                    const chapters = getBookChapters(book, totalPages)
-                    const warnings = getBookWarnings(book)
+                    // Some rows can come back from Mongo without the `id`
+                    // virtual populated (e.g. a document touched outside the
+                    // API) - `_id` is the raw Mongo id and is always present,
+                    // so fall back to it everywhere an id is needed. Without
+                    // this, rows with no id at all would collide on the same
+                    // React key and visually overlap.
+                    const bookId = book.id || book._id
+                    const missingId = !bookId
 
                     return (
-                      <div className="table-row admin-book-row" key={book.id}>
+                      <div className="table-row admin-book-row" key={bookId || book.title}>
                         <img
                           src={getAdminCover(book)}
                           alt=""
-                          onError={(event) => {
-                            event.currentTarget.src = NONE_COVER_URL
-                          }}
+                          onError={(event) => handleGutenbergCoverError(event, book.sourceEtextNumber)}
                         />
                         <span>
                           {book.title}
                           <em className={`admin-status status-${book.status || 'published'}`}>{book.status || 'published'}</em>
                         </span>
-                        <small>{getAuthor(book)} - {getCategory(book)} - {chapters.length} chapters</small>
+                        <small>{getAuthor(book)} - {getCategory(book)}</small>
                         <div className="admin-row-actions">
-                          {warnings.length > 0 && <strong>{warnings.length} warnings</strong>}
-                          <button className="ghost-button" onClick={() => openEditBookModal(book)} type="button">Edit</button>
-                          <button className="ghost-button" onClick={() => removeManagedBook(book.id)} type="button">Remove</button>
+                          {missingId && <strong className="admin-row-warning-broken">no id - refresh page</strong>}
+                          <button className="ghost-button" disabled={missingId} onClick={() => openEditBookModal({ ...book, id: bookId })} type="button">Edit</button>
+                          <button className="ghost-button" disabled={missingId} onClick={() => removeManagedBook(bookId)} type="button">Remove</button>
                         </div>
                       </div>
                     )
                   })
                 ) : (
-                  <p>No books match this filter on this shelf.</p>
+                  <p>No books match this filter.</p>
                 )}
               </section>
 
@@ -430,7 +382,7 @@ function AdminPage({
                 </div>
                 <div className="admin-check-row">
                   <i className="bi bi-journal-text" />
-                  <span>Detail needs description, pages, chapters, language, and subjects.</span>
+                  <span>Detail needs description, language, and subjects. Chapters are optional.</span>
                 </div>
                 <div className="admin-check-row">
                   <i className="bi bi-book" />
@@ -506,6 +458,16 @@ function AdminPage({
                         </span>
                         <small>{maskEmail(member.email)}</small>
                         <div className="admin-row-actions">
+                          {isAdmin && (
+                            <button
+                              className="ghost-button"
+                              disabled={staffActionBusy === member.email}
+                              onClick={() => resignStaffAccount(member)}
+                              type="button"
+                            >
+                              {staffActionBusy === member.email ? 'Working...' : 'Resign'}
+                            </button>
+                          )}
                           <button
                             className="ghost-button"
                             disabled={staffActionBusy === member.email}
@@ -529,17 +491,10 @@ function AdminPage({
                 <ExistingAccountPicker onPick={(user) => setEmployeePrefill({ name: user.name, email: user.email })} />
                 <form className="admin-form compact-form" key={employeePrefill.email} onSubmit={createStaffAccount('employee')}>
                   <p className="form-note">
-                    Creating an employee generates a one-time password shown to you once, valid for their first login. Pick one Push Book shelf - employees only manage that shelf.
+                    Creating an employee generates a one-time password shown to you once, valid for their first login.
                   </p>
                   <label>Name<input defaultValue={employeePrefill.name} name="name" placeholder="Employee name" required /></label>
                   <label>Email<input defaultValue={employeePrefill.email} name="email" placeholder="employee@bookworm.com" required type="email" /></label>
-                  <label>
-                    Shelf
-                    <select defaultValue="read" name="section">
-                      <option value="read">To Read</option>
-                      <option value="rent">To Rent</option>
-                    </select>
-                  </label>
                   <button className="primary-button" disabled={staffActionBusy !== ''} type="submit">Create employee</button>
                 </form>
 
@@ -554,14 +509,14 @@ function AdminPage({
                         </span>
                         <small>{maskEmail(member.email)}</small>
                         <div className="admin-row-actions">
-                          <select
+                          <button
+                            className="ghost-button"
                             disabled={staffActionBusy === member.email}
-                            onChange={(event) => updateEmployeeSection(member, event.target.value)}
-                            value={member.section === 'rent' ? 'rent' : 'read'}
+                            onClick={() => resignStaffAccount(member)}
+                            type="button"
                           >
-                            <option value="read">To Read</option>
-                            <option value="rent">To Rent</option>
-                          </select>
+                            {staffActionBusy === member.email ? 'Working...' : 'Resign'}
+                          </button>
                           <button
                             className="ghost-button"
                             disabled={staffActionBusy === member.email}
@@ -605,7 +560,7 @@ function AdminPage({
                         </em>
                         {user.isRestricted ? (
                           <button
-                            className="ghost-button"
+                            className="unban-button"
                             disabled={banBusyId === user.id}
                             onClick={() => handleUnban(user)}
                             type="button"
@@ -613,7 +568,7 @@ function AdminPage({
                             {banBusyId === user.id ? 'Unbanning...' : 'Unban'}
                           </button>
                         ) : (
-                          <button className="ghost-button" onClick={() => setBanTarget(user)} type="button">
+                          <button className="danger-button" onClick={() => setBanTarget(user)} type="button">
                             Ban
                           </button>
                         )}
@@ -629,14 +584,9 @@ function AdminPage({
         </>
       ) : null}
 
-      {activeAdminSection === 'requests' && canReviewRequests ? (
-        <RentalRequestsPanel decidedRequests={decidedRequests} onDecide={onDecideRentalRequest} pendingRequests={pendingRequests} />
-      ) : null}
-
       {showBookModal && (
         <BookFormModal
           adminBook={adminBook}
-          bookAccess={bookAccess}
           currentErrors={currentErrors}
           currentWarnings={currentWarnings}
           managedBooksError={managedBooksError}
@@ -645,9 +595,6 @@ function AdminPage({
           onSubmit={handleBookSubmit}
           setAdminBook={setAdminBook}
           updateAdminBook={updateAdminBook}
-          addChapter={addChapter}
-          removeChapter={removeChapter}
-          updateChapter={updateChapter}
           updateCoverFile={updateCoverFile}
         />
       )}
@@ -668,18 +615,14 @@ function AdminPage({
 
 function BookFormModal({
   adminBook,
-  addChapter,
-  bookAccess,
   currentErrors,
   currentWarnings,
   managedBooksError,
   onClose,
   onPreview,
   onSubmit,
-  removeChapter,
   setAdminBook,
   updateAdminBook,
-  updateChapter,
   updateCoverFile,
 }) {
   const isEditing = Boolean(adminBook.id)
@@ -688,10 +631,14 @@ function BookFormModal({
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogError, setCatalogError] = useState('')
   const [publishBlockers, setPublishBlockers] = useState([])
+  const [formBlockers, setFormBlockers] = useState([])
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (currentErrors.length) return
+    if (currentErrors.length) {
+      setFormBlockers(currentErrors)
+      return
+    }
 
     if (adminBook.status === 'published') {
       const missing = getPublishRequirements(adminBook)
@@ -701,6 +648,7 @@ function BookFormModal({
       }
     }
 
+    setFormBlockers([])
     setPublishBlockers([])
     await onSubmit(event)
   }
@@ -753,16 +701,21 @@ function BookFormModal({
     const guessedCover = entry.etextNumber
       ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg`
       : ''
+    // Gutenberg's "bookshelves" is a semicolon list like "Politics; American
+    // Revolutionary War; ..." - Category is a required field to push
+    // (see getFormErrors), but catalog entries don't map to it directly, so
+    // without this the Push button silently stayed disabled after import.
+    const guessedCategory = entry.bookshelves?.split(';')[0]?.trim() || ''
 
     setAdminBook({
       ...adminBook,
       title: entry.title || adminBook.title,
       author: entry.authors || adminBook.author,
+      category: adminBook.category || guessedCategory,
       subjects: entry.subjects || adminBook.subjects,
       cover: adminBook.cover || guessedCover,
       readerUrl: entry.readOnlineUrl || entry.plainTextUtf8Url || adminBook.readerUrl,
       language: (entry.bookLanguage || 'en').toLowerCase(),
-      access: bookAccess,
       sourceEtextNumber: entry.etextNumber ?? null,
     })
     setCatalogQuery('')
@@ -788,67 +741,70 @@ function BookFormModal({
             <p className="admin-validation-error admin-book-modal-error"><i className="bi bi-x-circle" /> {managedBooksError}</p>
           )}
 
-          <div className="admin-search-hero">
-            <div className="admin-search-hero-label">
-              <i className="bi bi-stars" />
-              <div>
-                <strong>Find it in the Gutenberg catalog</strong>
-                <span>75k+ synced books - search and autofill the form in one click.</span>
+          {isEditing ? (
+            <div className="admin-search-hero admin-editing-notice">
+              <div className="admin-search-hero-label">
+                <i className="bi bi-pencil-square" />
+                <div>
+                  <strong>Editing "{adminBook.title}"</strong>
+                  <span>The Gutenberg search is hidden while editing, so you can't accidentally overwrite this book's title, cover, or content with a different one. To link a different catalog entry, cancel and push it as a new book instead.</span>
+                </div>
               </div>
             </div>
-            <form className="admin-search-box" onSubmit={handleSearchSubmit}>
-              <i className="bi bi-search" />
-              <input
-                autoFocus
-                onChange={(event) => setCatalogQuery(event.target.value)}
-                placeholder="Search by title, e.g. Pride and Prejudice"
-                value={catalogQuery}
-              />
-              {catalogLoading && <span className="admin-search-spinner" aria-hidden="true" />}
-            </form>
-            {catalogError && <p className="settings-error">{catalogError}</p>}
-            {adminBook.sourceEtextNumber && (
-              <p className="form-note">
-                <i className="bi bi-link-45deg" /> Filled from Gutenberg #{adminBook.sourceEtextNumber}. Cover is a guess - check it loaded before pushing.
-              </p>
-            )}
-            {catalogResults.length > 0 && (
-              <ul className="admin-search-results">
-                {catalogResults.map((entry) => (
-                  <li key={entry.etextNumber}>
-                    <button className="admin-search-result" onClick={() => importCatalogBook(entry)} type="button">
-                      <img
-                        alt=""
-                        onError={(event) => {
-                          event.currentTarget.src = NONE_COVER_URL
-                        }}
-                        src={entry.etextNumber ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg` : NONE_COVER_URL}
-                      />
-                      <span>
-                        <strong>{entry.title || 'Untitled'}</strong>
-                        <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
-                      </span>
-                      <i className="bi bi-arrow-right-circle" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {!catalogLoading && catalogQuery.trim().length >= 2 && catalogResults.length === 0 && !catalogError && (
-              <p className="form-note">No matches yet - keep typing, or fill the fields below by hand.</p>
-            )}
-          </div>
+          ) : (
+            <div className="admin-search-hero">
+              <div className="admin-search-hero-label">
+                <i className="bi bi-stars" />
+                <div>
+                  <strong>Find it in the Gutenberg catalog</strong>
+                  <span>75k+ synced books - search and autofill the form in one click.</span>
+                </div>
+              </div>
+              <form className="admin-search-box" onSubmit={handleSearchSubmit}>
+                <i className="bi bi-search" />
+                <input
+                  autoFocus
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  placeholder="Search by title, e.g. Pride and Prejudice"
+                  value={catalogQuery}
+                />
+                {catalogLoading && <span className="admin-search-spinner" aria-hidden="true" />}
+              </form>
+              {catalogError && <p className="settings-error">{catalogError}</p>}
+              {adminBook.sourceEtextNumber && (
+                <p className="form-note">
+                  <i className="bi bi-link-45deg" /> Filled from Gutenberg #{adminBook.sourceEtextNumber}. Cover is a guess - check it loaded before pushing.
+                </p>
+              )}
+              {catalogResults.length > 0 && (
+                <ul className="admin-search-results">
+                  {catalogResults.map((entry) => (
+                    <li key={entry.etextNumber}>
+                      <button className="admin-search-result" onClick={() => importCatalogBook(entry)} type="button">
+                        <img
+                          alt=""
+                          onError={(event) => handleGutenbergCoverError(event, entry.etextNumber)}
+                          src={entry.etextNumber ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg` : NONE_COVER_URL}
+                        />
+                        <span>
+                          <strong>{entry.title || 'Untitled'}</strong>
+                          <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
+                        </span>
+                        <i className="bi bi-arrow-right-circle" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!catalogLoading && catalogQuery.trim().length >= 2 && catalogResults.length === 0 && !catalogError && (
+                <p className="form-note">No matches yet - keep typing, or fill the fields below by hand.</p>
+              )}
+            </div>
+          )}
 
           <div className="admin-validation-panel" aria-live="polite">
-            <strong>{currentErrors.length ? 'Cannot push yet' : currentWarnings.length ? 'Ready with notes' : 'Ready checklist'}</strong>
-            {currentErrors.length ? (
-              currentErrors.map((error) => (
-                <span className="admin-validation-error" key={error.id}>
-                  <i className="bi bi-x-circle" />
-                  {error.message}
-                </span>
-              ))
-            ) : currentWarnings.length ? (
+            <strong>{currentWarnings.length ? 'Ready with notes' : 'Ready checklist'}</strong>
+            {currentWarnings.length ? (
               currentWarnings.map((warning) => (
                 <span className="admin-validation-warning" key={warning.id}>
                   <i className="bi bi-exclamation-circle" />
@@ -925,9 +881,7 @@ function BookFormModal({
                 <img
                   src={getAdminCover(adminBook)}
                   alt=""
-                  onError={(event) => {
-                    event.currentTarget.src = NONE_COVER_URL
-                  }}
+                  onError={(event) => handleGutenbergCoverError(event, adminBook.sourceEtextNumber)}
                 />
                 <div>
                   <label>
@@ -956,57 +910,6 @@ function BookFormModal({
                   />
                 </label>
               ))}
-              <label className="wide-field">
-                Reader text
-                <textarea
-                  value={adminBook.readerText}
-                  onChange={(event) => updateAdminBook('readerText', event.target.value)}
-                  placeholder="Optional full plain book text. Chapter content below is preferred."
-                />
-              </label>
-            </fieldset>
-
-            <fieldset className="admin-chapter-fieldset">
-              <legend>Chapters</legend>
-              <div className="admin-chapter-list">
-                {(adminBook.chaptersDraft?.length ? adminBook.chaptersDraft : [createEmptyChapter(0)]).map((chapter, index) => (
-                  <article className="admin-chapter-editor" key={`${index}-${chapter.title}`}>
-                    <div className="admin-chapter-heading">
-                      <strong>Chapter {index + 1}</strong>
-                      <button className="ghost-button" onClick={() => removeChapter(index)} type="button">Remove</button>
-                    </div>
-                    <label>
-                      Title
-                      <input
-                        value={chapter.title}
-                        onChange={(event) => updateChapter(index, 'title', event.target.value)}
-                        placeholder={`Chapter ${index + 1}`}
-                      />
-                    </label>
-                    <label>
-                      Pages
-                      <input
-                        min="1"
-                        type="number"
-                        value={chapter.pages}
-                        onChange={(event) => updateChapter(index, 'pages', event.target.value)}
-                      />
-                    </label>
-                    <label className="wide-field">
-                      Content
-                      <textarea
-                        value={chapter.content}
-                        onChange={(event) => updateChapter(index, 'content', event.target.value)}
-                        placeholder="Paste this chapter content..."
-                      />
-                    </label>
-                  </article>
-                ))}
-              </div>
-              <button className="ghost-button admin-add-chapter" onClick={addChapter} type="button">
-                <i className="bi bi-plus-circle" />
-                Add chapter
-              </button>
             </fieldset>
           </form>
         </div>
@@ -1019,11 +922,31 @@ function BookFormModal({
           <button className="ghost-button" onClick={onClose} type="button">
             {isEditing ? 'Cancel edit' : 'Cancel'}
           </button>
-          <button className="primary-button" disabled={currentErrors.length > 0} form="admin-book-form" type="submit">
+          <button className="primary-button" form="admin-book-form" type="submit">
             <i className="bi bi-cloud-upload" />
-            {isEditing ? 'Update book' : `Push to ${bookAccess === 'read' ? 'To Read' : 'To Rent'}`}
+            {isEditing ? 'Update book' : 'Push book'}
           </button>
         </footer>
+
+        {formBlockers.length > 0 && (
+          <div className="admin-publish-alert-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="admin-form-alert-title">
+            <div className="admin-publish-alert">
+              <i className="bi bi-exclamation-triangle" />
+              <h3 id="admin-form-alert-title">A few things need fixing</h3>
+              <p>This book can't be saved yet. Please fix:</p>
+              <ul>
+                {formBlockers.map((item) => (
+                  <li key={item.id}>{item.message}</li>
+                ))}
+              </ul>
+              <div className="admin-form-actions">
+                <button className="primary-button" onClick={() => setFormBlockers([])} type="button">
+                  Go back and fill it in
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {publishBlockers.length > 0 && (
           <div className="admin-publish-alert-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="admin-publish-alert-title">
@@ -1128,96 +1051,6 @@ function ExistingAccountPicker({ onPick }) {
   )
 }
 
-function RentalRequestsPanel({ decidedRequests, onDecide, pendingRequests }) {
-  const [draftByRequest, setDraftByRequest] = useState({})
-
-  function updateDraft(requestId, field, value) {
-    setDraftByRequest((current) => ({
-      ...current,
-      [requestId]: { ...current[requestId], [field]: value },
-    }))
-  }
-
-  function approve(request) {
-    const draft = draftByRequest[request.id] || {}
-    if (!draft.deliveryAt) return
-    onDecide?.(request.id, { status: 'approved', deliveryAt: new Date(draft.deliveryAt).toISOString(), responseNote: draft.note || '' })
-  }
-
-  function decline(request) {
-    const draft = draftByRequest[request.id] || {}
-    onDecide?.(request.id, { status: 'declined', responseNote: draft.note || '' })
-  }
-
-  return (
-    <section className="admin-workspace">
-      <div className="section-heading">
-        <div>
-          <p className="mono-eyebrow">Rentals</p>
-          <h2>Rental requests</h2>
-        </div>
-        <span>Approve a request with a delivery date and time, or decline it - the customer gets notified either way.</span>
-      </div>
-
-      <section className="admin-table staff-table">
-        <h2>Pending ({pendingRequests.length})</h2>
-        {pendingRequests.length ? (
-          pendingRequests.map((request) => (
-            <div className="table-row request-review-row" key={request.id}>
-              <span>
-                {request.bookTitle}
-                <em className="admin-status status-draft">pending</em>
-              </span>
-              <small>
-                {request.customerName} ({request.customerEmail}) - requested {new Date(request.requestedAt).toLocaleString()}
-                <br />
-                <i className="bi bi-person" /> {request.recipientName || '-'} - <i className="bi bi-telephone" /> {request.phone || '-'}
-                <br />
-                <i className="bi bi-geo-alt" /> {request.address || '-'} - <i className="bi bi-cash-coin" /> Cash on delivery
-                {request.note && <> - "{request.note}"</>}
-              </small>
-              <div className="admin-row-actions request-decision-actions">
-                <input
-                  aria-label="Delivery date and time"
-                  onChange={(event) => updateDraft(request.id, 'deliveryAt', event.target.value)}
-                  type="datetime-local"
-                  value={draftByRequest[request.id]?.deliveryAt || ''}
-                />
-                <button className="primary-button" disabled={!draftByRequest[request.id]?.deliveryAt} onClick={() => approve(request)} type="button">
-                  Approve
-                </button>
-                <button className="ghost-button" onClick={() => decline(request)} type="button">
-                  Decline
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p>No pending requests right now.</p>
-        )}
-      </section>
-
-      {decidedRequests.length > 0 && (
-        <section className="admin-table staff-table">
-          <h2>Recent decisions</h2>
-          {decidedRequests.map((request) => (
-            <div className="table-row" key={request.id}>
-              <span>{request.bookTitle}</span>
-              <small>
-                {request.customerEmail}
-                {request.status === 'approved' && request.deliveryAt && <> - {formatDeliveryDate(request.deliveryAt)}</>}
-              </small>
-              <div className="admin-row-actions">
-                <em className={`admin-status ${request.status === 'approved' ? 'status-published' : 'status-hidden'}`}>{request.status}</em>
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
-    </section>
-  )
-}
-
 function BanUserModal({ busy, onClose, onConfirm, user }) {
   const [days, setDays] = useState('7')
   const [reason, setReason] = useState('')
@@ -1295,7 +1128,6 @@ function BanUserModal({ busy, onClose, onConfirm, user }) {
 
 function AdminDetailPreview({ book, onClose }) {
   const totalPages = getTotalPages(book)
-  const chapters = getBookChapters(book, totalPages)
 
   return (
     <div
@@ -1325,7 +1157,6 @@ function AdminDetailPreview({ book, onClose }) {
           <p>{getDescription(book)}</p>
           <div className="admin-preview-meta">
             <span>{totalPages} pages</span>
-            <span>{chapters.length} chapters</span>
             <span>{book.languages?.[0]?.toUpperCase() || 'EN'}</span>
           </div>
         </div>
@@ -1339,7 +1170,6 @@ function createPreviewBook(adminBook) {
     .split(',')
     .map((subject) => subject.trim())
     .filter(Boolean)
-  const chapters = normalizePreviewChapters(adminBook.chaptersDraft)
 
   return {
     ...adminBook,
@@ -1351,9 +1181,7 @@ function createPreviewBook(adminBook) {
     bookshelves: [adminBook.category.trim() || 'Admin pick'],
     subjects,
     languages: ['en'],
-    pageCount: chapters.reduce((total, chapter) => total + chapter.pages, 0) || 120,
-    chapterCount: chapters.length || 1,
-    chapterList: chapters,
+    pageCount: 120,
     formats: {
       ...(adminBook.cover.trim() ? { 'image/jpeg': adminBook.cover.trim() } : {}),
       ...(adminBook.readerUrl.trim() ? { 'text/html': adminBook.readerUrl.trim() } : {}),
@@ -1362,23 +1190,7 @@ function createPreviewBook(adminBook) {
 }
 
 function getAdminCover(book) {
-  return book.formats?.['image/jpeg'] || book.cover || NONE_COVER_URL
-}
-
-function normalizePreviewChapters(chapters = []) {
-  let startPage = 1
-  return (chapters.length ? chapters : [createEmptyChapter(0)]).map((chapter, index) => {
-    const pages = Number(chapter.pages) > 0 ? Math.floor(Number(chapter.pages)) : 1
-    const nextChapter = {
-      number: index + 1,
-      title: chapter.title?.trim() || `Chapter ${index + 1}`,
-      startPage,
-      pages,
-      content: chapter.content || '',
-    }
-    startPage += pages
-    return nextChapter
-  })
+  return book.coverUrl || book.formats?.['image/jpeg'] || book.cover || NONE_COVER_URL
 }
 
 function getFormWarnings(book) {
@@ -1388,10 +1200,6 @@ function getFormWarnings(book) {
     !book.subjects?.split(',').some((subject) => hasText(subject)) && {
       id: 'subjects',
       message: 'Add subjects to make Discover filtering better.',
-    },
-    !book.chaptersDraft?.some((chapter) => hasText(chapter.content)) && hasText(book.readerUrl) && {
-      id: 'chapter-content',
-      message: 'Reader can open the URL, but pasted chapter content gives the best in-app reading page.',
     },
   ].filter(Boolean).filter((warning) => !errors.has(warning.id))
 }
@@ -1407,7 +1215,6 @@ function getFormErrors(book, managedBooks = []) {
     !hasText(book.title) && { id: 'title', message: 'Add a title.' },
     duplicateTitle && { id: 'duplicate-title', message: 'A managed book already uses this title.' },
     !hasText(book.author) && { id: 'author', message: 'Add an author.' },
-    !hasText(book.category) && { id: 'category', message: 'Choose a category or shelf.' },
     hasText(book.cover) && !isValidImageSource(book.cover) && { id: 'cover-url', message: 'Cover must be an http(s) image URL or an uploaded image.' },
     hasText(book.readerUrl) && !isValidHttpUrl(book.readerUrl) && { id: 'reader-url', message: 'Reader URL must start with http:// or https://.' },
   ].filter(Boolean)
@@ -1420,8 +1227,7 @@ function getPublishRequirements(book) {
   return [
     !hasText(book.cover) && { id: 'cover', message: 'a cover image (URL or upload)' },
     !hasText(book.description) && { id: 'description', message: 'a description' },
-    !hasReaderSource(book) && { id: 'reader', message: 'reader content - a URL, full text, or at least one chapter with text' },
-    !hasValidChapterDraft(book) && { id: 'chapters', message: 'at least one chapter with a title and page count' },
+    !hasReaderSource(book) && { id: 'reader', message: 'reader content - a Reader URL, or a linked Gutenberg catalog entry' },
   ].filter(Boolean)
 }
 
@@ -1430,12 +1236,7 @@ function getBookWarnings(book) {
     !hasCover(book) && { id: 'cover' },
     !hasText(book.description) && { id: 'description' },
     !isReaderReady(book) && { id: 'reader' },
-    !hasChapters(book) && { id: 'chapters' },
   ].filter(Boolean)
-}
-
-function createEmptyChapter(index) {
-  return { title: `Chapter ${index + 1}`, pages: '10', content: '' }
 }
 
 function hasText(value) {
@@ -1443,23 +1244,20 @@ function hasText(value) {
 }
 
 function hasCover(book) {
-  return Boolean(book.formats?.['image/jpeg'] || book.cover)
+  return Boolean(book.coverUrl || book.formats?.['image/jpeg'] || book.cover)
 }
 
-function hasChapters(book) {
-  return Boolean(book.chapterCount || book.chapterList?.length || book.chapters?.length)
-}
-
+// A book linked to the Gutenberg catalog (sourceEtextNumber) always has
+// reader text - the backend fetches it live from book_metadata's
+// readOnlineUrl at read time (see getBookReaderText), regardless of whether
+// the readerUrl field here was filled in. Only unlinked/manual books
+// actually need a readerUrl typed in by hand.
 function isReaderReady(book) {
-  return Boolean(getReaderUrl(book) || book.readerText || book.chapterList?.some((chapter) => chapter.content))
+  return Boolean(getReaderUrl(book) || book.sourceEtextNumber)
 }
 
 function hasReaderSource(book) {
-  return Boolean(hasText(book.readerUrl) || hasText(book.readerText) || book.chaptersDraft?.some((chapter) => hasText(chapter.content)))
-}
-
-function hasValidChapterDraft(book) {
-  return Boolean(book.chaptersDraft?.some((chapter) => hasText(chapter.title) && Number(chapter.pages) > 0))
+  return Boolean(hasText(book.readerUrl) || book.sourceEtextNumber)
 }
 
 function isValidHttpUrl(value) {

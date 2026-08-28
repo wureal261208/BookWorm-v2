@@ -15,7 +15,6 @@ function sanitizeUser(user) {
     name: user.name,
     email: maskEmail(user.email),
     role: user.role,
-    section: user.section || null,
     isRestricted: user.isRestricted,
     banReason: user.banReason || '',
     banExpiresAt: user.banExpiresAt,
@@ -255,7 +254,7 @@ const resignStaff = asyncHandler(async (req, res) => {
 //        password returned once in the response. Admin can grant either
 //        role; manager can only grant 'employee' (enforced below).
 const upsertStaffByEmail = asyncHandler(async (req, res) => {
-  const { name, role, section, id } = req.body;
+  const { name, role, id } = req.body;
   const email = (req.body.email || '').trim().toLowerCase();
 
   if (!name || (!email && !id)) {
@@ -269,8 +268,6 @@ const upsertStaffByEmail = asyncHandler(async (req, res) => {
   if (req.user.role === 'manager' && role !== 'employee') {
     return fail(res, 403, 'Managers can only grant employee access.');
   }
-
-  const normalizedSection = role === 'employee' && section === 'rent' ? 'rent' : role === 'employee' ? 'read' : null;
 
   // Prefer `id` when the caller already has it (e.g. editing an existing
   // staff row) - the `staff` list's email is masked for display, so it
@@ -289,7 +286,6 @@ const upsertStaffByEmail = asyncHandler(async (req, res) => {
     const roleChanged = target.role !== role;
     target.name = name;
     target.role = role;
-    target.section = normalizedSection;
     if (roleChanged) {
       target.displayId = await generateDisplayId(role);
     }
@@ -313,7 +309,6 @@ const upsertStaffByEmail = asyncHandler(async (req, res) => {
     name,
     email,
     role,
-    section: normalizedSection,
     createdBy: req.user._id,
     displayId: await generateDisplayId(role),
   });

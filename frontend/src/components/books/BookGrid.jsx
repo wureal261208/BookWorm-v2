@@ -1,6 +1,6 @@
 import BookCard from './BookCard'
 
-function BookGrid({ books, favorites, onDetail, onFavorite, onRead, onRent, rentals = [], variant = 'read', viewCounts }) {
+function BookGrid({ books, favorites, onDetail, onFavorite, onRead, variant = 'read', viewCounts }) {
   return (
     <section className="book-grid">
       {books.map((book) => (
@@ -11,8 +11,6 @@ function BookGrid({ books, favorites, onDetail, onFavorite, onRead, onRent, rent
           onDetail={onDetail}
           onFavorite={onFavorite}
           onRead={onRead}
-          onRent={onRent}
-          rental={rentals.find((item) => item.id === book.id)}
           variant={variant}
           viewCount={viewCounts?.[book.id] || 0}
         />

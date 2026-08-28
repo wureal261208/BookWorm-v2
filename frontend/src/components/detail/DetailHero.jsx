@@ -4,11 +4,10 @@ function DetailHero({
   book,
   checkpoint,
   favorites,
+  hasChapters = true,
   language,
   onAuth,
   onRead,
-  onRent,
-  rental,
   onSaveBook,
   onToggleSavePrompt,
   rating,
@@ -38,11 +37,13 @@ function DetailHero({
             <strong>{totalPages}</strong>
             <span>Pages</span>
           </article>
-          <article>
-            <i className="bi bi-list-ol" />
-            <strong>{totalChapters}</strong>
-            <span>Chapters</span>
-          </article>
+          {hasChapters && (
+            <article>
+              <i className="bi bi-list-ol" />
+              <strong>{totalChapters}</strong>
+              <span>Chapters</span>
+            </article>
+          )}
           <article>
             <i className="bi bi-translate" />
             <strong>{language}</strong>
@@ -65,10 +66,6 @@ function DetailHero({
           <button className="primary-button" onClick={() => onRead(book)} type="button">
             <i className="bi bi-journal-text" />
             Read now
-          </button>
-          <button className={`ghost-button ${rental ? 'rental-active' : ''}`} onClick={() => onRent(book)} type="button">
-            <i className={`bi ${rental ? 'bi-bag-check-fill' : 'bi-bag-plus'}`} />
-            {rental ? 'Rented' : 'Rent this book'}
           </button>
           <button className="ghost-button" onClick={onSaveBook} type="button">
             <i className={`bi ${favorites.includes(book.id) ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />

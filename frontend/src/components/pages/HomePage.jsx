@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react'
 import { getAuthor, getCategory, getCover } from '../../utils/bookUtils'
 import BookGrid from '../books/BookGrid'
 
-function HomePage({ books, favorites, onDetail, onFavorite, onRead, onRent, rentals = [], progress = {}, setPage, topics, viewCounts, viewerCounts }) {
+function HomePage({ books, favorites, onDetail, onFavorite, onRead, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isHeroPaused, setIsHeroPaused] = useState(false)
-  const [activeLibraryMode, setActiveLibraryMode] = useState('read')
   const hotBooks = books.slice(0, 6)
   const recommended = books.slice(6, 14)
   const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
@@ -28,25 +27,6 @@ function HomePage({ books, favorites, onDetail, onFavorite, onRead, onRent, rent
 
   return (
     <div className="home-page">
-      <section className="section-block library-mode-switcher">
-        <div className="section-heading">
-          <div>
-            <p className="mono-eyebrow">Choose your experience</p>
-            <h2>Library mode</h2>
-          </div>
-        </div>
-        <div className="mode-tabs">
-          <button className={activeLibraryMode === 'read' ? 'active' : ''} onClick={() => setActiveLibraryMode('read')} type="button">
-            <i className="bi bi-journal-text" />
-            Read books
-          </button>
-          <button className={activeLibraryMode === 'rent' ? 'active' : ''} onClick={() => setActiveLibraryMode('rent')} type="button">
-            <i className="bi bi-bag-plus" />
-            Rent books
-          </button>
-        </div>
-      </section>
-
       {featured && (
         <section className="hero-carousel">
           <div className="hero-copy" key={featured.id}>
@@ -54,33 +34,18 @@ function HomePage({ books, favorites, onDetail, onFavorite, onRead, onRent, rent
             <h1>{featured.title}</h1>
             <p>{getAuthor(featured)} · {getCategory(featured)}</p>
             <div className="hero-actions">
-              {activeLibraryMode === 'rent' ? (
-                <button
-                  className="primary-button"
-                  onBlur={() => setIsHeroPaused(false)}
-                  onClick={() => onRent(featured)}
-                  onFocus={() => setIsHeroPaused(true)}
-                  onMouseEnter={() => setIsHeroPaused(true)}
-                  onMouseLeave={() => setIsHeroPaused(false)}
-                  type="button"
-                >
-                  <i className="bi bi-bag-plus" />
-                  Rent now
-                </button>
-              ) : (
-                <button
-                  className="primary-button"
-                  onBlur={() => setIsHeroPaused(false)}
-                  onClick={() => onRead(featured)}
-                  onFocus={() => setIsHeroPaused(true)}
-                  onMouseEnter={() => setIsHeroPaused(true)}
-                  onMouseLeave={() => setIsHeroPaused(false)}
-                  type="button"
-                >
-                  <i className="bi bi-journal-text" />
-                  Read now
-                </button>
-              )}
+              <button
+                className="primary-button"
+                onBlur={() => setIsHeroPaused(false)}
+                onClick={() => onRead(featured)}
+                onFocus={() => setIsHeroPaused(true)}
+                onMouseEnter={() => setIsHeroPaused(true)}
+                onMouseLeave={() => setIsHeroPaused(false)}
+                type="button"
+              >
+                <i className="bi bi-journal-text" />
+                Read now
+              </button>
               <button
                 className="ghost-button"
                 onBlur={() => setIsHeroPaused(false)}
@@ -113,104 +78,70 @@ function HomePage({ books, favorites, onDetail, onFavorite, onRead, onRent, rent
         </section>
       )}
 
-      {activeLibraryMode === 'read' ? (
-        <>
-          {continueReading.length > 0 && (
-            <section className="section-block">
-              <div className="section-heading">
-                <div>
-                  <p className="mono-eyebrow">Pick up again</p>
-                  <h2>Continue reading</h2>
-                </div>
-                <button className="ghost-button" onClick={() => setPage('profile')} type="button">
-                  My progress
-                </button>
-              </div>
-              <BookGrid
-                books={continueReading}
-                favorites={favorites}
-                onDetail={onDetail}
-                onFavorite={onFavorite}
-                onRead={onRead}
-                onRent={onRent}
-                rentals={rentals}
-                variant="read"
-                viewCounts={viewCounts}
-                viewerCounts={viewerCounts}
-              />
-            </section>
-          )}
-
-          <section className="section-block">
-            <div className="section-heading">
-              <div>
-                <p className="mono-eyebrow">Popular now</p>
-                <h2>Hot books</h2>
-              </div>
-              <button className="ghost-button" onClick={() => setPage('discover')} type="button">
-                View library
-              </button>
-            </div>
-            <BookGrid
-              books={hotBooks}
-              favorites={favorites}
-              onDetail={onDetail}
-              onFavorite={onFavorite}
-              onRead={onRead}
-              onRent={onRent}
-              rentals={rentals}
-              variant="read"
-              viewCounts={viewCounts}
-              viewerCounts={viewerCounts}
-            />
-          </section>
-
-          <section className="section-block">
-            <div className="section-heading">
-              <div>
-                <p className="mono-eyebrow">For your shelf</p>
-                <h2>Recommended</h2>
-              </div>
-            </div>
-            <BookGrid
-              books={recommended}
-              favorites={favorites}
-              onDetail={onDetail}
-              onFavorite={onFavorite}
-              onRead={onRead}
-              onRent={onRent}
-              rentals={rentals}
-              variant="read"
-              viewCounts={viewCounts}
-              viewerCounts={viewerCounts}
-            />
-          </section>
-        </>
-      ) : (
+      {continueReading.length > 0 && (
         <section className="section-block">
           <div className="section-heading">
             <div>
-              <p className="mono-eyebrow">Rental library</p>
-              <h2>Rent books separately</h2>
+              <p className="mono-eyebrow">Pick up again</p>
+              <h2>Continue reading</h2>
             </div>
-            <button className="ghost-button" onClick={() => setPage('discover')} type="button">
-              Browse rental list
+            <button className="ghost-button" onClick={() => setPage('profile')} type="button">
+              My progress
             </button>
           </div>
           <BookGrid
-            books={hotBooks.slice(0, 8)}
+            books={continueReading}
             favorites={favorites}
             onDetail={onDetail}
             onFavorite={onFavorite}
             onRead={onRead}
-            onRent={onRent}
-            rentals={rentals}
-            variant="rent"
+            variant="read"
             viewCounts={viewCounts}
             viewerCounts={viewerCounts}
           />
         </section>
       )}
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <p className="mono-eyebrow">Popular now</p>
+            <h2>Hot books</h2>
+          </div>
+          <button className="ghost-button" onClick={() => setPage('discover')} type="button">
+            View library
+          </button>
+        </div>
+        <BookGrid
+          books={hotBooks}
+          favorites={favorites}
+          onDetail={onDetail}
+          onFavorite={onFavorite}
+          onRead={onRead}
+          variant="read"
+          viewCounts={viewCounts}
+          viewerCounts={viewerCounts}
+        />
+      </section>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <p className="mono-eyebrow">For your shelf</p>
+            <h2>Recommended</h2>
+          </div>
+        </div>
+        <BookGrid
+          books={recommended}
+          favorites={favorites}
+          onDetail={onDetail}
+          onFavorite={onFavorite}
+          onRead={onRead}
+          variant="read"
+          viewCounts={viewCounts}
+          viewerCounts={viewerCounts}
+        />
+      </section>
 
       <section className="section-block">
         <div className="section-heading">

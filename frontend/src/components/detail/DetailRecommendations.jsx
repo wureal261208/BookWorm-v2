@@ -1,6 +1,6 @@
 import BookGrid from '../books/BookGrid'
 
-function DetailRecommendations({ books, favorites, onDetail, onFavorite, onRead, onRent, rentals = [], viewCounts, viewerCounts }) {
+function DetailRecommendations({ books, favorites, onDetail, onFavorite, onRead, viewCounts, viewerCounts }) {
   return (
     <section className="section-block recommendations-section">
       <div className="section-heading">
@@ -13,8 +13,6 @@ function DetailRecommendations({ books, favorites, onDetail, onFavorite, onRead,
           onDetail={onDetail}
           onFavorite={onFavorite}
           onRead={onRead}
-          onRent={onRent}
-          rentals={rentals}
           viewCounts={viewCounts}
           viewerCounts={viewerCounts}
         />

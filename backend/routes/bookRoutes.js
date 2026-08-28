@@ -1,5 +1,5 @@
 const express = require('express');
-const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook } = require('../controllers/bookController');
+const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText } = require('../controllers/bookController');
 const { identify, protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -13,6 +13,7 @@ router.get('/', identify, listBooks);
 router.get('/mine', protect, authorize('admin', 'manager', 'employee'), listMyBooks);
 
 router.get('/:id', identify, getBook);
+router.get('/:id/reader-text', identify, getBookReaderText);
 
 // Only admin/manager/employee can push (create), update, or remove books.
 router.post('/', protect, authorize('admin', 'manager', 'employee'), createBook);

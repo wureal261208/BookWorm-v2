@@ -16,18 +16,16 @@ const BookSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     category: { type: String, default: 'General' },
     coverUrl: { type: String, default: '' },
+    // The Gutenberg (or other) reader page URL a manually-typed book uses -
+    // catalog-linked books (sourceEtextNumber set) don't need this, since
+    // getBookReaderText fetches live from book_metadata.readOnlineUrl
+    // instead, but manually-typed books have no other reader source.
+    readerUrl: { type: String, default: '' },
     chapters: { type: [ChapterSchema], default: [] },
-    isAvailableToRent: { type: Boolean, default: true },
-    totalCopies: { type: Number, default: 1, min: 0 },
-    availableCopies: { type: Number, default: 1, min: 0 },
     // Publishing state set from the admin "Status" dropdown. Hidden/draft
     // books still live in Mongo (so staff can keep editing them) but should
     // be filtered out of the public catalog - see listBooks below.
     status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
-    // Which admin shelf this book is filed under - matches the frontend's
-    // "To Read" / "To Rent" toggle. Distinct from isAvailableToRent (which
-    // actually gates the rental flow) - this is just a catalog grouping.
-    access: { type: String, enum: ['read', 'rent'], default: 'read' },
     subjects: { type: [String], default: [] },
     language: { type: String, default: 'en' },
     // Staff member (admin/manager/employee) who pushed this book.

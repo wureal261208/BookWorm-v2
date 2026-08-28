@@ -10,8 +10,6 @@ function DiscoverPage({
   onDetail,
   onFavorite,
   onRead,
-  onRent,
-  rentals = [],
   onSearchSubmit,
   query,
   searchableBooks = [],
@@ -24,7 +22,6 @@ function DiscoverPage({
 }) {
   const [draftSearch, setDraftSearch] = useState(query)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [activeLibraryMode, setActiveLibraryMode] = useState('read')
   const [pagination, setPagination] = useState({ page: 1, scope: '' })
   const normalizedDraft = draftSearch.trim().toLowerCase()
   const paginationScope = `${query}|${topic}`
@@ -81,16 +78,6 @@ function DiscoverPage({
       </section>
 
       <section className="tool-panel">
-        <div className="mode-tabs">
-          <button className={activeLibraryMode === 'read' ? 'active' : ''} onClick={() => setActiveLibraryMode('read')} type="button">
-            <i className="bi bi-journal-text" />
-            Read books
-          </button>
-          <button className={activeLibraryMode === 'rent' ? 'active' : ''} onClick={() => setActiveLibraryMode('rent')} type="button">
-            <i className="bi bi-bag-plus" />
-            Rent books
-          </button>
-        </div>
         <form className="discover-search" onSubmit={(event) => {
           event.preventDefault()
           submitSearch()
@@ -161,9 +148,7 @@ function DiscoverPage({
             onDetail={onDetail}
             onFavorite={onFavorite}
             onRead={onRead}
-            onRent={onRent}
-            rentals={rentals}
-            variant={activeLibraryMode === 'rent' ? 'rent' : 'read'}
+            variant="read"
             viewCounts={viewCounts}
             viewerCounts={viewerCounts}
           />

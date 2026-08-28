@@ -6,7 +6,7 @@
 // fire once with mock data (like a snapshot that never changes); writes are
 // no-ops that log to the console instead of touching Firebase.
 
-import { mockComments, mockNotifications, mockRentalRequests } from '../mockData'
+import { mockComments } from '../mockData'
 
 export const globalDataDefaults = {
   viewCounts: {},
@@ -14,8 +14,6 @@ export const globalDataDefaults = {
   comments: {},
   staff: [],
   knownUsers: [],
-  rentalRequests: [],
-  notifications: [],
 }
 
 export const userDataDefaults = {
@@ -36,8 +34,6 @@ export const userDataDefaults = {
 const mockGlobalData = {
   ...globalDataDefaults,
   comments: mockComments,
-  rentalRequests: mockRentalRequests,
-  notifications: mockNotifications,
 }
 
 export function subscribeGlobalData(onData) {
