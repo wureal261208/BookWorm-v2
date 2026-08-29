@@ -16,7 +16,11 @@ const app = express();
 // In production, set FRONTEND_URL to your deployed frontend's exact origin
 // (e.g. https://bookworm.vercel.app) to lock CORS down. Left unset, it
 // stays open (fine for local dev, and while the frontend URL isn't final).
-app.use(cors(process.env.FRONTEND_URL ? { origin: process.env.FRONTEND_URL } : {}));
+// Trimmed and stripped of any trailing slash - a copy-paste extra space or
+// "/" at the end would otherwise silently mismatch the browser's Origin
+// header (which never has a trailing slash) and break every request.
+const allowedFrontendOrigin = (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
+app.use(cors(allowedFrontendOrigin ? { origin: allowedFrontendOrigin } : {}));
 app.use(express.json());
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
@@ -26,11 +30,13 @@ app.get('/api/health', (req, res) => success(res, 200, 'BookWorm API is running.
 
 // Quick diagnostic for "is my deploy actually wired up right" - checks
 // Mongoose's live connection state and which required env vars are present
-// (never their values) without needing to dig through Vercel's log viewer.
+// (never secret values - FRONTEND_URL is shown in full since it's just a
+// public URL, not sensitive) without needing to dig through Vercel's log viewer.
 app.get('/api/health/db', (req, res) => {
   const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
   return success(res, 200, 'Database diagnostic.', {
     mongoose: states[mongoose.connection.readyState] || 'unknown',
+    frontendUrlConfigured: allowedFrontendOrigin || '(not set - CORS is open to all origins)',
     envPresent: {
       MONGODB_URI: Boolean(process.env.MONGODB_URI),
       FIREBASE_SERVICE_ACCOUNT_JSON: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
