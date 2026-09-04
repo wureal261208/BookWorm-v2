@@ -103,6 +103,8 @@ function AdminPage({
   const [showBookModal, setShowBookModal] = useState(false)
   const [banTarget, setBanTarget] = useState(null)
   const [banBusyId, setBanBusyId] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteBusyId, setDeleteBusyId] = useState('')
   const [managerPrefill, setManagerPrefill] = useState({ name: '', email: '' })
   const [employeePrefill, setEmployeePrefill] = useState({ name: '', email: '' })
 
@@ -240,6 +242,14 @@ function AdminPage({
     resetAdminBook()
   }
 
+  async function confirmDeleteBook() {
+    if (!deleteTarget) return
+    setDeleteBusyId(deleteTarget.id)
+    await removeManagedBook(deleteTarget.id)
+    setDeleteBusyId('')
+    setDeleteTarget(null)
+  }
+
   async function confirmBan(days, reason) {
     if (!banTarget) return
     setBanBusyId(banTarget.id)
@@ -363,8 +373,8 @@ function AdminPage({
                         <small>{getAuthor(book)} - {getCategory(book)}</small>
                         <div className="admin-row-actions">
                           {missingId && <strong className="admin-row-warning-broken">no id - refresh page</strong>}
-                          <button className="ghost-button" disabled={missingId} onClick={() => openEditBookModal({ ...book, id: bookId })} type="button">Edit</button>
-                          <button className="ghost-button" disabled={missingId} onClick={() => removeManagedBook(bookId)} type="button">Remove</button>
+                          <button className="edit-button" disabled={missingId} onClick={() => openEditBookModal({ ...book, id: bookId })} type="button">Edit</button>
+                          <button className="danger-button" disabled={missingId} onClick={() => setDeleteTarget({ id: bookId, title: book.title })} type="button">Remove</button>
                         </div>
                       </div>
                     )
@@ -609,6 +619,45 @@ function AdminPage({
           user={banTarget}
         />
       )}
+
+      {deleteTarget && (
+        <DeleteBookModal
+          busy={deleteBusyId === deleteTarget.id}
+          book={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteBook}
+        />
+      )}
+    </div>
+  )
+}
+
+function DeleteBookModal({ busy, book, onClose, onConfirm }) {
+  return (
+    <div
+      aria-labelledby="admin-delete-book-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-ban-modal">
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Delete this book?</p>
+        <h2 id="admin-delete-book-title">{book.title}</h2>
+        <p className="form-note">This will permanently remove the book from the catalog. This action cannot be undone.</p>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" onClick={onClose} type="button">Cancel</button>
+          <button className="danger-button" disabled={busy} onClick={onConfirm} type="button">
+            {busy ? 'Removing...' : 'Confirm delete'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

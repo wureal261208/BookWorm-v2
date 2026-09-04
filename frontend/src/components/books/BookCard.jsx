@@ -8,10 +8,13 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, viewCoun
       <button className="book-cover-button" onClick={() => onDetail(book)} type="button">
         <img loading="lazy" src={getCover(book)} alt={`${book.title} cover`} />
       </button>
-      <div>
+      <div className="book-card-body">
         <span className="category">{getCategory(book)}</span>
         <h2>{book.title}</h2>
         <p>{getAuthor(book)}</p>
+      </div>
+      <div className="book-card-meta">
+        <i className="bi bi-eye" />
         <small>{totalReads.toLocaleString()} reads</small>
       </div>
       <div className="card-actions">

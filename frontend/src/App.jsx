@@ -579,7 +579,17 @@ function App() {
     () => managedBooks.filter((book) => (book.status || 'published') === 'published'),
     [managedBooks],
   )
-  const allBooks = useMemo(() => [...publishedManagedBooks, ...books], [books, publishedManagedBooks])
+  const allBooks = useMemo(() => {
+    const merged = [...publishedManagedBooks, ...books]
+    const seen = new Set()
+    const deduped = []
+    for (const book of merged) {
+      if (seen.has(book.id)) continue
+      seen.add(book.id)
+      deduped.push(book)
+    }
+    return deduped
+  }, [books, publishedManagedBooks])
   const topics = useMemo(() => ['all', ...new Set(allBooks.map(getCategory).slice(0, 12))], [allBooks])
   const filteredBooks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()

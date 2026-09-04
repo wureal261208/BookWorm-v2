@@ -929,7 +929,7 @@ textarea {
 
 .book-card {
   display: grid;
-  grid-template-rows: 238px 1fr auto;
+  grid-template-rows: 238px 1fr auto auto;
   overflow: hidden;
   min-width: 0;
   box-sizing: border-box;
@@ -942,18 +942,19 @@ textarea {
   background: #d6d6d1;
 }
 
-.book-card > div:not(.card-actions) {
-  padding: 16px 16px 8px;
+.book-card-body {
+  padding: 14px 16px 0;
+  min-width: 0;
 }
 
 .category {
-  display: inline-block;
+  display: block;
   max-width: 100%;
-  padding: 6px 10px;
   overflow: hidden;
   color: #27716d;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
   box-sizing: border-box;
@@ -964,11 +965,17 @@ textarea {
 .reader-toolbar h2,
 .admin-form h2,
 .admin-table h2 {
-  margin: 12px 0 7px;
+  margin: 6px 0 3px;
+  overflow: hidden;
   color: #111111;
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
   letter-spacing: 0;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow-wrap: break-word;
 }
 
@@ -976,8 +983,11 @@ textarea {
 .shelf-item p,
 .admin-table p {
   margin: 0;
+  overflow: hidden;
   color: #5a5a5a;
-  line-height: 1.45;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .book-card small,
@@ -986,8 +996,21 @@ textarea {
   color: #74746f;
 }
 
+.book-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px 0;
+  color: #9a9a94;
+  font-size: 11px;
+}
+
+.book-card-meta i {
+  font-size: 11px;
+}
+
 .card-actions {
-  padding: 0 16px 16px;
+  padding: 10px 16px 16px;
 }
 
 .card-actions .primary-button,
@@ -1553,7 +1576,6 @@ progress {
 .avatar-chip:hover,
 .brand-button:hover,
 .category-grid button:hover,
-.book-card:hover,
 .shelf-item:hover,
 .metrics article:hover {
   transform: translateY(-2px);
@@ -4059,8 +4081,8 @@ progress {
 
 .admin-section-tabs button.active,
 .admin-section-tabs button:hover {
-  background: #111111;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 14%, transparent);
+  color: #0f6b66;
 }
 
 .admin-workspace {
@@ -4099,14 +4121,19 @@ progress {
   gap: 12px;
   min-width: 0;
   margin: 0;
-  padding: 16px;
-  border: 1px solid #d8d8d3;
-  border-radius: 8px;
-  background: #fbfbf8;
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--app-line, #eaeae5);
+  background: transparent;
+}
+
+.admin-book-form fieldset:last-of-type {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .admin-book-form legend {
-  padding: 0 6px;
+  padding: 0 0 10px;
   color: #111111;
   font-weight: 950;
 }
@@ -4351,6 +4378,28 @@ progress {
   color: #b3261e;
 }
 
+.admin-row-actions .edit-button {
+  border: 1px solid #bcd6f5;
+  background: #eef5fe;
+  color: #1d5fa8;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-row-actions .edit-button:hover:not(:disabled) {
+  background: #dcebfc;
+  border-color: #8fbceb;
+}
+
+.admin-row-actions .edit-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .admin-row-actions .danger-button {
   border: 1px solid #f0c4c4;
   background: #fdf2f2;
@@ -4558,7 +4607,6 @@ progress {
   grid-template-rows: auto 1fr auto;
   width: min(880px, 100%);
   max-height: min(880px, calc(100svh - 48px));
-  border: 1px solid #e4e4df;
   border-radius: 18px;
   background: #ffffff;
   color: #111111;
@@ -5721,6 +5769,16 @@ progress {
 .app-theme-dark .status-draft {
   background: rgba(255, 200, 120, 0.16);
   color: #ffcd85;
+}
+
+.app-theme-dark .admin-row-actions .edit-button {
+  border-color: rgba(124, 140, 248, 0.35);
+  background: rgba(124, 140, 248, 0.14);
+  color: var(--app-accent);
+}
+
+.app-theme-dark .admin-row-actions .edit-button:hover:not(:disabled) {
+  background: rgba(124, 140, 248, 0.24);
 }
 
 .app-theme-dark .admin-row-actions .danger-button {
