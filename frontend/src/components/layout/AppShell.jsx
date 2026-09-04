@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getInitials } from '../../utils/bookUtils'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
@@ -51,6 +51,7 @@ function AppShell({
         .slice(0, 4)
     : []
   const [showNotifications, setShowNotifications] = useState(false)
+  const notificationRef = useRef(null)
   const visibleNavItems = navItems.filter((item) => {
     if (isManagementNavContext && !managementNavIds.includes(item.id)) return false
     if (item.admin && !canShowAdminNav) return false
@@ -82,6 +83,21 @@ function AppShell({
       isCurrent = false
     }
   }, [isAdmin, isAdminPage, isGuest, rememberedAdminAccess])
+
+  useEffect(() => {
+    if (!showNotifications) return
+
+    function handleOutsideClick(event) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [showNotifications])
 
   function handleLogoClick() {
     navigateTo('home')
@@ -116,7 +132,7 @@ function AppShell({
 
         <div className="header-account">
           {!isGuest && (
-            <div className="mongo-notification" style={{ position: 'relative' }}>
+            <div className="mongo-notification" ref={notificationRef} style={{ position: 'relative' }}>
               <button
                 aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications} unread)` : ''}`}
                 className="notification-bell"

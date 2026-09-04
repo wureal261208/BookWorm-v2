@@ -112,7 +112,7 @@ function AdminPage({
     () => [...managedBooks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
     [managedBooks],
   )
-  const publishedBooks = sectionBooks.filter((book) => (book.status || 'published') === 'published').length
+  const publishedBooks = sectionBooks.filter((book) => (book.status || 'draft') === 'published').length
   const detailReadyBooks = sectionBooks.filter((book) => !getBookWarnings(book).some((warning) => warning.id === 'description')).length
   const readerReadyBooks = sectionBooks.filter((book) => isReaderReady(book)).length
   const currentErrors = getFormErrors(adminBook, managedBooks)
@@ -120,7 +120,7 @@ function AdminPage({
   const previewBook = useMemo(() => createPreviewBook(adminBook), [adminBook])
   const filteredManagedBooks = sectionBooks.filter((book) => {
     if (bookFilter === 'draft') return book.status === 'draft'
-    if (bookFilter === 'published') return (book.status || 'published') === 'published'
+    if (bookFilter === 'published') return (book.status || 'draft') === 'published'
     if (bookFilter === 'incomplete') return getBookWarnings(book).length > 0
     return true
   })
@@ -368,7 +368,7 @@ function AdminPage({
                         />
                         <span>
                           {book.title}
-                          <em className={`admin-status status-${book.status || 'published'}`}>{book.status || 'published'}</em>
+                          <em className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</em>
                         </span>
                         <small>{getAuthor(book)} - {getCategory(book)}</small>
                         <div className="admin-row-actions">
@@ -681,6 +681,7 @@ function BookFormModal({
   const [catalogError, setCatalogError] = useState('')
   const [publishBlockers, setPublishBlockers] = useState([])
   const [formBlockers, setFormBlockers] = useState([])
+  const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -699,7 +700,12 @@ function BookFormModal({
 
     setFormBlockers([])
     setPublishBlockers([])
-    await onSubmit(event)
+    setSubmitting(true)
+    try {
+      await onSubmit(event)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   // Live-search the synced Gutenberg catalog as the admin types, so
@@ -964,18 +970,33 @@ function BookFormModal({
         </div>
 
         <footer className="admin-book-modal-footer">
-          <button className="ghost-button" onClick={onPreview} type="button">
+          <button className="ghost-button" disabled={submitting} onClick={onPreview} type="button">
             <i className="bi bi-eye" />
             Preview as Detail
           </button>
-          <button className="ghost-button" onClick={onClose} type="button">
+          <button className="ghost-button" disabled={submitting} onClick={onClose} type="button">
             {isEditing ? 'Cancel edit' : 'Cancel'}
           </button>
-          <button className="primary-button" form="admin-book-form" type="submit">
-            <i className="bi bi-cloud-upload" />
-            {isEditing ? 'Update book' : 'Push book'}
+          <button className="primary-button" disabled={submitting} form="admin-book-form" type="submit">
+            {submitting ? (
+              <>
+                <i className="bi bi-arrow-repeat admin-spin" />
+                {isEditing ? 'Updating...' : 'Pushing...'}
+              </>
+            ) : (
+              <>
+                <i className="bi bi-cloud-upload" />
+                {isEditing ? 'Update book' : 'Push book'}
+              </>
+            )}
           </button>
         </footer>
+
+        {submitting && (
+          <div aria-hidden="true" className="admin-book-modal-progress">
+            <span />
+          </div>
+        )}
 
         {formBlockers.length > 0 && (
           <div className="admin-publish-alert-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="admin-form-alert-title">

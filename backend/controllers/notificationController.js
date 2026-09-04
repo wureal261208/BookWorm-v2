@@ -57,7 +57,14 @@ const getNotifications = asyncHandler(async (req, res) => {
   }
 
   const notifications = await Notification.find({
-    $or: [{ audience: 'all-customers' }, { targetUser: req.user._id }],
+    $or: [
+      // Broadcasts only count for customers whose account already existed
+      // when the notification went out - a freshly created account
+      // shouldn't see a backlog of "new book" announcements from before
+      // they signed up.
+      { audience: 'all-customers', createdAt: { $gte: req.user.createdAt } },
+      { targetUser: req.user._id },
+    ],
   })
     .sort({ createdAt: -1 })
     .limit(50);

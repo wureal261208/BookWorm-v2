@@ -85,6 +85,11 @@ const listBooks = asyncHandler(async (req, res) => {
     .skip((page - 1) * limit)
     .limit(limit);
 
+  // Defensive: make sure nothing between here and the browser (proxy, CDN,
+  // browser disk cache) ever serves a stale book list after a new book gets
+  // published - this list needs to reflect Mongo on every request.
+  res.setHeader('Cache-Control', 'no-store');
+
   return success(res, 200, 'Books retrieved successfully.', { books, page, limit });
 });
 
