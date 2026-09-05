@@ -698,6 +698,11 @@ textarea {
   color: #b42318;
 }
 
+.app-toast.loading > span {
+  background: #eef5fe;
+  color: #1d5fa8;
+}
+
 .app-toast p {
   margin: 0;
   color: #30343a;

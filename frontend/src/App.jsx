@@ -909,6 +909,7 @@ function App() {
 
     const record = createAdminBookRecord(adminBook)
     setManagedBooksError('')
+    setToast({ type: 'loading', message: adminBook.id ? 'Updating book...' : 'Pushing book...' })
     try {
       const { book } = adminBook.id
         ? await apiFetch(`/api/books/${adminBook.id}`, { method: 'PUT', body: record })
@@ -940,9 +941,11 @@ function App() {
     // exact row in place (looking like the delete "did nothing" until the
     // next manual refresh) even though it's already gone from Mongo.
     const matchesDeletedBook = (book) => book.id === id || book._id === id
+    setToast({ type: 'loading', message: 'Deleting book...' })
     try {
       await apiFetch(`/api/books/${id}`, { method: 'DELETE' })
       setManagedBooks((current) => current.filter((book) => !matchesDeletedBook(book)))
+      setToast({ type: 'success', message: 'Book removed from the catalog.' })
     } catch (error) {
       // The backend already returned 404 because the book is already gone
       // from MongoDB (e.g. deleted directly in Compass/mongosh, or this row
@@ -1360,14 +1363,20 @@ function BanNoticeModal({ message, onClose }) {
 
 function AppToast({ message, onClose, type }) {
   useEffect(() => {
+    // A loading toast represents work that's still in flight - it should
+    // stay up until the caller replaces it with a success/error toast, not
+    // vanish on its own while the request is still running.
+    if (type === 'loading') return undefined
     const timer = window.setTimeout(onClose, 3200)
     return () => window.clearTimeout(timer)
-  }, [onClose])
+  }, [onClose, type])
+
+  const icon = type === 'success' ? 'bi-check-circle' : type === 'loading' ? 'bi-arrow-repeat admin-spin' : 'bi-exclamation-circle'
 
   return (
     <div className={`app-toast ${type}`} role="status">
       <span>
-        <i className={`bi ${type === 'success' ? 'bi-check-circle' : 'bi-exclamation-circle'}`} />
+        <i className={`bi ${icon}`} />
       </span>
       <p>{message}</p>
       <button aria-label="Close notification" onClick={onClose} type="button">

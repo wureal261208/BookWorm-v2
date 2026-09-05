@@ -34,11 +34,38 @@ const BookSchema = new mongoose.Schema(
     // when it was pushed via "Import from catalog" or manually tagged to a
     // Gutenberg record. Optional - manually-typed books can leave this null.
     sourceEtextNumber: { type: Number, default: null, index: true },
+    // Lowercase/trimmed mirror of `title`, kept in sync in the pre-validate
+    // hook below. A plain unique index on `title` itself can't be
+    // case/whitespace-insensitive, so this is the field that actually gets
+    // the uniqueness constraint - it's what makes duplicate-title pushes
+    // impossible even when two requests race each other (see createBook),
+    // since MongoDB enforces this atomically at write time, unlike an
+    // application-level "does this already exist?" check beforehand.
+    normalizedTitle: { type: String, unique: true },
   },
   { timestamps: true }
 );
 
+BookSchema.pre('validate', function setNormalizedTitle(next) {
+  this.normalizedTitle = (this.title || '').trim().toLowerCase();
+  next();
+});
+
+const Book = mongoose.model('Book', BookSchema);
+
+// Surfaces a failed index build in the server logs instead of it failing
+// silently - the most common cause is leftover duplicate titles already in
+// the collection from before this unique index existed (MongoDB can't build
+// a unique index over data that already violates it). If you see this, use
+// Admin > Remove to delete the duplicate-titled books, then restart the
+// server so the index can build.
+Book.on('index', (error) => {
+  if (error) {
+    console.error('Book collection index build failed (likely duplicate titles already in the database):', error.message);
+  }
+});
+
 // The number of chapters an anonymous (not logged in) reader may access.
 BookSchema.statics.ANONYMOUS_CHAPTER_LIMIT = 3;
 
-module.exports = mongoose.model('Book', BookSchema);
+module.exports = Book;

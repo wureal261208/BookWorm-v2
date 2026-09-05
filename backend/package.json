@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "import:book-metadata": "node scripts/importBookMetadata.js"
+    "import:book-metadata": "node scripts/importBookMetadata.js",
+    "dedupe-books": "node scripts/dedupeBooks.js"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

@@ -66,20 +66,35 @@ const createBook = asyncHandler(async (req, res) => {
       }))
     : [];
 
-  const book = await Book.create({
-    title,
-    author,
-    description,
-    category,
-    coverUrl,
-    readerUrl,
-    chapters: normalizedChapters,
-    createdBy: req.user._id,
-    sourceEtextNumber: Number.isFinite(Number(sourceEtextNumber)) ? Number(sourceEtextNumber) : null,
-    status: ['draft', 'published', 'hidden'].includes(status) ? status : 'draft',
-    subjects: Array.isArray(subjects) ? subjects : [],
-    language: language || 'en',
-  });
+  let book;
+  try {
+    book = await Book.create({
+      title,
+      author,
+      description,
+      category,
+      coverUrl,
+      readerUrl,
+      chapters: normalizedChapters,
+      createdBy: req.user._id,
+      sourceEtextNumber: etextNumber,
+      status: ['draft', 'published', 'hidden'].includes(status) ? status : 'draft',
+      subjects: Array.isArray(subjects) ? subjects : [],
+      language: language || 'en',
+    });
+  } catch (error) {
+    // Belt and suspenders: the findOne check above is a fast, friendly
+    // pre-check, but it isn't atomic - two requests within the same few
+    // milliseconds of each other (a double-click, a slow connection retried)
+    // can both pass it before either has actually saved. The unique index
+    // on normalizedTitle is what actually guarantees no duplicate ever gets
+    // written, so this catches that case too and gives it the same clear
+    // message instead of a raw 500.
+    if (error.code === 11000) {
+      return fail(res, 409, `"${title.trim()}" is already in the catalog.`);
+    }
+    throw error;
+  }
 
   if (book.status === 'published') {
     await notifyBookPublished(book, req.user._id);
@@ -190,7 +205,14 @@ const updateBook = asyncHandler(async (req, res) => {
     }
   });
 
-  await book.save();
+  try {
+    await book.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      return fail(res, 409, `"${book.title}" is already in the catalog.`);
+    }
+    throw error;
+  }
 
   // Only notify on the Draft/Hidden -> Published transition - not on every
   // edit to a book that was already published, or that isn't published now.
