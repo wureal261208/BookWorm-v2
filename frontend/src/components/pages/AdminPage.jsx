@@ -63,7 +63,6 @@ const adminBookFilters = [
   { id: 'all', label: 'All books' },
   { id: 'draft', label: 'Draft' },
   { id: 'published', label: 'Published' },
-  { id: 'incomplete', label: 'Missing info' },
 ]
 
 function AdminPage({
@@ -99,6 +98,7 @@ function AdminPage({
   const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'book')
   const [userTab, setUserTab] = useState(isAdmin ? 'manager' : 'employee')
   const [bookFilter, setBookFilter] = useState('all')
+  const [bookPage, setBookPage] = useState(1)
   const [showPreview, setShowPreview] = useState(false)
   const [showBookModal, setShowBookModal] = useState(false)
   const [banTarget, setBanTarget] = useState(null)
@@ -112,23 +112,31 @@ function AdminPage({
     () => [...managedBooks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
     [managedBooks],
   )
-  const publishedBooks = sectionBooks.filter((book) => (book.status || 'draft') === 'published').length
-  const detailReadyBooks = sectionBooks.filter((book) => !getBookWarnings(book).some((warning) => warning.id === 'description')).length
-  const readerReadyBooks = sectionBooks.filter((book) => isReaderReady(book)).length
   const currentErrors = getFormErrors(adminBook, managedBooks)
   const currentWarnings = getFormWarnings(adminBook)
   const previewBook = useMemo(() => createPreviewBook(adminBook), [adminBook])
   const filteredManagedBooks = sectionBooks.filter((book) => {
     if (bookFilter === 'draft') return book.status === 'draft'
     if (bookFilter === 'published') return (book.status || 'draft') === 'published'
-    if (bookFilter === 'incomplete') return getBookWarnings(book).length > 0
     return true
   })
+
+  const BOOKS_PER_PAGE = 5
+  const bookPageCount = Math.max(1, Math.ceil(filteredManagedBooks.length / BOOKS_PER_PAGE))
+  const currentBookPage = Math.min(bookPage, bookPageCount)
+  const pagedManagedBooks = filteredManagedBooks.slice(
+    (currentBookPage - 1) * BOOKS_PER_PAGE,
+    currentBookPage * BOOKS_PER_PAGE,
+  )
+
+  function changeBookFilter(filterId) {
+    setBookFilter(filterId)
+    setBookPage(1)
+  }
 
   const managerAccounts = staff.filter((item) => item.role === 'manager' && !item.isResigned)
   const employeeAccounts = staff.filter((item) => item.role === 'employee' && !item.isResigned)
   const customerAccounts = users.filter((item) => normalizeRole(item.role) === 'customer')
-  const lockedCustomers = customerAccounts.filter((item) => item.isRestricted).length
   const userTabsAvailable = isAdmin ? ['manager', 'employee', 'customer'] : ['employee', 'customer']
   const userTabLabels = { manager: 'Managers', employee: 'Employees', customer: 'Customers' }
 
@@ -311,13 +319,6 @@ function AdminPage({
 
       {activeAdminSection === 'book' && canPushBooks ? (
         <>
-          <div className="metrics admin-metrics">
-            <article><strong>{books.length}</strong><span>Books on main</span></article>
-            <article><strong>{publishedBooks}</strong><span>Published in this shelf</span></article>
-            <article><strong>{detailReadyBooks}</strong><span>Detail ready</span></article>
-            <article><strong>{readerReadyBooks}</strong><span>Reader ready</span></article>
-          </div>
-
           <section className="admin-workspace admin-book-toolbar">
             <div className="section-heading">
               <div>
@@ -339,7 +340,7 @@ function AdminPage({
 
             <div className="admin-filter-bar" aria-label="Filter admin books">
               {adminBookFilters.map((filter) => (
-                <button className={bookFilter === filter.id ? 'active' : ''} key={filter.id} onClick={() => setBookFilter(filter.id)} type="button">
+                <button className={bookFilter === filter.id ? 'active' : ''} key={filter.id} onClick={() => changeBookFilter(filter.id)} type="button">
                   {filter.label}
                 </button>
               ))}
@@ -347,9 +348,12 @@ function AdminPage({
 
             <div className="admin-two-col">
               <section className="admin-table">
-                <h2>Books</h2>
-                {filteredManagedBooks.length ? (
-                  filteredManagedBooks.map((book) => {
+                <div className="admin-table-heading">
+                  <h2>Books</h2>
+                  <span className="admin-count-pill">{filteredManagedBooks.length}</span>
+                </div>
+                {pagedManagedBooks.length ? (
+                  pagedManagedBooks.map((book) => {
                     // Some rows can come back from Mongo without the `id`
                     // virtual populated (e.g. a document touched outside the
                     // API) - `_id` is the raw Mongo id and is always present,
@@ -360,7 +364,7 @@ function AdminPage({
                     const missingId = !bookId
 
                     return (
-                      <div className="table-row admin-book-row" key={bookId || book.title}>
+                      <div className="table-row admin-book-row admin-row-fade-in" key={bookId || book.title}>
                         <img
                           src={getAdminCover(book)}
                           alt=""
@@ -381,6 +385,14 @@ function AdminPage({
                   })
                 ) : (
                   <p>No books match this filter.</p>
+                )}
+
+                {filteredManagedBooks.length > BOOKS_PER_PAGE && (
+                  <AdminPagination
+                    currentPage={currentBookPage}
+                    onPageChange={setBookPage}
+                    totalPages={bookPageCount}
+                  />
                 )}
               </section>
 
@@ -406,13 +418,6 @@ function AdminPage({
 
       {activeAdminSection === 'team' && canManageUsers ? (
         <>
-          <div className="metrics admin-metrics">
-            <article><strong>{managerAccounts.length}</strong><span>Managers</span></article>
-            <article><strong>{employeeAccounts.length}</strong><span>Employees</span></article>
-            <article><strong>{customerAccounts.length}</strong><span>Customers</span></article>
-            <article><strong>{lockedCustomers}</strong><span>Locked customers</span></article>
-          </div>
-
           <section className="admin-workspace">
             <div className="section-heading">
               <div>
@@ -629,6 +634,67 @@ function AdminPage({
         />
       )}
     </div>
+  )
+}
+
+function getPaginationItems(current, total) {
+  // Always show first, last, current, and one neighbour on each side;
+  // everything else collapses into a single "..." so the strip stays a
+  // fixed, short width no matter how many pages there are.
+  const items = []
+  const pages = new Set([1, total, current, current - 1, current + 1].filter((page) => page >= 1 && page <= total))
+  const sorted = [...pages].sort((a, b) => a - b)
+
+  let previous = 0
+  for (const page of sorted) {
+    if (previous && page - previous > 1) items.push('ellipsis')
+    items.push(page)
+    previous = page
+  }
+  return items
+}
+
+function AdminPagination({ currentPage, onPageChange, totalPages }) {
+  const items = getPaginationItems(currentPage, totalPages)
+
+  return (
+    <nav aria-label="Books pagination" className="admin-pagination">
+      <button
+        aria-label="Previous page"
+        className="admin-pagination-arrow"
+        disabled={currentPage <= 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        type="button"
+      >
+        <i className="bi bi-chevron-left" />
+      </button>
+
+      {items.map((item, index) =>
+        item === 'ellipsis' ? (
+          <span className="admin-pagination-ellipsis" key={`ellipsis-${index}`}>...</span>
+        ) : (
+          <button
+            aria-current={item === currentPage ? 'page' : undefined}
+            className={item === currentPage ? 'active' : ''}
+            key={item}
+            onClick={() => onPageChange(item)}
+            type="button"
+          >
+            {item}
+          </button>
+        ),
+      )}
+
+      <button
+        aria-label="Next page"
+        className="admin-pagination-arrow"
+        disabled={currentPage >= totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        type="button"
+      >
+        <i className="bi bi-chevron-right" />
+      </button>
+    </nav>
   )
 }
 

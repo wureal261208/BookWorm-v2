@@ -99,4 +99,22 @@ const markAsRead = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createNotification, getNotifications, markAsRead };
+// @route PATCH /api/notifications/read-all
+// @desc  Marks every notification currently visible to this user as read,
+//        in one round trip instead of one PATCH per item.
+const markAllAsRead = asyncHandler(async (req, res) => {
+  await Notification.updateMany(
+    {
+      $or: [
+        { audience: 'all-customers', createdAt: { $gte: req.user.createdAt } },
+        { targetUser: req.user._id },
+      ],
+      readBy: { $ne: req.user._id },
+    },
+    { $addToSet: { readBy: req.user._id } },
+  );
+
+  return success(res, 200, 'All notifications marked as read.', {});
+});
+
+module.exports = { createNotification, getNotifications, markAsRead, markAllAsRead };

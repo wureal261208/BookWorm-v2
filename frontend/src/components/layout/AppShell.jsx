@@ -24,6 +24,7 @@ function AppShell({
   onAuth,
   onGuest,
   onLogout,
+  onMarkAllNotificationsRead,
   onMarkNotificationRead,
   setWebsiteTheme,
   staff = [],
@@ -145,10 +146,21 @@ function AppShell({
               </button>
               {showNotifications && (
                 <div className="mongo-notification-dropdown">
-                  <strong>Notifications</strong>
+                  <div className="notification-dropdown-header">
+                    <strong>Notifications</strong>
+                    {notifications.length > 0 && (
+                      <button
+                        className="notification-mark-all"
+                        onClick={() => onMarkAllNotificationsRead?.()}
+                        type="button"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
                   {notifications.length ? (
-                    <ul>
-                      {notifications.slice(0, 6).map((item) => (
+                    <ul className="notification-list">
+                      {notifications.map((item) => (
                         <li key={item.id}>
                           <button
                             className={item.read ? '' : 'unread'}

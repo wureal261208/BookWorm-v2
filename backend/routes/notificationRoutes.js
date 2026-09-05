@@ -3,6 +3,7 @@ const {
   createNotification,
   getNotifications,
   markAsRead,
+  markAllAsRead,
 } = require('../controllers/notificationController');
 const { identify, protect, authorize } = require('../middleware/auth');
 
@@ -15,6 +16,7 @@ router.get('/', identify, getNotifications);
 // Only admin can broadcast notifications.
 router.post('/', protect, authorize('admin'), createNotification);
 
+router.patch('/read-all', protect, markAllAsRead);
 router.patch('/:id/read', protect, markAsRead);
 
 module.exports = router;

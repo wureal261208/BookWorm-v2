@@ -101,6 +101,7 @@ function App() {
   const [, setBooksLoading] = useState(false)
   const [managedBooks, setManagedBooks] = useState([])
   const [managedBooksError, setManagedBooksError] = useState('')
+  const addBookInFlightRef = useRef(false)
   const [favorites, setFavorites] = useState(userDataDefaults.favorites)
   const [history, setHistory] = useState(userDataDefaults.history)
   const [readingActivity, setReadingActivity] = useState(userDataDefaults.readingActivity)
@@ -840,6 +841,16 @@ function App() {
     )))
   }
 
+  async function markAllNotificationsRead() {
+    try {
+      await apiFetch('/api/notifications/read-all', { method: 'PATCH' })
+    } catch (error) {
+      handleDataSyncError(error, 'mark-all-notifications-read')
+      return
+    }
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })))
+  }
+
   async function banUser(id, { days, reason }) {
     try {
       await apiFetch(`/api/users/${id}/ban`, { method: 'PATCH', body: { days, reason } })
@@ -866,9 +877,18 @@ function App() {
 
   async function addManagedBook(event) {
     event.preventDefault()
+    // Guards against a book getting pushed multiple times from a single
+    // intended click - e.g. a slow connection where the button's disabled
+    // state hasn't re-rendered yet by the time a second click/Enter lands.
+    // A ref (not state) so the check is synchronous and can't race the
+    // async submit itself.
+    if (addBookInFlightRef.current) return false
+    addBookInFlightRef.current = true
+
     const validationErrors = validateAdminBook(adminBook, managedBooks)
     if (validationErrors.length) {
       setToast({ type: 'error', message: validationErrors.slice(0, 2).join(' ') })
+      addBookInFlightRef.current = false
       return false
     }
 
@@ -890,6 +910,8 @@ function App() {
       setManagedBooksError(error.message)
       setToast({ type: 'error', message: error.message })
       return false
+    } finally {
+      addBookInFlightRef.current = false
     }
   }
 
@@ -1107,7 +1129,7 @@ function App() {
 
   return (
     <NavigationProvider value={navigation}>
-      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkNotificationRead={markNotificationRead} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
+      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onMarkNotificationRead={markNotificationRead} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
         <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}

@@ -32,8 +32,29 @@ app.get('/api/health', (req, res) => success(res, 200, 'BookWorm API is running.
 // Mongoose's live connection state and which required env vars are present
 // (never secret values - FRONTEND_URL is shown in full since it's just a
 // public URL, not sensitive) without needing to dig through Vercel's log viewer.
-app.get('/api/health/db', (req, res) => {
+app.get('/api/health/db', async (req, res) => {
   const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+
+  // Book counts by status, straight from Mongo, bypassing any app-level
+  // filtering/caching - use this to check whether "X books show as
+  // Published in Admin but only Y show on the public site" is a real data
+  // mismatch or just a frontend display issue.
+  let bookCounts = null;
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const Book = require('./models/Book');
+      const [total, published, draft, hidden] = await Promise.all([
+        Book.countDocuments({}),
+        Book.countDocuments({ status: 'published' }),
+        Book.countDocuments({ status: 'draft' }),
+        Book.countDocuments({ status: 'hidden' }),
+      ]);
+      bookCounts = { total, published, draft, hidden };
+    }
+  } catch (error) {
+    bookCounts = { error: error.message };
+  }
+
   return success(res, 200, 'Database diagnostic.', {
     mongoose: states[mongoose.connection.readyState] || 'unknown',
     frontendUrlConfigured: allowedFrontendOrigin || '(not set - CORS is open to all origins)',
@@ -42,6 +63,7 @@ app.get('/api/health/db', (req, res) => {
       FIREBASE_SERVICE_ACCOUNT_JSON: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
       FIREBASE_SERVICE_ACCOUNT_PATH: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_PATH),
     },
+    bookCounts,
   });
 });
 
