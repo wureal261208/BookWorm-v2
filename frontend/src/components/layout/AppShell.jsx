@@ -25,7 +25,7 @@ function AppShell({
   onGuest,
   onLogout,
   onMarkAllNotificationsRead,
-  onMarkNotificationRead,
+  onNotificationClick,
   setWebsiteTheme,
   staff = [],
   websiteTheme = 'light',
@@ -42,15 +42,9 @@ function AppShell({
   const canShowAdminNav = isAdmin || isAdminPage || rememberedAdminAccess
   const isManagementNavContext = canShowAdminNav && managementNavIds.includes(activePage)
   const displayName = account?.name || 'None Account'
-  const unreadNotifications = isGuest
-    ? 0
-    : notifications.filter((item) => !item.read).length
+  const unreadNotificationItems = isGuest ? [] : notifications.filter((item) => !item.read)
+  const unreadNotifications = unreadNotificationItems.length
 
-  const recentPushedBooks = isAdmin
-    ? [...managedBooks]
-        .sort((a, b) => getBookPushTimestamp(b.id) - getBookPushTimestamp(a.id))
-        .slice(0, 4)
-    : []
   const [showNotifications, setShowNotifications] = useState(false)
   const notificationRef = useRef(null)
   const visibleNavItems = navItems.filter((item) => {
@@ -148,7 +142,7 @@ function AppShell({
                 <div className="mongo-notification-dropdown">
                   <div className="notification-dropdown-header">
                     <strong>Notifications</strong>
-                    {notifications.length > 0 && (
+                    {unreadNotificationItems.length > 0 && (
                       <button
                         className="notification-mark-all"
                         onClick={() => onMarkAllNotificationsRead?.()}
@@ -158,49 +152,33 @@ function AppShell({
                       </button>
                     )}
                   </div>
-                  {notifications.length ? (
+                  {unreadNotificationItems.length ? (
                     <ul className="notification-list">
-                      {notifications.map((item) => (
+                      {unreadNotificationItems.map((item) => (
                         <li key={item.id}>
                           <button
-                            className={item.read ? '' : 'unread'}
-                            onClick={() => onMarkNotificationRead?.(item.id)}
+                            className="unread"
+                            onClick={() => {
+                              setShowNotifications(false)
+                              onNotificationClick?.(item)
+                            }}
                             type="button"
                           >
-                            <i className={`bi ${item.read ? 'bi-envelope-open' : 'bi-envelope'}`} />
-                            <span><strong>{item.title}</strong> {item.message}</span>
+                            <i className="bi bi-envelope" />
+                            <span className="notification-item-body">
+                              <strong>{item.title}</strong>
+                              <em>{item.message}</em>
+                              <small>{formatNotificationTime(item.createdAt)}</small>
+                            </span>
                           </button>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="settings-copy">No notifications yet.</p>
-                  )}
-
-                  {isAdmin && (
-                    <>
-                      <strong style={{ marginTop: 10 }}>Recently pushed books</strong>
-                      {recentPushedBooks.length ? (
-                        <ul>
-                          {recentPushedBooks.map((book) => (
-                            <li key={book.id}>
-                              <button
-                                onClick={() => {
-                                  setShowNotifications(false)
-                                  navigateTo('admin')
-                                }}
-                                type="button"
-                              >
-                                <i className="bi bi-journal-plus" />
-                                <span>"{book.title}" pushed to the catalog.</span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="settings-copy">No recent push activity.</p>
-                      )}
-                    </>
+                    <div className="notification-empty">
+                      <i className="bi bi-bell-slash" />
+                      <p>No new notifications right now.</p>
+                    </div>
                   )}
                 </div>
               )}
@@ -285,9 +263,17 @@ function AppShell({
   )
 }
 
-function getBookPushTimestamp(id) {
-  const match = /^managed-(\d+)$/.exec(id || '')
-  return match ? Number(match[1]) : 0
+function formatNotificationTime(isoString) {
+  if (!isoString) return ''
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(isoString).toLocaleDateString()
 }
 
 export default AppShell

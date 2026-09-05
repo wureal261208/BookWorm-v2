@@ -15,6 +15,7 @@ async function notifyBookPublished(book, staffUserId) {
     message: `"${book.title}" is now available to read.`,
     createdBy: staffUserId,
     audience: 'all-customers',
+    book: book._id,
   });
 }
 
@@ -37,6 +38,24 @@ const createBook = asyncHandler(async (req, res) => {
 
   if (!title || !author) {
     return fail(res, 400, 'Title and author are required.');
+  }
+
+  // Block duplicate pushes - whether that's a genuinely accidental repeat
+  // push of the same title, or several near-simultaneous submits (a slow
+  // connection, a form double-click) racing past the frontend's own guard.
+  // Case/whitespace-insensitive so "The Odyssey " and "the odyssey" collide
+  // too. A matching sourceEtextNumber (the same Gutenberg book picked twice)
+  // also counts, even if the title was hand-edited afterward.
+  const normalizedTitle = title.trim();
+  const etextNumber = Number.isFinite(Number(sourceEtextNumber)) ? Number(sourceEtextNumber) : null;
+  const duplicate = await Book.findOne({
+    $or: [
+      { title: { $regex: `^${normalizedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } },
+      ...(etextNumber ? [{ sourceEtextNumber: etextNumber }] : []),
+    ],
+  });
+  if (duplicate) {
+    return fail(res, 409, `"${duplicate.title}" is already in the catalog.`);
   }
 
   const normalizedChapters = Array.isArray(chapters)
@@ -81,7 +100,14 @@ const listBooks = asyncHandler(async (req, res) => {
 
   const books = await Book.find(filter)
     .select('-chapters')
-    .sort({ createdAt: -1 })
+    // Tie-break on _id too - MongoDB's skip/limit pagination is only
+    // stable when the sort is fully deterministic. Several books created
+    // in the same millisecond (e.g. bulk-imported, or a double-submit
+    // before the duplicate-push guard existed) would otherwise sort
+    // ambiguously between page requests, so the same book could show up
+    // on two pages (visible as duplicate React keys / a book missing from
+    // the site while Admin still counts it as published).
+    .sort({ createdAt: -1, _id: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 

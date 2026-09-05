@@ -534,7 +534,15 @@ function App() {
         })
 
         const pages = await Promise.all(pageRequests)
-        const combinedBooks = pages.flat()
+        // Belt-and-suspenders alongside the backend's now-deterministic sort
+        // (createdAt + _id tie-break): never let a book that lands on two
+        // of these three page requests reach the UI twice.
+        const seenIds = new Set()
+        const combinedBooks = pages.flat().filter((book) => {
+          if (seenIds.has(book.id)) return false
+          seenIds.add(book.id)
+          return true
+        })
 
         if (!ignore) {
           setBooks(combinedBooks)
@@ -851,6 +859,13 @@ function App() {
     setNotifications((current) => current.map((item) => ({ ...item, read: true })))
   }
 
+  function handleNotificationClick(notification) {
+    if (!notification.read) markNotificationRead(notification.id)
+    if (!notification.bookId) return
+    const book = allBooks.find((item) => item.id === notification.bookId)
+    if (book) openDetail(book)
+  }
+
   async function banUser(id, { days, reason }) {
     try {
       await apiFetch(`/api/users/${id}/ban`, { method: 'PATCH', body: { days, reason } })
@@ -920,16 +935,21 @@ function App() {
       setToast({ type: 'error', message: 'This book has no id yet - refresh the admin book list and try again.' })
       return
     }
+    // Match on _id too - a row can be showing thanks to the id/_id fallback
+    // in AdminPage, and filtering on .id alone would silently keep that
+    // exact row in place (looking like the delete "did nothing" until the
+    // next manual refresh) even though it's already gone from Mongo.
+    const matchesDeletedBook = (book) => book.id === id || book._id === id
     try {
       await apiFetch(`/api/books/${id}`, { method: 'DELETE' })
-      setManagedBooks((current) => current.filter((book) => book.id !== id))
+      setManagedBooks((current) => current.filter((book) => !matchesDeletedBook(book)))
     } catch (error) {
       // The backend already returned 404 because the book is already gone
       // from MongoDB (e.g. deleted directly in Compass/mongosh, or this row
       // was stale leftover state) - the goal (book removed) is already true,
       // so just drop the stale row instead of leaving it stuck with an error.
       if (/not found/i.test(error.message)) {
-        setManagedBooks((current) => current.filter((book) => book.id !== id))
+        setManagedBooks((current) => current.filter((book) => !matchesDeletedBook(book)))
         setToast({ type: 'success', message: 'That book was already removed from the database - cleared it from this list too.' })
         return
       }
@@ -1129,7 +1149,7 @@ function App() {
 
   return (
     <NavigationProvider value={navigation}>
-      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onMarkNotificationRead={markNotificationRead} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
+      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onNotificationClick={handleNotificationClick} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
         <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}

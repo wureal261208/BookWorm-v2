@@ -353,18 +353,20 @@ function AdminPage({
                   <span className="admin-count-pill">{filteredManagedBooks.length}</span>
                 </div>
                 {pagedManagedBooks.length ? (
-                  pagedManagedBooks.map((book) => {
+                  pagedManagedBooks.map((book, bookIndex) => {
                     // Some rows can come back from Mongo without the `id`
                     // virtual populated (e.g. a document touched outside the
                     // API) - `_id` is the raw Mongo id and is always present,
-                    // so fall back to it everywhere an id is needed. Without
-                    // this, rows with no id at all would collide on the same
-                    // React key and visually overlap.
+                    // so fall back to it everywhere an id is needed. The key
+                    // itself falls back to the row's position on the page,
+                    // never the title - two genuinely different books (or
+                    // two accidental duplicates) can share a title, and a
+                    // title-based key would collide for both.
                     const bookId = book.id || book._id
                     const missingId = !bookId
 
                     return (
-                      <div className="table-row admin-book-row admin-row-fade-in" key={bookId || book.title}>
+                      <div className="table-row admin-book-row admin-row-fade-in" key={bookId || `book-row-${bookIndex}`}>
                         <img
                           src={getAdminCover(book)}
                           alt=""
@@ -604,6 +606,7 @@ function AdminPage({
           adminBook={adminBook}
           currentErrors={currentErrors}
           currentWarnings={currentWarnings}
+          managedBooks={managedBooks}
           managedBooksError={managedBooksError}
           onClose={closeBookModal}
           onPreview={() => setShowPreview(true)}
@@ -732,6 +735,7 @@ function BookFormModal({
   adminBook,
   currentErrors,
   currentWarnings,
+  managedBooks = [],
   managedBooksError,
   onClose,
   onPreview,
@@ -819,6 +823,7 @@ function BookFormModal({
   // Note the Gutenberg catalog only carries bibliographic fields - it has no
   // plot description, so `description` is intentionally left for staff to write.
   function importCatalogBook(entry) {
+    if (isEntryAlreadyAdded(entry)) return
     const guessedCover = entry.etextNumber
       ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg`
       : ''
@@ -842,6 +847,14 @@ function BookFormModal({
     setCatalogQuery('')
     setCatalogResults([])
     setCatalogError('')
+  }
+
+  function isEntryAlreadyAdded(entry) {
+    const normalizedEntryTitle = (entry.title || '').trim().toLowerCase()
+    return managedBooks.some((book) => {
+      if (entry.etextNumber && book.sourceEtextNumber === entry.etextNumber) return true
+      return normalizedEntryTitle && book.title?.trim().toLowerCase() === normalizedEntryTitle
+    })
   }
 
   return (
@@ -899,22 +912,31 @@ function BookFormModal({
               )}
               {catalogResults.length > 0 && (
                 <ul className="admin-search-results">
-                  {catalogResults.map((entry) => (
-                    <li key={entry.etextNumber}>
-                      <button className="admin-search-result" onClick={() => importCatalogBook(entry)} type="button">
-                        <img
-                          alt=""
-                          onError={(event) => handleGutenbergCoverError(event, entry.etextNumber)}
-                          src={entry.etextNumber ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg` : NONE_COVER_URL}
-                        />
-                        <span>
-                          <strong>{entry.title || 'Untitled'}</strong>
-                          <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
-                        </span>
-                        <i className="bi bi-arrow-right-circle" />
-                      </button>
-                    </li>
-                  ))}
+                  {catalogResults.map((entry) => {
+                    const alreadyAdded = isEntryAlreadyAdded(entry)
+                    return (
+                      <li key={entry.etextNumber}>
+                        <button
+                          className={`admin-search-result${alreadyAdded ? ' admin-search-result-disabled' : ''}`}
+                          disabled={alreadyAdded}
+                          onClick={() => importCatalogBook(entry)}
+                          type="button"
+                        >
+                          <img
+                            alt=""
+                            onError={(event) => handleGutenbergCoverError(event, entry.etextNumber)}
+                            src={entry.etextNumber ? `https://www.gutenberg.org/cache/epub/${entry.etextNumber}/pg${entry.etextNumber}.cover.medium.jpg` : NONE_COVER_URL}
+                          />
+                          <span>
+                            <strong>{entry.title || 'Untitled'}</strong>
+                            <small>{entry.authors || 'Unknown author'} - Gutenberg #{entry.etextNumber}</small>
+                            {alreadyAdded && <em className="admin-search-result-tag">This book already exists</em>}
+                          </span>
+                          {alreadyAdded ? <i className="bi bi-check-circle" /> : <i className="bi bi-arrow-right-circle" />}
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               {!catalogLoading && catalogQuery.trim().length >= 2 && catalogResults.length === 0 && !catalogError && (
