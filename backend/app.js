@@ -40,6 +40,8 @@ app.get('/api/health/db', async (req, res) => {
   // Published in Admin but only Y show on the public site" is a real data
   // mismatch or just a frontend display issue.
   let bookCounts = null;
+  let duplicateTitles = [];
+  let uniqueTitleIndexActive = false;
   try {
     if (mongoose.connection.readyState === 1) {
       const Book = require('./models/Book');
@@ -50,6 +52,25 @@ app.get('/api/health/db', async (req, res) => {
         Book.countDocuments({ status: 'hidden' }),
       ]);
       bookCounts = { total, published, draft, hidden };
+
+      // Groups by the same case/whitespace-insensitive key the app uses for
+      // duplicate detection, so you can see directly whether leftover
+      // duplicate-titled books are still sitting in the database (run
+      // `npm run dedupe-books` in backend/ to clear these out).
+      duplicateTitles = await Book.aggregate([
+        { $group: { _id: '$normalizedTitle', count: { $sum: 1 }, titles: { $push: '$title' } } },
+        { $match: { count: { $gt: 1 } } },
+        { $project: { _id: 0, title: { $arrayElemAt: ['$titles', 0] }, count: 1 } },
+      ]);
+
+      // Confirms the unique index that actually prevents duplicate pushes
+      // has finished building - if this is false, duplicate titles can
+      // still slip through no matter what the frontend does, usually
+      // because duplicateTitles above wasn't empty the last time the server
+      // started (Mongo refuses to build a unique index over data that
+      // already violates it).
+      const indexes = await Book.collection.indexes();
+      uniqueTitleIndexActive = indexes.some((idx) => idx.key && idx.key.normalizedTitle === 1 && idx.unique);
     }
   } catch (error) {
     bookCounts = { error: error.message };
@@ -64,6 +85,8 @@ app.get('/api/health/db', async (req, res) => {
       FIREBASE_SERVICE_ACCOUNT_PATH: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_PATH),
     },
     bookCounts,
+    duplicateTitles,
+    uniqueTitleIndexActive,
   });
 });
 

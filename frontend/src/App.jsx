@@ -916,8 +916,13 @@ function App() {
         : await apiFetch('/api/books', { method: 'POST', body: record })
 
       setManagedBooks((current) => {
-        const exists = current.some((item) => item.id === book.id)
-        return exists ? current.map((item) => (item.id === book.id ? book : item)) : [book, ...current]
+        // Map keyed by id so this can never produce two rows for the same
+        // book no matter how many times this update ends up running - the
+        // new copy always wins over anything already in the list with the
+        // same id.
+        const byId = new Map(current.map((item) => [item.id, item]))
+        byId.set(book.id, book)
+        return [book, ...[...byId.values()].filter((item) => item.id !== book.id)]
       })
       setAdminBook(emptyAdminBook)
       setToast({ type: 'success', message: book.status === 'published' ? 'Book published to the main site.' : 'Book saved in Admin.' })

@@ -5070,6 +5070,25 @@ progress {
   .admin-book-modal-footer .ghost-button {
     width: 100%;
   }
+
+  .admin-ban-backdrop {
+    padding: 12px;
+  }
+
+  .admin-ban-modal {
+    width: 100%;
+    padding: 20px;
+  }
+
+  .admin-ban-modal .admin-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .admin-ban-modal .admin-form-actions .primary-button,
+  .admin-ban-modal .admin-form-actions .ghost-button,
+  .admin-ban-modal .admin-form-actions .danger-button {
+    width: 100%;
+  }
 }
 
 .admin-publish-alert-backdrop {
