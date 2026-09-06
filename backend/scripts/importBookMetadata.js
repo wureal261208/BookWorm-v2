@@ -11,7 +11,7 @@
 // Safe to re-run: rows are upserted by "Etext Number", so running it again
 // (e.g. with a refreshed CSV) updates existing rows instead of duplicating.
 
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 const fs = require('fs');
 const path = require('path');

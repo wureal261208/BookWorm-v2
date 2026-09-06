@@ -2,7 +2,7 @@
 // a normal long-running Express server) - this file is only used when
 // deployed to Vercel, where every request is a fresh (or reused-warm)
 // function invocation instead of one long-running process.
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 const app = require('../app');
 const connectDB = require('../config/db');
