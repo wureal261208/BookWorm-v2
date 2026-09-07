@@ -66,6 +66,15 @@ const createBook = asyncHandler(async (req, res) => {
       }))
     : [];
 
+  // Customers can push books now, but never straight to the public site -
+  // their submissions always land as a draft so a staff member reviews and
+  // publishes it from User Contributions/Book Management. Staff keep full
+  // control over the status they choose.
+  const isCustomer = req.user.role === 'customer';
+  const resolvedStatus = isCustomer
+    ? 'draft'
+    : (['draft', 'published', 'hidden'].includes(status) ? status : 'draft');
+
   let book;
   try {
     book = await Book.create({
@@ -77,8 +86,9 @@ const createBook = asyncHandler(async (req, res) => {
       readerUrl,
       chapters: normalizedChapters,
       createdBy: req.user._id,
+      createdByRole: req.user.role,
       sourceEtextNumber: etextNumber,
-      status: ['draft', 'published', 'hidden'].includes(status) ? status : 'draft',
+      status: resolvedStatus,
       subjects: Array.isArray(subjects) ? subjects : [],
       language: language || 'en',
     });
@@ -103,18 +113,28 @@ const createBook = asyncHandler(async (req, res) => {
   return success(res, 201, 'Book pushed successfully.', { book });
 });
 
-// @route GET /api/books?limit=&page=
+// @route GET /api/books?limit=&page=&q=&category=&sort=
 // @desc  Public catalog listing - published books only, paginated. Staff use
 //        GET /api/books/mine (below) for the full catalog including
-//        drafts/hidden books.
+//        drafts/hidden books. `q` full-text searches title/author/subjects,
+//        `category` filters exactly, `sort` is "recent" (default) or
+//        "views" (most-read first) - the search/pagination Discover and
+//        Home actually need now that the catalog can hold ~75k books, far
+//        too many to ever hand the browser in one go.
 const listBooks = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 32));
 
   const filter = { status: 'published' };
+  if (req.query.category && req.query.category !== 'all') {
+    filter.category = req.query.category;
+  }
+  if (req.query.q && req.query.q.trim()) {
+    filter.$text = { $search: req.query.q.trim() };
+  }
 
-  const books = await Book.find(filter)
-    .select('-chapters')
+  const sort = req.query.sort === 'views'
+    ? { views: -1, _id: -1 }
     // Tie-break on _id too - MongoDB's skip/limit pagination is only
     // stable when the sort is fully deterministic. Several books created
     // in the same millisecond (e.g. bulk-imported, or a double-submit
@@ -122,25 +142,58 @@ const listBooks = asyncHandler(async (req, res) => {
     // ambiguously between page requests, so the same book could show up
     // on two pages (visible as duplicate React keys / a book missing from
     // the site while Admin still counts it as published).
-    .sort({ createdAt: -1, _id: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit);
+    : { createdAt: -1, _id: -1 };
+
+  const [books, total] = await Promise.all([
+    Book.find(filter).select('-chapters').sort(sort).skip((page - 1) * limit).limit(limit),
+    Book.countDocuments(filter),
+  ]);
 
   // Defensive: make sure nothing between here and the browser (proxy, CDN,
   // browser disk cache) ever serves a stale book list after a new book gets
   // published - this list needs to reflect Mongo on every request.
   res.setHeader('Cache-Control', 'no-store');
 
-  return success(res, 200, 'Books retrieved successfully.', { books, page, limit });
+  return success(res, 200, 'Books retrieved successfully.', { books, page, limit, total });
 });
 
 // @route GET /api/books/mine
 // @desc  Full book records (including chapters) for the staff admin panel.
 //        Not scoped to req.user - admin/manager/employee share one catalog,
 //        this isn't just books that specific staffer personally pushed.
+// @route GET /api/books/mine?page=&limit=&contributorRole=
+// @desc  Staff (admin/manager/employee) get the full catalog, paginated -
+//        this used to return every book in one array, which the 75k-book
+//        Gutenberg import makes completely impractical (multi-MB payload,
+//        the browser trying to hold and render tens of thousands of rows).
+//        Customers get only their own submissions back (see the createdBy
+//        filter below), which doubles as the data source for their
+//        "My submissions" view.
 const listMyBooks = asyncHandler(async (req, res) => {
-  const books = await Book.find().sort({ createdAt: -1 });
-  return success(res, 200, 'Managed books retrieved successfully.', { books });
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+
+  const filter = {};
+  if (req.user.role === 'customer') {
+    filter.createdBy = req.user._id;
+  } else if (['admin', 'manager', 'employee', 'customer'].includes(req.query.contributorRole)) {
+    // Lets the Admin "User Contributions" tab ask for customer-submitted
+    // books specifically, without the client having to page through the
+    // entire catalog to find them.
+    filter.createdByRole = req.query.contributorRole;
+  }
+
+  const [books, total] = await Promise.all([
+    Book.find(filter)
+      .select('-chapters')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate('createdBy', 'name email role'),
+    Book.countDocuments(filter),
+  ]);
+
+  return success(res, 200, 'Managed books retrieved successfully.', { books, page, limit, total });
 });
 
 // @route GET /api/books/:id
@@ -272,4 +325,68 @@ const getBookReaderText = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText };
+// @route POST /api/books/:id/view
+// @desc  Records one real read/open of a book - anyone, including
+//        anonymous visitors, counts. Fire-and-forget from the frontend the
+//        moment a reader opens a book; this is what the Dashboard's "most
+//        viewed" stat and each book's on-page view count are based on now,
+//        replacing the old browser-only counter that reset on every reload
+//        and never counted anyone else's visits.
+const incrementBookViews = asyncHandler(async (req, res) => {
+  const book = await Book.findByIdAndUpdate(
+    req.params.id,
+    { $inc: { views: 1 } },
+    { new: true, select: 'views' }
+  );
+
+  if (!book) {
+    return fail(res, 404, 'Book not found.');
+  }
+
+  return success(res, 200, 'View recorded.', { views: book.views });
+});
+
+// @route GET /api/books/stats
+// @desc  Admin Dashboard numbers: totals by status/contributor, the most
+//        viewed books, and the most commented books. Real aggregates
+//        straight from Mongo - nothing here is estimated or client-derived.
+const getBookStats = asyncHandler(async (req, res) => {
+  const Comment = require('../models/Comment');
+
+  const [totalBooks, statusBreakdown, contributorBreakdown, mostViewed, mostCommentedRaw] = await Promise.all([
+    Book.countDocuments({}),
+    Book.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Book.aggregate([{ $group: { _id: '$createdByRole', count: { $sum: 1 } } }]),
+    Book.find({}).select('title author views').sort({ views: -1 }).limit(5),
+    Comment.aggregate([
+      { $group: { _id: '$book', commentCount: { $sum: 1 } } },
+      { $sort: { commentCount: -1 } },
+      { $limit: 5 },
+      { $lookup: { from: 'books', localField: '_id', foreignField: '_id', as: 'book' } },
+      { $unwind: '$book' },
+      { $project: { _id: 0, bookId: '$book._id', title: '$book.title', author: '$book.author', commentCount: 1 } },
+    ]),
+  ]);
+
+  const toCountMap = (rows) => rows.reduce((map, row) => ({ ...map, [row._id || 'unknown']: row.count }), {});
+
+  return success(res, 200, 'Stats retrieved successfully.', {
+    totalBooks,
+    byStatus: toCountMap(statusBreakdown),
+    byContributorRole: toCountMap(contributorBreakdown),
+    mostViewed: mostViewed.map((book) => ({ id: book._id, title: book.title, author: book.author, views: book.views })),
+    mostCommented: mostCommentedRaw,
+  });
+});
+
+module.exports = {
+  createBook,
+  listBooks,
+  listMyBooks,
+  getBook,
+  updateBook,
+  deleteBook,
+  getBookReaderText,
+  incrementBookViews,
+  getBookStats,
+};

@@ -28,8 +28,19 @@ const BookSchema = new mongoose.Schema(
     status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
     subjects: { type: [String], default: [] },
     language: { type: String, default: 'en' },
-    // Staff member (admin/manager/employee) who pushed this book.
+    // Staff member (admin/manager/employee) OR customer who pushed this
+    // book - customers can now submit books too (see createBook), tagged
+    // via createdByRole below so listings can show "Admin"/"Customer" etc.
+    // without populating the User document on every row.
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // Denormalized copy of the pusher's role *at the time they pushed this
+    // book* - kept even if that account's role changes later, since this
+    // describes how the book got here, not the account's current standing.
+    createdByRole: { type: String, enum: ['admin', 'manager', 'employee', 'customer'], required: true },
+    // Real, persisted read count - incremented via POST /:id/view. Powers
+    // the "most viewed" dashboard stat; the old client-only counter never
+    // survived a refresh or counted anything for other visitors.
+    views: { type: Number, default: 0 },
     // Links this Book back to its BookMetadata entry (book_metadata.etextNumber)
     // when it was pushed via "Import from catalog" or manually tagged to a
     // Gutenberg record. Optional - manually-typed books can leave this null.
@@ -50,6 +61,10 @@ BookSchema.pre('validate', function setNormalizedTitle(next) {
   this.normalizedTitle = (this.title || '').trim().toLowerCase();
   next();
 });
+
+// Powers the `q=` search param on GET /api/books - needed once the catalog
+// can hold tens of thousands of books and a plain regex scan is too slow.
+BookSchema.index({ title: 'text', author: 'text', subjects: 'text' });
 
 const Book = mongoose.model('Book', BookSchema);
 

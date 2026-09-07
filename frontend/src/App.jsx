@@ -119,6 +119,8 @@ function App() {
   const [readerStartPage, setReaderStartPage] = useState(null)
   const [query, setQuery] = useState('')
   const [topic, setTopic] = useState('all')
+  const [searchResults, setSearchResults] = useState(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const [readerTheme, setReaderTheme] = useState(userDataDefaults.readerTheme)
   const [readerFontSize, setReaderFontSize] = useState(userDataDefaults.readerFontSize)
   const [websiteTheme, setWebsiteTheme] = useState(userDataDefaults.websiteTheme)
@@ -509,7 +511,12 @@ function App() {
     }
 
     let ignore = false
-    apiFetch('/api/books/mine')
+    // limit=200 keeps this workable now that the catalog can hold ~75k
+    // bulk-imported books - Book Management's own list still shows the 200
+    // most recent, which comfortably covers everything staff pushed or
+    // edited by hand; browsing the full import is what the public
+    // Home/Discover pagination and User Contributions' own fetch are for.
+    apiFetch('/api/books/mine?limit=200')
       .then((data) => {
         if (!ignore) setManagedBooks(Array.isArray(data.books) ? data.books : [])
       })
@@ -528,24 +535,17 @@ function App() {
     async function loadBooks() {
       setBooksLoading(true)
       try {
-        const pageRequests = [1, 2, 3].map(async (page) => {
-          const data = await publicApiFetch(`/api/books?limit=32&page=${page}`).catch(() => ({ books: [] }))
-          return Array.isArray(data.books) ? data.books : []
-        })
-
-        const pages = await Promise.all(pageRequests)
-        // Belt-and-suspenders alongside the backend's now-deterministic sort
-        // (createdAt + _id tie-break): never let a book that lands on two
-        // of these three page requests reach the UI twice.
-        const seenIds = new Set()
-        const combinedBooks = pages.flat().filter((book) => {
-          if (seenIds.has(book.id)) return false
-          seenIds.add(book.id)
-          return true
-        })
+        // The catalog can now hold ~75k books (see the Gutenberg bulk
+        // import) - nowhere close to something the browser should ever
+        // hold in one array. Home/Discover's browsing sections work from
+        // this single bounded, most-recent page; reaching anything beyond
+        // it is what the search box (searchBooksOnServer below) is for -
+        // that hits the server's full-text index across the entire catalog
+        // instead of filtering whatever happens to be loaded here.
+        const data = await publicApiFetch('/api/books?limit=60&page=1').catch(() => ({ books: [] }))
 
         if (!ignore) {
-          setBooks(combinedBooks)
+          setBooks(Array.isArray(data.books) ? data.books : [])
         }
       } catch {
         if (!ignore) setBooks([])
@@ -600,19 +600,39 @@ function App() {
     return deduped
   }, [books, publishedManagedBooks])
   const topics = useMemo(() => ['all', ...new Set(allBooks.map(getCategory).slice(0, 12))], [allBooks])
+  // Full-catalog search - the ~75k-book catalog is far larger than what's
+  // ever loaded into `books`, so typing a query hits the server's text
+  // index directly instead of filtering the small bounded set above.
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      setSearchResults(null)
+      setSearchLoading(false)
+      return
+    }
+
+    let ignore = false
+    setSearchLoading(true)
+    const timeout = setTimeout(async () => {
+      try {
+        const data = await publicApiFetch(`/api/books?limit=60&q=${encodeURIComponent(trimmed)}`).catch(() => ({ books: [] }))
+        if (!ignore) setSearchResults(Array.isArray(data.books) ? data.books : [])
+      } finally {
+        if (!ignore) setSearchLoading(false)
+      }
+    }, 350)
+
+    return () => {
+      ignore = true
+      clearTimeout(timeout)
+    }
+  }, [query])
+
   const filteredBooks = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-
-    return allBooks.filter((book) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        book.title.toLowerCase().includes(normalizedQuery) ||
-        getAuthor(book).toLowerCase().includes(normalizedQuery)
-      const matchesTopic = topic === 'all' || getCategory(book) === topic
-
-      return matchesQuery && matchesTopic
-    })
-  }, [allBooks, query, topic])
+    const source = searchResults !== null ? searchResults : allBooks
+    if (topic === 'all') return source
+    return source.filter((book) => getCategory(book) === topic)
+  }, [allBooks, searchResults, topic])
 
   const handleAuth = useCallback(async (event) => {
     event.preventDefault()
@@ -1149,6 +1169,11 @@ function App() {
         onBanUser={banUser}
         onUnbanUser={unbanUser}
         onRefreshStaff={refreshStaffDirectory}
+        onChangePassword={changeAccountPassword}
+        onProfileUpdate={updateAccountProfile}
+        onToast={setToast}
+        setWebsiteTheme={updateWebsiteTheme}
+        websiteTheme={websiteTheme}
       />
     ) : null,
   }

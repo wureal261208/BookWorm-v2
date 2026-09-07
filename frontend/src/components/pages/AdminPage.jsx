@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAuthor, getCategory, getDescription, getReaderUrl } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials } from '../../utils/bookUtils'
 import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
@@ -73,11 +73,16 @@ function AdminPage({
   editManagedBook,
   managedBooks,
   managedBooksError,
+  onChangePassword,
+  onProfileUpdate,
+  onToast,
   removeManagedBook,
   resetAdminBook,
   setAdminBook,
+  setWebsiteTheme,
   staff,
   users,
+  websiteTheme,
   onBanUser,
   onUnbanUser,
   onRefreshStaff,
@@ -90,12 +95,16 @@ function AdminPage({
   const canPushBooks = isAdmin || isEmployee
   const canManageUsers = isAdmin || isManager
 
-  const availableSections = [
-    canPushBooks && 'book',
-    canManageUsers && 'team',
+  const adminNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
+    canPushBooks && { id: 'book', label: 'Book Management', icon: 'bi-collection' },
+    canManageUsers && { id: 'contributions', label: 'User Contributions', icon: 'bi-people' },
+    { id: 'settings', label: 'Settings', icon: 'bi-gear' },
   ].filter(Boolean)
+  const availableSections = adminNavItems.map((item) => item.id)
 
-  const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'book')
+  const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'dashboard')
+  const [contributionsTab, setContributionsTab] = useState('submissions')
   const [userTab, setUserTab] = useState(isAdmin ? 'manager' : 'employee')
   const [bookFilter, setBookFilter] = useState('all')
   const [bookPage, setBookPage] = useState(1)
@@ -286,36 +295,26 @@ function AdminPage({
         </div>
       </section>
 
-      <div className="admin-sticky-switcher">
-        {availableSections.length > 1 ? (
-          <div
-            className="admin-section-tabs"
-            role="tablist"
-            aria-label="Management sections"
-            style={{ gridTemplateColumns: `repeat(${availableSections.length}, 1fr)` }}
-          >
-            {availableSections.includes('book') && (
-              <button className={activeAdminSection === 'book' ? 'active' : ''} onClick={() => setActiveAdminSection('book')} type="button">
-                <i className="bi bi-journal-plus" />
-                Push Book
-              </button>
-            )}
-            {availableSections.includes('team') && (
-              <button className={activeAdminSection === 'team' ? 'active' : ''} onClick={() => setActiveAdminSection('team')} type="button">
-                <i className="bi bi-people" />
-                Users
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="admin-section-tabs" style={{ gridTemplateColumns: '1fr' }}>
-            <button className="active" disabled type="button">
-              <i className={canPushBooks ? 'bi bi-journal-plus' : 'bi bi-people'} />
-              {canPushBooks ? 'Push Book' : 'Users'}
+      <div className="admin-shell">
+        <nav className="admin-sidebar" aria-label="Management sections">
+          {adminNavItems.map((item) => (
+            <button
+              className={activeAdminSection === item.id ? 'active' : ''}
+              key={item.id}
+              onClick={() => setActiveAdminSection(item.id)}
+              type="button"
+            >
+              <i className={`bi ${item.icon}`} />
+              <span>{item.label}</span>
             </button>
-          </div>
-        )}
-      </div>
+          ))}
+        </nav>
+
+        <div className="admin-shell-content">
+
+      {activeAdminSection === 'dashboard' ? (
+        <AdminDashboard canPushBooks={canPushBooks} />
+      ) : null}
 
       {activeAdminSection === 'book' && canPushBooks ? (
         <>
@@ -418,8 +417,26 @@ function AdminPage({
         </>
       ) : null}
 
-      {activeAdminSection === 'team' && canManageUsers ? (
+      {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
+          <section className="admin-workspace admin-contributions-tabs">
+            <div className="admin-subtabs" role="tablist" aria-label="Contributions view">
+              <button className={contributionsTab === 'submissions' ? 'active' : ''} onClick={() => setContributionsTab('submissions')} type="button">
+                <i className="bi bi-journal-check" />
+                Book Submissions
+              </button>
+              <button className={contributionsTab === 'accounts' ? 'active' : ''} onClick={() => setContributionsTab('accounts')} type="button">
+                <i className="bi bi-person-lines-fill" />
+                Accounts
+              </button>
+            </div>
+          </section>
+
+          {contributionsTab === 'submissions' && (
+            <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
+          )}
+
+          {contributionsTab === 'accounts' && (
           <section className="admin-workspace">
             <div className="section-heading">
               <div>
@@ -598,8 +615,23 @@ function AdminPage({
               </section>
             )}
           </section>
+          )}
         </>
       ) : null}
+
+      {activeAdminSection === 'settings' ? (
+        <AdminSettingsPanel
+          account={account}
+          onChangePassword={onChangePassword}
+          onProfileUpdate={onProfileUpdate}
+          onToast={onToast}
+          setWebsiteTheme={setWebsiteTheme}
+          websiteTheme={websiteTheme}
+        />
+      ) : null}
+
+        </div>
+      </div>
 
       {showBookModal && (
         <BookFormModal
@@ -698,6 +730,394 @@ function AdminPagination({ currentPage, onPageChange, totalPages }) {
         <i className="bi bi-chevron-right" />
       </button>
     </nav>
+  )
+}
+
+function AdminDashboard({ canPushBooks }) {
+  const [stats, setStats] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    apiFetch('/api/books/stats')
+      .then((data) => {
+        if (!ignore) setStats(data)
+      })
+      .catch((err) => {
+        if (!ignore) setError(err.message)
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <section className="admin-workspace admin-dashboard">
+        <p className="settings-copy">Loading stats...</p>
+      </section>
+    )
+  }
+
+  if (error || !stats) {
+    return (
+      <section className="admin-workspace admin-dashboard">
+        <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Could not load stats.'}</p>
+      </section>
+    )
+  }
+
+  const byStatus = stats.byStatus || {}
+  const byRole = stats.byContributorRole || {}
+  const statusEntries = ['published', 'draft', 'hidden'].map((key) => ({ key, count: byStatus[key] || 0 }))
+  const roleEntries = ['admin', 'manager', 'employee', 'customer'].map((key) => ({ key, count: byRole[key] || 0 }))
+  const maxStatusCount = Math.max(1, ...statusEntries.map((entry) => entry.count))
+  const maxRoleCount = Math.max(1, ...roleEntries.map((entry) => entry.count))
+  const maxViews = Math.max(1, ...(stats.mostViewed || []).map((book) => book.views))
+  const maxComments = Math.max(1, ...(stats.mostCommented || []).map((book) => book.commentCount))
+
+  return (
+    <section className="admin-workspace admin-dashboard">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">Overview</p>
+          <h2>Dashboard</h2>
+        </div>
+        <span>Real numbers straight from the database - refresh the page to update.</span>
+      </div>
+
+      <div className="admin-dashboard-summary">
+        <div className="admin-summary-card admin-row-fade-in">
+          <i className="bi bi-collection" />
+          <strong>{stats.totalBooks}</strong>
+          <span>Total books</span>
+        </div>
+        {statusEntries.map((entry) => (
+          <div className="admin-summary-card admin-row-fade-in" key={entry.key}>
+            <i className={`bi ${entry.key === 'published' ? 'bi-check-circle' : entry.key === 'draft' ? 'bi-pencil-square' : 'bi-eye-slash'}`} />
+            <strong>{entry.count}</strong>
+            <span>{entry.key.charAt(0).toUpperCase() + entry.key.slice(1)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="admin-dashboard-grid">
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-bar-chart" /> Books by status</h3>
+          {statusEntries.map((entry) => (
+            <div className="admin-bar-row" key={entry.key}>
+              <span className="admin-bar-label">{entry.key}</span>
+              <div className="admin-bar-track">
+                <div className="admin-bar-fill" style={{ width: `${(entry.count / maxStatusCount) * 100}%` }} />
+              </div>
+              <span className="admin-bar-value">{entry.count}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-pie-chart" /> Pushed by</h3>
+          {roleEntries.map((entry) => (
+            <div className="admin-bar-row" key={entry.key}>
+              <span className="admin-bar-label">{entry.key}</span>
+              <div className="admin-bar-track">
+                <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(entry.count / maxRoleCount) * 100}%` }} />
+              </div>
+              <span className="admin-bar-value">{entry.count}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-eye" /> Most viewed</h3>
+          {stats.mostViewed?.length ? (
+            stats.mostViewed.map((book) => (
+              <div className="admin-bar-row" key={book.id}>
+                <span className="admin-bar-label admin-bar-label-title" title={book.title}>{book.title}</span>
+                <div className="admin-bar-track">
+                  <div className="admin-bar-fill" style={{ width: `${(book.views / maxViews) * 100}%` }} />
+                </div>
+                <span className="admin-bar-value">{book.views}</span>
+              </div>
+            ))
+          ) : (
+            <p className="settings-copy">No views recorded yet.</p>
+          )}
+        </div>
+
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-chat-dots" /> Most commented</h3>
+          {stats.mostCommented?.length ? (
+            stats.mostCommented.map((book) => (
+              <div className="admin-bar-row" key={book.bookId}>
+                <span className="admin-bar-label admin-bar-label-title" title={book.title}>{book.title}</span>
+                <div className="admin-bar-track">
+                  <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(book.commentCount / maxComments) * 100}%` }} />
+                </div>
+                <span className="admin-bar-value">{book.commentCount}</span>
+              </div>
+            ))
+          ) : (
+            <p className="settings-copy">No comments recorded yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function UserSubmissionsPanel({ onEdit, onToast }) {
+  const [submissions, setSubmissions] = useState([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const LIMIT = 10
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    apiFetch(`/api/books/mine?contributorRole=customer&page=${page}&limit=${LIMIT}`)
+      .then((data) => {
+        if (!ignore) {
+          setSubmissions(Array.isArray(data.books) ? data.books : [])
+          setTotal(data.total || 0)
+        }
+      })
+      .catch((error) => {
+        if (!ignore) onToast?.({ type: 'error', message: error.message })
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [page])
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
+
+  return (
+    <section className="admin-workspace">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">User Contributions</p>
+          <h2>Book submissions</h2>
+        </div>
+        <span>Books customers pushed themselves - they land as a draft until a staff member reviews and publishes them.</span>
+      </div>
+
+      <section className="admin-table">
+        {loading ? (
+          <p className="settings-copy">Loading submissions...</p>
+        ) : submissions.length ? (
+          submissions.map((book) => (
+            <div className="table-row admin-book-row admin-row-fade-in" key={book.id || book._id}>
+              <img alt="" src={getAdminCover(book)} onError={(event) => handleGutenbergCoverError(event, book.sourceEtextNumber)} />
+              <span>
+                {book.title}
+                <em className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</em>
+              </span>
+              <small>
+                {getAuthor(book)}
+                <span className="admin-contributor-tag" title={book.createdBy?.email ? maskEmail(book.createdBy.email) : ''}>
+                  <i className="bi bi-person" /> Customer
+                </span>
+              </small>
+              <div className="admin-row-actions">
+                <button className="edit-button" onClick={() => onEdit(book)} type="button">Review</button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p>No customer submissions yet.</p>
+        )}
+
+        {total > LIMIT && (
+          <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />
+        )}
+      </section>
+    </section>
+  )
+}
+
+function AdminSettingsPanel({ account, onChangePassword, onProfileUpdate, onToast, setWebsiteTheme, websiteTheme }) {
+  const [avatarPreview, setAvatarPreview] = useState(account?.avatar || '')
+  const [displayName, setDisplayName] = useState(account?.name || 'Admin')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+
+  const safeName = displayName || account?.name || 'Admin'
+  const safeAvatar = avatarPreview || account?.avatar || ''
+  const safeEmail = account?.email || ''
+
+  function handleAvatarChange(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setAvatarPreview(String(reader.result))
+    reader.readAsDataURL(file)
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    setSavingProfile(true)
+    try {
+      await onProfileUpdate({ avatar: safeAvatar, displayName: displayName.trim() })
+      onToast?.({ type: 'success', message: 'Profile updated successfully.' })
+    } catch {
+      onToast?.({ type: 'error', message: 'Could not update your profile. Please try again.' })
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  return (
+    <section className="admin-workspace admin-settings-panel">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">Admin</p>
+          <h2>Settings</h2>
+        </div>
+        <span>Your profile, password, and how the site looks to you.</span>
+      </div>
+
+      <div className="admin-settings-grid">
+        <form className="account-settings-card" onSubmit={saveProfile}>
+          <h3><i className="bi bi-person-gear" /> Identity</h3>
+          <div className="avatar-editor">
+            <span>{safeAvatar ? <img src={safeAvatar} alt="" /> : getInitials(safeName)}</span>
+            <label className="file-picker">
+              <i className="bi bi-image" />
+              Change avatar
+              <input accept="image/jpeg,image/png,image/webp,image/gif" type="file" onChange={handleAvatarChange} />
+            </label>
+            <small>JPG, PNG, WEBP, or GIF. Max 2MB.</small>
+          </div>
+          <label>
+            Display name
+            <input maxLength={32} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+          </label>
+          <button className="primary-button" disabled={savingProfile} type="submit">
+            <i className="bi bi-check2-circle" />
+            {savingProfile ? 'Saving...' : 'Save profile'}
+          </button>
+        </form>
+
+        <div className="account-settings-card">
+          <h3><i className="bi bi-shield-lock" /> Security</h3>
+          <p className="settings-copy">Change your password. We'll email {safeEmail ? maskEmail(safeEmail) : 'you'} to confirm.</p>
+          <button className="primary-button" onClick={() => setShowPasswordModal(true)} type="button">
+            <i className="bi bi-key" />
+            Change password
+          </button>
+        </div>
+
+        <div className="account-settings-card">
+          <h3><i className="bi bi-palette" /> Appearance</h3>
+          <div className="theme-options" role="group" aria-label="Website theme">
+            {[['light', 'Light'], ['dark', 'Dark']].map(([value, label]) => (
+              <button
+                className={websiteTheme === value ? 'active' : ''}
+                key={value}
+                onClick={() => setWebsiteTheme(value)}
+                type="button"
+              >
+                <span className={`theme-swatch theme-swatch-${value}`} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {showPasswordModal && (
+        <ChangePasswordModal
+          onClose={() => setShowPasswordModal(false)}
+          onSubmit={onChangePassword}
+          onToast={onToast}
+        />
+      )}
+    </section>
+  )
+}
+
+function ChangePasswordModal({ onClose, onSubmit, onToast }) {
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+
+    if (!oldPassword.trim()) return setError('Enter your current password.')
+    if (newPassword.length < 8) return setError('New password must be at least 8 characters.')
+    if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return setError('New password must include at least one letter and one number.')
+    }
+    if (newPassword !== confirmPassword) return setError("New password and confirmation don't match.")
+    if (newPassword === oldPassword) return setError('New password must be different from your current password.')
+
+    setBusy(true)
+    try {
+      await onSubmit({ oldPassword, newPassword })
+      onToast?.({ type: 'success', message: 'Password changed successfully.' })
+      onClose()
+    } catch (submitError) {
+      const code = submitError?.code || ''
+      let message = 'Could not change your password. Please try again.'
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+        message = 'Current password is incorrect.'
+      } else if (code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please wait a bit and try again.'
+      } else if (code === 'auth/weak-password') {
+        message = 'New password is too weak - use at least 8 characters.'
+      }
+      setError(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="reader-modal-backdrop admin-ban-backdrop" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+      <form className="admin-ban-modal" onSubmit={handleSubmit}>
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Security</p>
+        <h2 id="change-password-title">Change password</h2>
+
+        <label>
+          Current password
+          <input autoComplete="current-password" onChange={(event) => setOldPassword(event.target.value)} type="password" value={oldPassword} />
+        </label>
+        <label>
+          New password
+          <input autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
+        </label>
+        <label>
+          Confirm new password
+          <input autoComplete="new-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} />
+        </label>
+
+        {error && <p className="settings-error"><i className="bi bi-exclamation-circle" /> {error}</p>}
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <button className="primary-button" disabled={busy || !oldPassword || !newPassword || !confirmPassword} type="submit">
+            {busy ? 'Changing...' : 'Change password'}
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
 
