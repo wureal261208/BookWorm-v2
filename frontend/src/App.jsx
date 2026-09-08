@@ -472,8 +472,14 @@ function App() {
 
       setAccount(nextAccount)
       const canAccessAdmin = hasAccess(nextAccount.role, 'employee')
+      // authReady is only ever false on the very first auth resolution
+      // after the app loads - this is what makes opening the raw site URL
+      // as a logged-in admin land straight on the dashboard instead of the
+      // customer Home page, without also hijacking a deliberate later click
+      // on "Home" from inside the app (authReady is already true by then).
+      const isInitialLoad = !authReady
 
-      if (currentRoute === 'auth') {
+      if (currentRoute === 'auth' || (currentRoute === 'home' && isInitialLoad)) {
         navigateTo(canAccessAdmin ? 'admin' : 'home', { instant: true, replace: true })
       } else if (currentRoute === 'admin' && !canAccessAdmin) {
         navigateTo('home', { instant: true, replace: true })

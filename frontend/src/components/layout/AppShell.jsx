@@ -46,6 +46,7 @@ function AppShell({
   const unreadNotifications = unreadNotificationItems.length
 
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const notificationRef = useRef(null)
   const visibleNavItems = navItems.filter((item) => {
     if (isManagementNavContext && !managementNavIds.includes(item.id)) return false
@@ -218,12 +219,48 @@ function AppShell({
               </button>
             </>
           ) : (
-            <button className="ghost-button" onClick={onLogout} type="button">
+            <button className="ghost-button" onClick={() => setShowLogoutConfirm(true)} type="button">
               Logout
             </button>
           )}
         </div>
       </header>
+      )}
+
+      {showLogoutConfirm && (
+        <div
+          aria-labelledby="shell-confirm-logout-title"
+          aria-modal="true"
+          className="reader-modal-backdrop admin-ban-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setShowLogoutConfirm(false)
+          }}
+          role="dialog"
+        >
+          <div className="admin-ban-modal">
+            <button aria-label="Close" className="admin-book-modal-close" onClick={() => setShowLogoutConfirm(false)} type="button">
+              <i className="bi bi-x-lg" />
+            </button>
+            <p className="mono-eyebrow">Log out</p>
+            <h2 id="shell-confirm-logout-title">Leave BookWorm?</h2>
+            <p className="form-note">You'll need to log back in to pick up where you left off.</p>
+
+            <div className="admin-form-actions">
+              <button className="ghost-button" onClick={() => setShowLogoutConfirm(false)} type="button">Stay signed in</button>
+              <button
+                className="danger-button"
+                onClick={() => {
+                  setShowLogoutConfirm(false)
+                  onLogout()
+                }}
+                type="button"
+              >
+                <i className="bi bi-box-arrow-right" />
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <main className={isAdminPage ? 'admin-page-shell' : 'page-shell'}>{children}</main>

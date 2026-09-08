@@ -329,6 +329,7 @@ function AdminPage({
   }
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const displayName = account?.name || 'Admin'
 
   return (
@@ -394,7 +395,7 @@ function AdminPage({
                 <strong>{displayName}</strong>
                 <small>{normalizeRole(account?.role)}</small>
               </span>
-              <button aria-label="Log out" onClick={onLogout} type="button">
+              <button aria-label="Log out" onClick={() => setShowLogoutConfirm(true)} type="button">
                 <i className="bi bi-box-arrow-right" />
               </button>
             </div>
@@ -445,16 +446,16 @@ function AdminPage({
               </div>
             </div>
 
-            <div className="admin-two-col">
-              <section className="admin-table">
-                <div className="admin-table-heading">
-                  <h2>Books</h2>
-                  <span className="admin-count-pill">{catalogTotal.toLocaleString()}</span>
-                </div>
-                {catalogLoading ? (
-                  <p className="settings-copy">Loading books...</p>
-                ) : catalogBooks.length ? (
-                  catalogBooks.map((book, bookIndex) => {
+            <section className="admin-table admin-book-grid">
+              <div className="admin-table-heading">
+                <h2>Books</h2>
+                <span className="admin-count-pill">{catalogTotal.toLocaleString()}</span>
+              </div>
+              {catalogLoading ? (
+                <p className="settings-copy">Loading books...</p>
+              ) : catalogBooks.length ? (
+                <div className="admin-book-grid-rows">
+                  {catalogBooks.map((book, bookIndex) => {
                     // Some rows can come back from Mongo without the `id`
                     // virtual populated (e.g. a document touched outside the
                     // API) - `_id` is the raw Mongo id and is always present,
@@ -485,240 +486,26 @@ function AdminPage({
                         </div>
                       </div>
                     )
-                  })
-                ) : (
-                  <p>No books match this filter.</p>
-                )}
+                  })}
+                </div>
+              ) : (
+                <p>No books match this filter.</p>
+              )}
 
-                {catalogTotal > BOOKS_PER_PAGE && (
-                  <AdminPagination
-                    currentPage={currentBookPage}
-                    onPageChange={setBookPage}
-                    totalPages={bookPageCount}
-                  />
-                )}
-              </section>
-
-              <section className="admin-table admin-guidelines">
-                <h2>Main site checklist</h2>
-                <div className="admin-check-row">
-                  <i className="bi bi-house" />
-                  <span>Home needs title, cover, category, and author.</span>
-                </div>
-                <div className="admin-check-row">
-                  <i className="bi bi-journal-text" />
-                  <span>Detail needs description, language, and subjects. Chapters are optional.</span>
-                </div>
-                <div className="admin-check-row">
-                  <i className="bi bi-book" />
-                  <span>Reader needs reader URL, full reader text, or chapter content.</span>
-                </div>
-              </section>
-            </div>
+              {catalogTotal > BOOKS_PER_PAGE && (
+                <AdminPagination
+                  currentPage={currentBookPage}
+                  onPageChange={setBookPage}
+                  totalPages={bookPageCount}
+                />
+              )}
+            </section>
           </section>
         </>
       ) : null}
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
-        <>
-          <section className="admin-workspace admin-contributions-tabs">
-            <div className="admin-subtabs" role="tablist" aria-label="Contributions view">
-              <button className={contributionsTab === 'submissions' ? 'active' : ''} onClick={() => setContributionsTab('submissions')} type="button">
-                <i className="bi bi-journal-check" />
-                Book Submissions
-              </button>
-              <button className={contributionsTab === 'accounts' ? 'active' : ''} onClick={() => setContributionsTab('accounts')} type="button">
-                <i className="bi bi-person-lines-fill" />
-                Accounts
-              </button>
-            </div>
-          </section>
-
-          {contributionsTab === 'submissions' && (
-            <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
-          )}
-
-          {contributionsTab === 'accounts' && (
-          <section className="admin-workspace">
-            <div className="section-heading">
-              <div>
-                <p className="mono-eyebrow">Team access</p>
-                <h2>Users</h2>
-              </div>
-              <span>{isAdmin ? 'Manage managers, employees, and customers' : 'Manage employees and customers'}</span>
-            </div>
-
-            <div className="admin-filter-bar" aria-label="User type">
-              {userTabsAvailable.map((tab) => (
-                <button className={userTab === tab ? 'active' : ''} key={tab} onClick={() => setUserTab(tab)} type="button">
-                  {userTabLabels[tab]}
-                </button>
-              ))}
-            </div>
-
-            {staffActionError && (
-              <p className="admin-validation-error"><i className="bi bi-x-circle" /> {staffActionError}</p>
-            )}
-            {newStaffCredential && (
-              <div className="admin-validation-panel" aria-live="polite">
-                <strong>Account created</strong>
-                <span>
-                  <i className="bi bi-key" />
-                  {newStaffCredential.email} - one-time password: <code>{newStaffCredential.password}</code>
-                </span>
-                <span>Share this with them directly. It is only shown once and won&apos;t be stored anywhere.</span>
-                <button className="ghost-button" onClick={() => setNewStaffCredential(null)} type="button">Dismiss</button>
-              </div>
-            )}
-
-            {userTab === 'manager' && isAdmin && (
-              <>
-                <ExistingAccountPicker onPick={(user) => setManagerPrefill({ name: user.name, email: user.email })} />
-                <form className="admin-form compact-form" key={managerPrefill.email} onSubmit={createStaffAccount('manager')}>
-                  <p className="form-note">
-                    Creating a manager generates a one-time password shown to you once, valid for their first login. Managers assign employees to a Push Book shelf and manage customer access.
-                  </p>
-                  <label>Name<input defaultValue={managerPrefill.name} name="name" placeholder="Manager name" required /></label>
-                  <label>Email<input defaultValue={managerPrefill.email} name="email" placeholder="manager@bookworm.com" required type="email" /></label>
-                  <button className="primary-button" disabled={staffActionBusy !== ''} type="submit">Create manager</button>
-                </form>
-
-                <section className="admin-table staff-table">
-                  <h2>Manager accounts</h2>
-                  {managerAccounts.length ? (
-                    managerAccounts.map((member) => (
-                      <div className="table-row" key={member.email}>
-                        <span>
-                          {member.name}
-                          {member.displayId && <em className="admin-display-id">{member.displayId}</em>}
-                        </span>
-                        <small>{maskEmail(member.email)}</small>
-                        <div className="admin-row-actions">
-                          {isAdmin && (
-                            <button
-                              className="ghost-button"
-                              disabled={staffActionBusy === member.email}
-                              onClick={() => resignStaffAccount(member)}
-                              type="button"
-                            >
-                              {staffActionBusy === member.email ? 'Working...' : 'Resign'}
-                            </button>
-                          )}
-                          <button
-                            className="ghost-button"
-                            disabled={staffActionBusy === member.email}
-                            onClick={() => removeStaffAccount(member)}
-                            type="button"
-                          >
-                            {staffActionBusy === member.email ? 'Removing...' : 'Remove'}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No manager accounts yet.</p>
-                  )}
-                </section>
-              </>
-            )}
-
-            {userTab === 'employee' && (
-              <>
-                <ExistingAccountPicker onPick={(user) => setEmployeePrefill({ name: user.name, email: user.email })} />
-                <form className="admin-form compact-form" key={employeePrefill.email} onSubmit={createStaffAccount('employee')}>
-                  <p className="form-note">
-                    Creating an employee generates a one-time password shown to you once, valid for their first login.
-                  </p>
-                  <label>Name<input defaultValue={employeePrefill.name} name="name" placeholder="Employee name" required /></label>
-                  <label>Email<input defaultValue={employeePrefill.email} name="email" placeholder="employee@bookworm.com" required type="email" /></label>
-                  <button className="primary-button" disabled={staffActionBusy !== ''} type="submit">Create employee</button>
-                </form>
-
-                <section className="admin-table staff-table">
-                  <h2>Employee accounts</h2>
-                  {employeeAccounts.length ? (
-                    employeeAccounts.map((member) => (
-                      <div className="table-row" key={member.email}>
-                        <span>
-                          {member.name}
-                          {member.displayId && <em className="admin-display-id">{member.displayId}</em>}
-                        </span>
-                        <small>{maskEmail(member.email)}</small>
-                        <div className="admin-row-actions">
-                          <button
-                            className="ghost-button"
-                            disabled={staffActionBusy === member.email}
-                            onClick={() => resignStaffAccount(member)}
-                            type="button"
-                          >
-                            {staffActionBusy === member.email ? 'Working...' : 'Resign'}
-                          </button>
-                          <button
-                            className="ghost-button"
-                            disabled={staffActionBusy === member.email}
-                            onClick={() => removeStaffAccount(member)}
-                            type="button"
-                          >
-                            {staffActionBusy === member.email ? 'Removing...' : 'Remove'}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No employee accounts yet.</p>
-                  )}
-                </section>
-              </>
-            )}
-
-            {userTab === 'customer' && (
-              <section className="admin-table staff-table">
-                <h2>Customer accounts</h2>
-                <p className="form-note">Customers create their own account from Login. Ban an account to block their login, with a reason and a length of time.</p>
-                {customerAccounts.length ? (
-                  customerAccounts.map((user) => (
-                    <div className="table-row" key={user.email}>
-                      <span>
-                        {user.name}
-                        {user.displayId && <em className="admin-display-id">{user.displayId}</em>}
-                      </span>
-                      <small>{maskEmail(user.email)}</small>
-                      <div className="admin-row-actions">
-                        <em
-                          className={`admin-status ${user.isRestricted ? 'status-hidden' : 'status-published'}`}
-                          title={
-                            user.isRestricted
-                              ? `${user.banExpiresAt ? `Until ${new Date(user.banExpiresAt).toLocaleDateString()}` : 'Permanent'} - ${user.banReason || 'No reason given'}`
-                              : undefined
-                          }
-                        >
-                          {user.isRestricted ? 'Banned' : 'Active'}
-                        </em>
-                        {user.isRestricted ? (
-                          <button
-                            className="unban-button"
-                            disabled={banBusyId === user.id}
-                            onClick={() => handleUnban(user)}
-                            type="button"
-                          >
-                            {banBusyId === user.id ? 'Unbanning...' : 'Unban'}
-                          </button>
-                        ) : (
-                          <button className="danger-button" onClick={() => setBanTarget(user)} type="button">
-                            Ban
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p>No customers recorded yet.</p>
-                )}
-              </section>
-            )}
-          </section>
-          )}
-        </>
+        <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
       ) : null}
 
       {activeAdminSection === 'settings' ? (
@@ -734,6 +521,16 @@ function AdminPage({
 
         </div>
       </div>
+
+      {showLogoutConfirm && (
+        <ConfirmLogoutModal
+          onCancel={() => setShowLogoutConfirm(false)}
+          onConfirm={() => {
+            setShowLogoutConfirm(false)
+            onLogout()
+          }}
+        />
+      )}
 
       {showBookModal && (
         <BookFormModal
@@ -860,8 +657,16 @@ function AdminDashboard({ canPushBooks }) {
 
   if (loading) {
     return (
-      <section className="admin-workspace admin-dashboard">
-        <p className="settings-copy">Loading stats...</p>
+      <section className="admin-workspace admin-dashboard admin-loading-screen">
+        <div className="admin-loading-content">
+          <span className="admin-loading-logo">
+            <img alt="" src={logo} />
+          </span>
+          <div className="admin-loading-bar">
+            <span />
+          </div>
+          <p>Loading your dashboard...</p>
+        </div>
       </section>
     )
   }
@@ -1219,6 +1024,37 @@ function ChangePasswordModal({ onClose, onSubmit, onToast }) {
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+function ConfirmLogoutModal({ onCancel, onConfirm }) {
+  return (
+    <div
+      aria-labelledby="confirm-logout-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCancel()
+      }}
+      role="dialog"
+    >
+      <div className="admin-ban-modal">
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onCancel} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Log out</p>
+        <h2 id="confirm-logout-title">Leave the dashboard?</h2>
+        <p className="form-note">You'll need to log back in to manage books and users again.</p>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" onClick={onCancel} type="button">Stay signed in</button>
+          <button className="danger-button" onClick={onConfirm} type="button">
+            <i className="bi bi-box-arrow-right" />
+            Log out
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
