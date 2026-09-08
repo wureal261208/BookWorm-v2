@@ -182,6 +182,16 @@ const listMyBooks = asyncHandler(async (req, res) => {
     // entire catalog to find them.
     filter.createdByRole = req.query.contributorRole;
   }
+  if (['draft', 'published', 'hidden'].includes(req.query.status)) {
+    // Book Management's All/Draft/Published filter chips - now a real
+    // server-side filter instead of slicing whatever page happened to be
+    // loaded, which is the only way that filter can mean anything once the
+    // catalog holds ~75k books.
+    filter.status = req.query.status;
+  }
+  if (req.query.q && req.query.q.trim()) {
+    filter.$text = { $search: req.query.q.trim() };
+  }
 
   const [books, total] = await Promise.all([
     Book.find(filter)

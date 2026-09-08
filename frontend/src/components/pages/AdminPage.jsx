@@ -4,6 +4,7 @@ import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
 import { maskEmail } from '../../utils/maskEmail'
+import logo from '../../assets/logo.jpg'
 
 const identityFields = [
   { name: 'title', label: 'Title', placeholder: 'Book title' },
@@ -74,6 +75,7 @@ function AdminPage({
   managedBooks,
   managedBooksError,
   onChangePassword,
+  onLogout,
   onProfileUpdate,
   onToast,
   removeManagedBook,
@@ -117,30 +119,71 @@ function AdminPage({
   const [managerPrefill, setManagerPrefill] = useState({ name: '', email: '' })
   const [employeePrefill, setEmployeePrefill] = useState({ name: '', email: '' })
 
-  const sectionBooks = useMemo(
-    () => [...managedBooks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
-    [managedBooks],
-  )
   const currentErrors = getFormErrors(adminBook, managedBooks)
   const currentWarnings = getFormWarnings(adminBook)
   const previewBook = useMemo(() => createPreviewBook(adminBook), [adminBook])
-  const filteredManagedBooks = sectionBooks.filter((book) => {
-    if (bookFilter === 'draft') return book.status === 'draft'
-    if (bookFilter === 'published') return (book.status || 'draft') === 'published'
-    return true
-  })
 
-  const BOOKS_PER_PAGE = 5
-  const bookPageCount = Math.max(1, Math.ceil(filteredManagedBooks.length / BOOKS_PER_PAGE))
+  // Book Management's own catalog fetch - real server-side pagination,
+  // completely separate from the `managedBooks` prop (which is just a
+  // recent-200 snapshot used for the add/edit form's duplicate check).
+  // At ~75k books, slicing one pre-loaded array client-side the way this
+  // used to work isn't workable - filtering and paging both have to happen
+  // in the query.
+  const BOOKS_PER_PAGE = 20
+  const [catalogBooks, setCatalogBooks] = useState([])
+  const [catalogTotal, setCatalogTotal] = useState(0)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogQueryInput, setCatalogQueryInput] = useState('')
+  const [catalogRefreshTick, setCatalogRefreshTick] = useState(0)
+  const bookPageCount = Math.max(1, Math.ceil(catalogTotal / BOOKS_PER_PAGE))
   const currentBookPage = Math.min(bookPage, bookPageCount)
-  const pagedManagedBooks = filteredManagedBooks.slice(
-    (currentBookPage - 1) * BOOKS_PER_PAGE,
-    currentBookPage * BOOKS_PER_PAGE,
-  )
+
+  useEffect(() => {
+    if (activeAdminSection !== 'book') return
+    let ignore = false
+    setCatalogLoading(true)
+    const params = new URLSearchParams({ page: String(currentBookPage), limit: String(BOOKS_PER_PAGE) })
+    if (bookFilter !== 'all') params.set('status', bookFilter)
+    if (catalogQuery.trim()) params.set('q', catalogQuery.trim())
+
+    apiFetch(`/api/books/mine?${params.toString()}`)
+      .then((data) => {
+        if (ignore) return
+        setCatalogBooks(Array.isArray(data.books) ? data.books : [])
+        setCatalogTotal(data.total || 0)
+      })
+      .catch((error) => {
+        if (!ignore) onToast?.({ type: 'error', message: error.message })
+      })
+      .finally(() => {
+        if (!ignore) setCatalogLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [activeAdminSection, bookFilter, catalogQuery, currentBookPage, catalogRefreshTick])
+
+  // Debounce the search box before it hits the server.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setCatalogQuery(catalogQueryInput)
+      setBookPage(1)
+    }, 350)
+    return () => clearTimeout(timeout)
+  }, [catalogQueryInput])
 
   function changeBookFilter(filterId) {
     setBookFilter(filterId)
     setBookPage(1)
+  }
+
+  function refreshCatalog() {
+    // Bumps a tick that's in the fetch effect's dependency array, so
+    // add/edit/delete can force an immediate re-fetch of the current page
+    // without duplicating the fetch logic itself.
+    setCatalogRefreshTick((tick) => tick + 1)
   }
 
   const managerAccounts = staff.filter((item) => item.role === 'manager' && !item.isResigned)
@@ -241,7 +284,10 @@ function AdminPage({
     }
 
     const saved = await addManagedBook(event)
-    if (saved) setShowBookModal(false)
+    if (saved) {
+      setShowBookModal(false)
+      refreshCatalog()
+    }
   }
 
   function openAddBookModal() {
@@ -265,6 +311,7 @@ function AdminPage({
     await removeManagedBook(deleteTarget.id)
     setDeleteBusyId('')
     setDeleteTarget(null)
+    refreshCatalog()
   }
 
   async function confirmBan(days, reason) {
@@ -281,33 +328,77 @@ function AdminPage({
     setBanBusyId('')
   }
 
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const displayName = account?.name || 'Admin'
+
   return (
-    <div className="admin-page">
-      <section className="page-title admin-title">
-        <div>
-          <p className="mono-eyebrow">Management</p>
-          <h1>BookWorm management</h1>
-        </div>
-        <div className="admin-title-side">
-          <p>
-            Manage the books, reader content, access rules, and team accounts that directly affect the main BookWorm site.
-          </p>
-        </div>
-      </section>
+    <div className="admin-page admin-page-full">
+      <button
+        aria-label="Open menu"
+        className="admin-sidebar-mobile-toggle"
+        onClick={() => setSidebarOpen(true)}
+        type="button"
+      >
+        <i className="bi bi-list" />
+      </button>
+
+      {sidebarOpen && (
+        <div className="admin-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
 
       <div className="admin-shell">
-        <nav className="admin-sidebar" aria-label="Management sections">
-          {adminNavItems.map((item) => (
-            <button
-              className={activeAdminSection === item.id ? 'active' : ''}
-              key={item.id}
-              onClick={() => setActiveAdminSection(item.id)}
-              type="button"
-            >
-              <i className={`bi ${item.icon}`} />
-              <span>{item.label}</span>
-            </button>
-          ))}
+        <nav className={`admin-sidebar${sidebarOpen ? ' open' : ''}`} aria-label="Management sections">
+          <div className="admin-sidebar-brand">
+            <img alt="" src={logo} />
+            <span>BookWorm</span>
+          </div>
+
+          <div className="admin-sidebar-nav">
+            {adminNavItems.map((item) => (
+              <button
+                className={activeAdminSection === item.id ? 'active' : ''}
+                key={item.id}
+                onClick={() => {
+                  setActiveAdminSection(item.id)
+                  setSidebarOpen(false)
+                }}
+                type="button"
+              >
+                <i className={`bi ${item.icon}`} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="admin-sidebar-footer">
+            {typeof setWebsiteTheme === 'function' && (
+              <button
+                aria-pressed={websiteTheme === 'dark'}
+                className="admin-theme-switch"
+                onClick={() => setWebsiteTheme(websiteTheme === 'dark' ? 'light' : 'dark')}
+                type="button"
+              >
+                <i className="bi bi-sun" />
+                <span className="admin-theme-switch-track">
+                  <span className="admin-theme-switch-thumb" />
+                </span>
+                <i className="bi bi-moon" />
+              </button>
+            )}
+
+            <div className="admin-sidebar-account">
+              <span className="admin-sidebar-avatar">
+                {account?.avatar ? <img src={account.avatar} alt="" /> : getInitials(displayName)}
+              </span>
+              <span className="admin-sidebar-account-info">
+                <strong>{displayName}</strong>
+                <small>{normalizeRole(account?.role)}</small>
+              </span>
+              <button aria-label="Log out" onClick={onLogout} type="button">
+                <i className="bi bi-box-arrow-right" />
+              </button>
+            </div>
+          </div>
         </nav>
 
         <div className="admin-shell-content">
@@ -343,16 +434,27 @@ function AdminPage({
                   {filter.label}
                 </button>
               ))}
+              <div className="admin-catalog-search">
+                <i className="bi bi-search" />
+                <input
+                  onChange={(event) => setCatalogQueryInput(event.target.value)}
+                  placeholder="Search title, author..."
+                  type="text"
+                  value={catalogQueryInput}
+                />
+              </div>
             </div>
 
             <div className="admin-two-col">
               <section className="admin-table">
                 <div className="admin-table-heading">
                   <h2>Books</h2>
-                  <span className="admin-count-pill">{filteredManagedBooks.length}</span>
+                  <span className="admin-count-pill">{catalogTotal.toLocaleString()}</span>
                 </div>
-                {pagedManagedBooks.length ? (
-                  pagedManagedBooks.map((book, bookIndex) => {
+                {catalogLoading ? (
+                  <p className="settings-copy">Loading books...</p>
+                ) : catalogBooks.length ? (
+                  catalogBooks.map((book, bookIndex) => {
                     // Some rows can come back from Mongo without the `id`
                     // virtual populated (e.g. a document touched outside the
                     // API) - `_id` is the raw Mongo id and is always present,
@@ -388,7 +490,7 @@ function AdminPage({
                   <p>No books match this filter.</p>
                 )}
 
-                {filteredManagedBooks.length > BOOKS_PER_PAGE && (
+                {catalogTotal > BOOKS_PER_PAGE && (
                   <AdminPagination
                     currentPage={currentBookPage}
                     onPageChange={setBookPage}

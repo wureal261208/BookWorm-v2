@@ -1170,6 +1170,7 @@ function App() {
         onUnbanUser={unbanUser}
         onRefreshStaff={refreshStaffDirectory}
         onChangePassword={changeAccountPassword}
+        onLogout={handleLogout}
         onProfileUpdate={updateAccountProfile}
         onToast={setToast}
         setWebsiteTheme={updateWebsiteTheme}

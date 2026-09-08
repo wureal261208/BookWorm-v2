@@ -100,30 +100,33 @@ function AppShell({
 
   return (
     <div className={`book-app app-theme-${websiteTheme}`}>
+      {!isAdminPage && (
       <header className="site-header">
         <button className="brand-button" onClick={handleLogoClick} type="button">
           <img src={logo} alt="BookWorm logo" />
           <span>BookWorm</span>
         </button>
 
-        <nav className="main-nav" aria-label="Main navigation">
-          {visibleNavItems.map((item) => {
-            if (item.admin && !canShowAdminNav) return null
-            if (item.private && isGuest) return null
+        {!isAdminPage && (
+          <nav className="main-nav" aria-label="Main navigation">
+            {visibleNavItems.map((item) => {
+              if (item.admin && !canShowAdminNav) return null
+              if (item.private && isGuest) return null
 
-            return (
-              <button
-                className={activePage === item.id ? 'active' : ''}
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                type="button"
-              >
-                <i className={`bi ${item.icon}`} />
-                {item.label}
-              </button>
-            )
-          })}
-        </nav>
+              return (
+                <button
+                  className={activePage === item.id ? 'active' : ''}
+                  key={item.id}
+                  onClick={() => navigateTo(item.id)}
+                  type="button"
+                >
+                  <i className={`bi ${item.icon}`} />
+                  {item.label}
+                </button>
+              )
+            })}
+          </nav>
+        )}
 
         <div className="header-account">
           {!isGuest && (
@@ -221,8 +224,9 @@ function AppShell({
           )}
         </div>
       </header>
+      )}
 
-      <main className="page-shell">{children}</main>
+      <main className={isAdminPage ? 'admin-page-shell' : 'page-shell'}>{children}</main>
       {!isAdminPage && <footer className="site-footer">
         <section className="footer-brand">
           <div className="footer-logo">
