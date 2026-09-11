@@ -59,7 +59,6 @@ export function subscribeUserData(_userId, onData) {
 }
 
 export function saveGlobalData() {
-  console.log('demo only – global data change not persisted')
   return Promise.resolve()
 }
 
@@ -74,7 +73,6 @@ export function subscribeComments(onData) {
 }
 
 export function saveBookComment(bookId, comment) {
-  console.log(`demo only – comment on book ${bookId} not persisted`, comment)
   return Promise.resolve()
 }
 
@@ -83,7 +81,6 @@ export function migrateLegacyComments() {
 }
 
 export function saveUserData(userId) {
-  console.log(`demo only – user data for ${userId} not persisted`)
   return Promise.resolve()
 }
 

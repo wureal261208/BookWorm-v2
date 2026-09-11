@@ -43,7 +43,7 @@ export function onAuthStateChanged(auth, callback) {
 }
 
 export async function signInWithEmailAndPassword(auth, email, password) {
-  console.log('demo only – no real Firebase sign-in')
+  // demo only - no real Firebase sign-in
   const account = findAccountByEmail(email)
   if (!account || account.password !== password) {
     throw authError('auth/invalid-credential')
@@ -55,7 +55,7 @@ export async function signInWithEmailAndPassword(auth, email, password) {
 }
 
 export async function createUserWithEmailAndPassword(auth, email, password) {
-  console.log('demo only – no real Firebase account created')
+  // demo only - no real Firebase account created
   if (findAccountByEmail(email)) throw authError('auth/email-already-in-use')
   if (!password || password.length < 6) throw authError('auth/weak-password')
 
@@ -75,14 +75,14 @@ export async function createUserWithEmailAndPassword(auth, email, password) {
 }
 
 export async function signOut(auth) {
-  console.log('demo only – local session cleared')
+  // demo only - local session cleared
   auth.currentUser = null
   clearSession()
   notify(auth)
 }
 
 export async function updateProfile(user, { displayName } = {}) {
-  console.log('demo only – profile change kept in local demo data only')
+  // demo only - profile change kept in local demo data only
   if (!user) return
   const account = findAccountByUid(user.uid)
   if (account) {
@@ -92,7 +92,7 @@ export async function updateProfile(user, { displayName } = {}) {
 }
 
 export async function sendPasswordResetEmail(_auth, email) {
-  console.log(`demo only – no reset email actually sent to ${email}`)
+  // demo only - no reset email actually sent
 }
 
 // Not used directly by App.jsx today, but kept for completeness in case a

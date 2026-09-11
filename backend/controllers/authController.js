@@ -1,6 +1,6 @@
 const maskEmail = require('../utils/maskEmail');
 const asyncHandler = require('../utils/asyncHandler');
-const { success } = require('../utils/response');
+const { success, fail } = require('../utils/response');
 
 function sanitizeUser(user) {
   return {
@@ -13,6 +13,7 @@ function sanitizeUser(user) {
     banReason: user.banReason || '',
     banExpiresAt: user.banExpiresAt,
     createdAt: user.createdAt,
+    themePreference: user.themePreference || null,
   };
 }
 
@@ -24,4 +25,20 @@ const getMe = asyncHandler(async (req, res) => {
   return success(res, 200, 'Current user retrieved.', { user: sanitizeUser(req.user) });
 });
 
-module.exports = { getMe, sanitizeUser };
+// @route PATCH /api/users/me/theme
+// @desc  Saves the caller's light/dark preference so it follows their
+//        account across devices instead of resetting every time they log
+//        in somewhere new. Purely a preference - never forced.
+const updateMyTheme = asyncHandler(async (req, res) => {
+  const { theme } = req.body;
+  if (!['light', 'dark'].includes(theme)) {
+    return fail(res, 400, 'Theme must be "light" or "dark".');
+  }
+
+  req.user.themePreference = theme;
+  await req.user.save();
+
+  return success(res, 200, 'Theme preference saved.', { themePreference: theme });
+});
+
+module.exports = { getMe, sanitizeUser, updateMyTheme };

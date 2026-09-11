@@ -91,11 +91,9 @@ function AdminPage({
 }) {
   const role = normalizeRole(account?.role)
   const isAdmin = role === 'admin'
-  const isManager = role === 'manager'
-  const isEmployee = role === 'employee'
 
-  const canPushBooks = isAdmin || isEmployee
-  const canManageUsers = isAdmin || isManager
+  const canPushBooks = isAdmin
+  const canManageUsers = isAdmin
 
   const adminNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
@@ -107,7 +105,6 @@ function AdminPage({
 
   const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'dashboard')
   const [contributionsTab, setContributionsTab] = useState('submissions')
-  const [userTab, setUserTab] = useState(isAdmin ? 'manager' : 'employee')
   const [bookFilter, setBookFilter] = useState('all')
   const [bookPage, setBookPage] = useState(1)
   const [showPreview, setShowPreview] = useState(false)
@@ -116,8 +113,6 @@ function AdminPage({
   const [banBusyId, setBanBusyId] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteBusyId, setDeleteBusyId] = useState('')
-  const [managerPrefill, setManagerPrefill] = useState({ name: '', email: '' })
-  const [employeePrefill, setEmployeePrefill] = useState({ name: '', email: '' })
 
   const currentErrors = getFormErrors(adminBook, managedBooks)
   const currentWarnings = getFormWarnings(adminBook)
@@ -136,6 +131,9 @@ function AdminPage({
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogQueryInput, setCatalogQueryInput] = useState('')
   const [catalogRefreshTick, setCatalogRefreshTick] = useState(0)
+  const [catalogSuggestions, setCatalogSuggestions] = useState([])
+  const [catalogSuggestionsLoading, setCatalogSuggestionsLoading] = useState(false)
+  const [catalogSuggestionsOpen, setCatalogSuggestionsOpen] = useState(false)
   const bookPageCount = Math.max(1, Math.ceil(catalogTotal / BOOKS_PER_PAGE))
   const currentBookPage = Math.min(bookPage, bookPageCount)
 
@@ -165,14 +163,54 @@ function AdminPage({
     }
   }, [activeAdminSection, bookFilter, catalogQuery, currentBookPage, catalogRefreshTick])
 
-  // Debounce the search box before it hits the server.
+  // Small, separate "does this already exist" suggestion dropdown - a light
+  // debounced lookup of just a handful of matches from staff's own catalog.
+  // Kept independent of the main list above: that one only re-queries on
+  // Enter/submit (runCatalogSearch), since re-running a full paginated
+  // fetch on every keystroke over a ~75k-book catalog is what caused the
+  // lag/render thrash this replaces.
   useEffect(() => {
+    const trimmed = catalogQueryInput.trim()
+    if (trimmed.length < 2) {
+      setCatalogSuggestions([])
+      setCatalogSuggestionsLoading(false)
+      return
+    }
+
+    let ignore = false
+    setCatalogSuggestionsLoading(true)
     const timeout = setTimeout(() => {
-      setCatalogQuery(catalogQueryInput)
-      setBookPage(1)
-    }, 350)
-    return () => clearTimeout(timeout)
+      apiFetch(`/api/books/mine?limit=6&q=${encodeURIComponent(trimmed)}`)
+        .then((data) => {
+          if (!ignore) setCatalogSuggestions(Array.isArray(data.books) ? data.books : [])
+        })
+        .catch(() => {
+          if (!ignore) setCatalogSuggestions([])
+        })
+        .finally(() => {
+          if (!ignore) setCatalogSuggestionsLoading(false)
+        })
+    }, 300)
+
+    return () => {
+      ignore = true
+      clearTimeout(timeout)
+    }
   }, [catalogQueryInput])
+
+  function submitCatalogSearch(event) {
+    event?.preventDefault()
+    setCatalogSuggestionsOpen(false)
+    setCatalogQuery(catalogQueryInput.trim())
+    setBookPage(1)
+  }
+
+  function pickCatalogSuggestion(book) {
+    setCatalogQueryInput(book.title)
+    setCatalogQuery(book.title)
+    setBookPage(1)
+    setCatalogSuggestionsOpen(false)
+  }
 
   function changeBookFilter(filterId) {
     setBookFilter(filterId)
@@ -186,11 +224,7 @@ function AdminPage({
     setCatalogRefreshTick((tick) => tick + 1)
   }
 
-  const managerAccounts = staff.filter((item) => item.role === 'manager' && !item.isResigned)
-  const employeeAccounts = staff.filter((item) => item.role === 'employee' && !item.isResigned)
   const customerAccounts = users.filter((item) => normalizeRole(item.role) === 'customer')
-  const userTabsAvailable = isAdmin ? ['manager', 'employee', 'customer'] : ['employee', 'customer']
-  const userTabLabels = { manager: 'Managers', employee: 'Employees', customer: 'Customers' }
 
   function updateAdminBook(name, value) {
     setAdminBook({ ...adminBook, [name]: value })
@@ -207,57 +241,6 @@ function AdminPage({
       }
     }
     reader.readAsDataURL(file)
-  }
-
-  const [staffActionError, setStaffActionError] = useState('')
-  const [staffActionBusy, setStaffActionBusy] = useState('')
-  const [newStaffCredential, setNewStaffCredential] = useState(null)
-
-  // Every staff mutation goes through the backend (which checks the
-  // caller's real role from MongoDB) and returns the updated record.
-  // onRefreshStaff() re-fetches GET /api/users afterwards so the table
-  // reflects the change - there's no realtime listener anymore.
-  function createStaffAccount(staffRole) {
-    return async function submit(event) {
-      event.preventDefault()
-      const form = new FormData(event.currentTarget)
-      const name = (form.get('name') || '').trim()
-      const email = (form.get('email') || '').trim().toLowerCase()
-      if (!name || !email) return
-
-      setStaffActionError('')
-      setNewStaffCredential(null)
-      setStaffActionBusy(email)
-      try {
-        const data = await apiFetch('/api/users/upsert-by-email', { method: 'PATCH', body: { name, email, role: staffRole } })
-        if (data.temporaryPassword) {
-          setNewStaffCredential({ email, password: data.temporaryPassword })
-        }
-        await onRefreshStaff()
-        event.currentTarget.reset()
-      } catch (error) {
-        setStaffActionError(error.message)
-      } finally {
-        setStaffActionBusy('')
-      }
-    }
-  }
-
-  async function resignStaffAccount(member) {
-    if (!member?.id) {
-      setStaffActionError('This account was created before the account-management update - ask an admin to resign it from MongoDB directly.')
-      return
-    }
-    setStaffActionError('')
-    setStaffActionBusy(member.email)
-    try {
-      await apiFetch(`/api/users/${member.id}/resign`, { method: 'PATCH' })
-      await onRefreshStaff()
-    } catch (error) {
-      setStaffActionError(error.message)
-    } finally {
-      setStaffActionBusy('')
-    }
   }
 
   async function removeStaffAccount(member) {
@@ -435,15 +418,61 @@ function AdminPage({
                   {filter.label}
                 </button>
               ))}
-              <div className="admin-catalog-search">
+              <form className="admin-catalog-search" onSubmit={submitCatalogSearch}>
                 <i className="bi bi-search" />
                 <input
-                  onChange={(event) => setCatalogQueryInput(event.target.value)}
-                  placeholder="Search title, author..."
+                  onBlur={() => setTimeout(() => setCatalogSuggestionsOpen(false), 120)}
+                  onChange={(event) => {
+                    setCatalogQueryInput(event.target.value)
+                    setCatalogSuggestionsOpen(true)
+                  }}
+                  onFocus={() => setCatalogSuggestionsOpen(true)}
+                  placeholder="Search title, author... (Enter to search)"
                   type="text"
                   value={catalogQueryInput}
                 />
-              </div>
+                {catalogQueryInput && (
+                  <button
+                    aria-label="Clear search"
+                    className="admin-catalog-search-clear"
+                    onClick={() => {
+                      setCatalogQueryInput('')
+                      setCatalogQuery('')
+                      setBookPage(1)
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-x-lg" />
+                  </button>
+                )}
+
+                {catalogSuggestionsOpen && catalogQueryInput.trim().length >= 2 && (
+                  <div className="admin-catalog-suggestions">
+                    {catalogSuggestionsLoading ? (
+                      <div className="admin-catalog-suggestions-loading">
+                        <span className="admin-spin-small" />
+                        Searching your catalog...
+                      </div>
+                    ) : catalogSuggestions.length ? (
+                      catalogSuggestions.map((book) => (
+                        <button
+                          className="admin-catalog-suggestion"
+                          key={book.id || book._id}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => pickCatalogSuggestion(book)}
+                          type="button"
+                        >
+                          <span className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</span>
+                          <span className="admin-catalog-suggestion-title">{book.title}</span>
+                          <small>{getAuthor(book)}</small>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="admin-catalog-suggestions-empty">Not pushed yet - no match in your catalog.</p>
+                    )}
+                  </div>
+                )}
+              </form>
             </div>
 
             <section className="admin-table admin-book-grid">
@@ -452,7 +481,7 @@ function AdminPage({
                 <span className="admin-count-pill">{catalogTotal.toLocaleString()}</span>
               </div>
               {catalogLoading ? (
-                <p className="settings-copy">Loading books...</p>
+                <AdminLoadingScreen label="Loading books..." />
               ) : catalogBooks.length ? (
                 <div className="admin-book-grid-rows">
                   {catalogBooks.map((book, bookIndex) => {
@@ -505,7 +534,10 @@ function AdminPage({
       ) : null}
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
-        <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
+        <>
+          <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
+          <UsersDirectoryPanel onToast={onToast} />
+        </>
       ) : null}
 
       {activeAdminSection === 'settings' ? (
@@ -632,6 +664,22 @@ function AdminPagination({ currentPage, onPageChange, totalPages }) {
   )
 }
 
+function AdminLoadingScreen({ fill, label }) {
+  return (
+    <section className={`admin-workspace admin-loading-screen${fill ? ' admin-loading-screen-fill' : ''}`}>
+      <div className="admin-loading-content">
+        <span className="admin-loading-logo">
+          <img alt="" src={logo} />
+        </span>
+        <div className="admin-loading-bar">
+          <span />
+        </div>
+        <p>{label}</p>
+      </div>
+    </section>
+  )
+}
+
 function AdminDashboard({ canPushBooks }) {
   const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
@@ -656,19 +704,7 @@ function AdminDashboard({ canPushBooks }) {
   }, [])
 
   if (loading) {
-    return (
-      <section className="admin-workspace admin-dashboard admin-loading-screen">
-        <div className="admin-loading-content">
-          <span className="admin-loading-logo">
-            <img alt="" src={logo} />
-          </span>
-          <div className="admin-loading-bar">
-            <span />
-          </div>
-          <p>Loading your dashboard...</p>
-        </div>
-      </section>
-    )
+    return <AdminLoadingScreen fill label="Loading your dashboard..." />
   }
 
   if (error || !stats) {
@@ -680,13 +716,12 @@ function AdminDashboard({ canPushBooks }) {
   }
 
   const byStatus = stats.byStatus || {}
-  const byRole = stats.byContributorRole || {}
   const statusEntries = ['published', 'draft', 'hidden'].map((key) => ({ key, count: byStatus[key] || 0 }))
-  const roleEntries = ['admin', 'manager', 'employee', 'customer'].map((key) => ({ key, count: byRole[key] || 0 }))
   const maxStatusCount = Math.max(1, ...statusEntries.map((entry) => entry.count))
-  const maxRoleCount = Math.max(1, ...roleEntries.map((entry) => entry.count))
   const maxViews = Math.max(1, ...(stats.mostViewed || []).map((book) => book.views))
   const maxComments = Math.max(1, ...(stats.mostCommented || []).map((book) => book.commentCount))
+  const mostActiveReaders = stats.mostActiveReaders || []
+  const maxReaderCount = Math.max(1, ...mostActiveReaders.map((reader) => reader.booksReadCount))
 
   return (
     <section className="admin-workspace admin-dashboard">
@@ -728,16 +763,20 @@ function AdminDashboard({ canPushBooks }) {
         </div>
 
         <div className="admin-chart-card">
-          <h3><i className="bi bi-pie-chart" /> Pushed by</h3>
-          {roleEntries.map((entry) => (
-            <div className="admin-bar-row" key={entry.key}>
-              <span className="admin-bar-label">{entry.key}</span>
-              <div className="admin-bar-track">
-                <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(entry.count / maxRoleCount) * 100}%` }} />
+          <h3><i className="bi bi-trophy" /> Top readers</h3>
+          {mostActiveReaders.length ? (
+            mostActiveReaders.map((reader) => (
+              <div className="admin-bar-row" key={reader.id}>
+                <span className="admin-bar-label admin-bar-label-title" title={reader.name}>{reader.name}</span>
+                <div className="admin-bar-track">
+                  <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(reader.booksReadCount / maxReaderCount) * 100}%` }} />
+                </div>
+                <span className="admin-bar-value">{reader.booksReadCount}</span>
               </div>
-              <span className="admin-bar-value">{entry.count}</span>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="settings-copy">No reading activity recorded yet.</p>
+          )}
         </div>
 
         <div className="admin-chart-card">
@@ -820,7 +859,7 @@ function UserSubmissionsPanel({ onEdit, onToast }) {
 
       <section className="admin-table">
         {loading ? (
-          <p className="settings-copy">Loading submissions...</p>
+          <AdminLoadingScreen fill label="Loading submissions..." />
         ) : submissions.length ? (
           submissions.map((book) => (
             <div className="table-row admin-book-row admin-row-fade-in" key={book.id || book._id}>
@@ -846,6 +885,81 @@ function UserSubmissionsPanel({ onEdit, onToast }) {
 
         {total > LIMIT && (
           <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />
+        )}
+      </section>
+    </section>
+  )
+}
+
+function UsersDirectoryPanel({ onToast }) {
+  const [users, setUsers] = useState([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const LIMIT = 10
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    apiFetch(`/api/users?page=${page}&limit=${LIMIT}`)
+      .then((data) => {
+        if (!ignore) {
+          setUsers(Array.isArray(data.users) ? data.users : [])
+          setTotal(data.total || 0)
+        }
+      })
+      .catch((error) => {
+        if (!ignore) onToast?.({ type: 'error', message: error.message })
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [page])
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
+
+  return (
+    <section className="admin-workspace">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">User Contributions</p>
+          <h2>Users</h2>
+        </div>
+        <span>Every account on the site - display name and masked email only, for reference before any moderation action.</span>
+      </div>
+
+      <section className="admin-table">
+        {loading ? (
+          <AdminLoadingScreen fill label="Loading users..." />
+        ) : users.length ? (
+          <>
+            <div className="admin-users-directory">
+              {users.map((user) => (
+                <div className="admin-users-directory-row admin-row-fade-in" key={user.id}>
+                  <span className="admin-sidebar-avatar admin-users-directory-avatar">{getInitials(user.name)}</span>
+                  <span className="admin-users-directory-info">
+                    <strong>{user.name}</strong>
+                    <small>{user.email}</small>
+                  </span>
+                  <span className="admin-contributor-tag">
+                    <i className="bi bi-person" /> {user.role}
+                  </span>
+                  {user.isRestricted && (
+                    <span className="admin-status status-hidden">Restricted</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {total > LIMIT && (
+              <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />
+            )}
+          </>
+        ) : (
+          <p>No users found.</p>
         )}
       </section>
     </section>

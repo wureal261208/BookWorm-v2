@@ -35,6 +35,15 @@ const UserSchema = new mongoose.Schema(
     // Bumped whenever this account's password is changed from Profile -
     // audit trail + used to time the "your password changed" email.
     passwordChangedAt: { type: Date, default: null },
+    // Remembers the user's light/dark preference across devices/sessions -
+    // opt-in, set only when they actually toggle it (see
+    // PATCH /api/users/me/theme). Not required, so accounts before this
+    // field existed just fall back to the app's default until they pick one.
+    themePreference: { type: String, enum: ['light', 'dark'], default: null },
+    // Bumped once per book a signed-in reader opens (see POST
+    // /:id/view) - purely a simple activity counter for the Admin
+    // "Top readers" stat, not a full reading-history log.
+    booksReadCount: { type: Number, default: 0 },
   },
   { timestamps: true, collection: 'user_profiles' }
 );

@@ -154,6 +154,7 @@ function App() {
         role: normalizeRole(data.user?.role) || 'customer',
         id: data.user?.id || '',
         displayId: data.user?.displayId || '',
+        themePreference: data.user?.themePreference || '',
       }
     } catch (error) {
       console.warn('Could not verify account role from server, defaulting to customer:', error.message)
@@ -161,7 +162,7 @@ function App() {
       // specific "Your account has been banned... Reason: ..." message -
       // surface that verbatim in the ban popup instead of a generic toast.
       const banMessage = /banned/i.test(error.message || '') ? error.message : ''
-      return { role: 'customer', id: '', displayId: '', banMessage }
+      return { role: 'customer', id: '', displayId: '', themePreference: '', banMessage }
     }
   }, [])
 
@@ -471,6 +472,13 @@ function App() {
       }
 
       setAccount(nextAccount)
+      // The account's saved theme preference (MongoDB) wins over whatever
+      // was showing before login - only applied when the account actually
+      // has one saved, so a fresh account without a preference yet doesn't
+      // get forced into either mode.
+      if (trustedProfile.themePreference) {
+        setWebsiteTheme(trustedProfile.themePreference)
+      }
       const canAccessAdmin = hasAccess(nextAccount.role, 'employee')
       // authReady is only ever false on the very first auth resolution
       // after the app loads - this is what makes opening the raw site URL
@@ -751,6 +759,11 @@ function App() {
           websiteTheme: nextTheme,
         },
       }))
+      // Persisted on the account itself (MongoDB) so it follows the user to
+      // any device/browser they log into, not just this one - fire and
+      // forget, since a failed save here shouldn't block switching the
+      // theme locally right now.
+      apiFetch('/api/users/me/theme', { method: 'PATCH', body: { theme: nextTheme } }).catch(() => {})
     }
   }
 
@@ -787,6 +800,14 @@ function App() {
       if (readers.includes(accountKey)) return current
       return { ...current, [book.id]: [...readers, accountKey] }
     })
+    // Real, persisted count (Book.views, and User.booksReadCount when
+    // signed in) - what the Admin Dashboard's "Most viewed"/"Top readers"
+    // stats actually read from. publicApiFetch (not apiFetch) because
+    // anonymous visitors' views should still count toward the book's
+    // total; it just attaches a token (and so credits a reader) when
+    // someone happens to be signed in. Fire-and-forget: a failed ping here
+    // shouldn't block the reader from opening.
+    publicApiFetch(`/api/books/${book.id}/view`, { method: 'POST' }).catch(() => {})
   }
 
   function openDetail(book) {

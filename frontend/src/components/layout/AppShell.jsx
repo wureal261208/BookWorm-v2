@@ -100,7 +100,7 @@ function AppShell({
   }
 
   return (
-    <div className={`book-app app-theme-${websiteTheme}`}>
+    <div className={`book-app app-theme-${websiteTheme}${isAdminPage ? ' book-app-admin-locked' : ''}`}>
       {!isAdminPage && (
       <header className="site-header">
         <button className="brand-button" onClick={handleLogoClick} type="button">

@@ -1,9 +1,11 @@
 const Book = require('../models/Book');
 const BookMetadata = require('../models/BookMetadata');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { fetchGutenbergReaderText } = require('../utils/gutenbergReader');
+const maskEmail = require('../utils/maskEmail');
 
 // Broadcasts a "new book" notification to every customer. Only ever called
 // right after a book's status actually becomes 'published' - never for
@@ -353,6 +355,13 @@ const incrementBookViews = asyncHandler(async (req, res) => {
     return fail(res, 404, 'Book not found.');
   }
 
+  // Only signed-in readers count toward "Top readers" - identify (not
+  // protect) is used on this route so anonymous views still bump the
+  // book's own count above, they just don't attribute to anyone.
+  if (req.user) {
+    await User.findByIdAndUpdate(req.user._id, { $inc: { booksReadCount: 1 } });
+  }
+
   return success(res, 200, 'View recorded.', { views: book.views });
 });
 
@@ -363,7 +372,7 @@ const incrementBookViews = asyncHandler(async (req, res) => {
 const getBookStats = asyncHandler(async (req, res) => {
   const Comment = require('../models/Comment');
 
-  const [totalBooks, statusBreakdown, contributorBreakdown, mostViewed, mostCommentedRaw] = await Promise.all([
+  const [totalBooks, statusBreakdown, contributorBreakdown, mostViewed, mostCommentedRaw, mostActiveReadersRaw] = await Promise.all([
     Book.countDocuments({}),
     Book.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     Book.aggregate([{ $group: { _id: '$createdByRole', count: { $sum: 1 } } }]),
@@ -376,6 +385,7 @@ const getBookStats = asyncHandler(async (req, res) => {
       { $unwind: '$book' },
       { $project: { _id: 0, bookId: '$book._id', title: '$book.title', author: '$book.author', commentCount: 1 } },
     ]),
+    User.find({ booksReadCount: { $gt: 0 } }).select('name email booksReadCount').sort({ booksReadCount: -1 }).limit(5),
   ]);
 
   const toCountMap = (rows) => rows.reduce((map, row) => ({ ...map, [row._id || 'unknown']: row.count }), {});
@@ -386,6 +396,12 @@ const getBookStats = asyncHandler(async (req, res) => {
     byContributorRole: toCountMap(contributorBreakdown),
     mostViewed: mostViewed.map((book) => ({ id: book._id, title: book.title, author: book.author, views: book.views })),
     mostCommented: mostCommentedRaw,
+    mostActiveReaders: mostActiveReadersRaw.map((user) => ({
+      id: user._id,
+      name: user.name,
+      maskedEmail: maskEmail(user.email),
+      booksReadCount: user.booksReadCount,
+    })),
   });
 });
 
