@@ -5153,14 +5153,8 @@ progress {
 
 .admin-book-grid-rows {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 4px 24px;
-}
-
-@media (max-width: 1100px) {
-  .admin-book-grid-rows {
-    grid-template-columns: 1fr;
-  }
 }
 
 .admin-book-row {
@@ -6635,6 +6629,77 @@ progress {
   color: var(--app-accent);
 }
 
+/* The "Add/Edit book" modal (header, search-catalog box, results list,
+   footer) had zero dark-theme coverage before this - only the form fields
+   inside it (inputs/selects/choice buttons) did, which is why it looked
+   like a broken mix of light and dark panels. */
+.app-theme-dark .admin-book-modal {
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-book-modal-header,
+.app-theme-dark .admin-book-modal-footer {
+  background: var(--app-surface);
+  border-color: var(--app-line);
+}
+
+.app-theme-dark .admin-book-modal-close {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-book-modal-close:hover {
+  background: var(--app-line);
+}
+
+.app-theme-dark .admin-search-hero {
+  background: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface));
+  border-color: var(--app-line);
+}
+
+.app-theme-dark .admin-editing-notice {
+  background: color-mix(in srgb, #d99a1f 14%, var(--app-surface));
+}
+
+.app-theme-dark .admin-search-hero-label strong {
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-search-hero-label span {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .admin-search-box input {
+  background: var(--app-bg);
+  border-color: var(--app-line);
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-search-result {
+  background: var(--app-bg);
+  border-color: var(--app-line);
+}
+
+.app-theme-dark .admin-search-result:hover,
+.app-theme-dark .admin-search-result:focus-visible {
+  background: color-mix(in srgb, var(--app-accent) 14%, var(--app-bg));
+  border-color: var(--app-accent);
+}
+
+.app-theme-dark .admin-search-result strong {
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-search-result small {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .admin-search-result-disabled:hover {
+  background: var(--app-bg);
+  border-color: var(--app-line);
+}
+
 .app-theme-dark .admin-form,
 .app-theme-dark .admin-table,
 .app-theme-dark .admin-workspace,
@@ -6834,6 +6899,37 @@ progress {
 
 .app-theme-dark .admin-validation-warning {
   color: #ffcd85;
+}
+
+/* Confirmation popups (logout, ban customer) had zero dark-theme override
+   before this - they were always rendering with hardcoded light colors
+   (#fff background, #111 text) even in dark mode, so on a dark backdrop
+   the text was nearly unreadable. */
+.app-theme-dark .admin-ban-modal {
+  background: var(--app-surface);
+  border-color: var(--app-line);
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-ban-modal .mono-eyebrow {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .admin-ban-modal .form-note {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .admin-ban-modal select,
+.app-theme-dark .admin-ban-modal textarea {
+  background: var(--app-bg);
+  border-color: var(--app-line);
+  color: var(--app-text);
+}
+
+.app-theme-dark .admin-ban-modal .admin-book-modal-close {
+  background: var(--app-bg);
+  border-color: var(--app-line);
+  color: var(--app-text);
 }
 
 /* Reader - align the existing "Night" reader theme with the same dark

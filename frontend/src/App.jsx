@@ -556,10 +556,20 @@ function App() {
         // it is what the search box (searchBooksOnServer below) is for -
         // that hits the server's full-text index across the entire catalog
         // instead of filtering whatever happens to be loaded here.
-        const data = await publicApiFetch('/api/books?limit=60&page=1').catch(() => ({ books: [] }))
+        const data = await publicApiFetch('/api/books?limit=60&page=1').catch((error) => {
+          // A silent fallback here previously meant a real fetch failure
+          // (wrong API URL, CORS, a 500) looked identical to "there just
+          // aren't many books yet" - nothing in the console to tell them
+          // apart. Logging it costs nothing and saves a lot of guessing.
+          console.error('Failed to load the public book list:', error)
+          return { books: [] }
+        })
 
         if (!ignore) {
           setBooks(Array.isArray(data.books) ? data.books : [])
+          if (Array.isArray(data.books) && typeof data.total === 'number' && data.total > data.books.length) {
+            console.info(`Home is showing ${data.books.length} of ${data.total} published books (server total).`)
+          }
         }
       } catch {
         if (!ignore) setBooks([])
