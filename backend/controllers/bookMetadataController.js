@@ -1,23 +1,55 @@
 const BookMetadata = require('../models/BookMetadata');
+const Book = require('../models/Book');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 
 // @route GET /api/book-metadata?q=&page=&limit=
 // @desc  Search the imported Gutenberg catalog by title/author/subject.
+//        Each result is tagged `alreadyAdded` (already pushed to the real
+//        `books` collection, matched by Etext Number) so the "Add a new
+//        book" search can mark it, block re-adding it, and - within the
+//        page of results actually shown - list not-yet-added matches
+//        first instead of mixing them in relevance order. Only applies
+//        this reordering on page 1, where it actually matters (that's the
+//        live-suggestions box admins see while typing); deeper pages keep
+//        plain relevance order.
 const searchBookMetadata = asyncHandler(async (req, res) => {
   const { q } = req.query;
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Number(req.query.limit) || 20);
 
   const filter = q ? { $text: { $search: q } } : {};
+  const sort = q ? { score: { $meta: 'textScore' } } : { etextNumber: 1 };
 
-  const [results, total] = await Promise.all([
+  // On page 1, pull a larger candidate pool so that if the top relevance
+  // matches happen to already be pushed, there are still enough
+  // not-yet-added matches on hand to fill the requested `limit` after
+  // reordering below - otherwise the visible list could end up mostly (or
+  // entirely) "already added" entries even when better new options exist
+  // just outside the plain top-N cutoff.
+  const poolSize = page === 1 ? Math.min(100, limit * 5) : limit;
+
+  const [candidates, total] = await Promise.all([
     BookMetadata.find(filter)
       .skip((page - 1) * limit)
-      .limit(limit)
-      .sort(q ? { score: { $meta: 'textScore' } } : { etextNumber: 1 }),
+      .limit(poolSize)
+      .sort(sort),
     BookMetadata.countDocuments(filter),
   ]);
+
+  const candidateEtextNumbers = candidates.map((entry) => entry.etextNumber);
+  const alreadyAddedNumbers = new Set(
+    await Book.distinct('sourceEtextNumber', { sourceEtextNumber: { $in: candidateEtextNumbers } })
+  );
+
+  const tagged = candidates.map((entry) => ({
+    ...entry.toObject(),
+    alreadyAdded: alreadyAddedNumbers.has(entry.etextNumber),
+  }));
+
+  const results = page === 1
+    ? [...tagged.filter((entry) => !entry.alreadyAdded), ...tagged.filter((entry) => entry.alreadyAdded)].slice(0, limit)
+    : tagged;
 
   return success(res, 200, 'Book metadata retrieved successfully.', {
     results,

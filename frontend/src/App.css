@@ -1335,12 +1335,17 @@ progress {
 }
 
 .admin-pagination {
+  position: sticky;
+  bottom: -28px;
+  z-index: 6;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin: 16px calc(var(--content-px, 40px) * -1) -28px;
+  padding: 14px var(--content-px, 40px) 28px;
+  background: #ffffff;
   border-top: 1px solid #eaeae5;
 }
 
@@ -4786,7 +4791,8 @@ progress {
      scroll region was actually working the whole time; it just never
      showed a visible affordance for it. */
   scrollbar-gutter: stable both-edges;
-  padding: 28px clamp(16px, 3vw, 40px);
+  --content-px: clamp(16px, 3vw, 40px);
+  padding: 28px var(--content-px);
   animation: adminPanelFadeIn 0.28s ease both;
 }
 
@@ -4816,6 +4822,7 @@ progress {
 }
 
 .admin-catalog-search {
+  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -4830,7 +4837,7 @@ progress {
 
 .admin-catalog-search input {
   min-width: 0;
-  width: min(200px, 40vw);
+  width: min(240px, 40vw);
   padding: 9px 0;
   border: 0;
   background: transparent;
@@ -4840,6 +4847,79 @@ progress {
 
 .admin-catalog-search input:focus {
   outline: none;
+}
+
+/* The suggestions list used to render with no styling of its own, which
+   left it stuck inline inside the search pill itself (stretching the
+   whole rounded-999px bar into an oval blob around the results instead of
+   a normal dropdown). Positioning it absolutely below the input - the
+   same pattern Discover's search box already uses - fixes that. */
+.admin-catalog-suggestions {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #d8d8d3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #171717;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.16);
+}
+
+.admin-catalog-suggestions-loading {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  color: #74746f;
+  font-weight: 800;
+}
+
+.admin-catalog-suggestions-empty {
+  margin: 0;
+  padding: 12px;
+  color: #74746f;
+  font-weight: 800;
+  text-align: left;
+}
+
+.admin-catalog-suggestion {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #111111;
+  text-align: left;
+}
+
+.admin-catalog-suggestion:hover {
+  background: #f1f5f4;
+}
+
+.admin-catalog-suggestion-title {
+  grid-column: 2;
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-catalog-suggestion small {
+  grid-column: 2;
+  overflow: hidden;
+  color: #777771;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
@@ -5283,7 +5363,15 @@ progress {
   border: 1px solid #d8d8d3;
   border-radius: 8px;
   background: #ffffff;
-  overflow: hidden;
+  /* visible, not hidden: hidden here was blocking .admin-pagination's
+     "position: sticky; bottom" from docking to the actual scrolling panel
+     (.admin-shell-content) - any overflow value other than visible creates
+     a new containing block for sticky descendants, which pinned the
+     pagination bar to the bottom of this (auto-height) box instead of the
+     visible viewport, defeating the point of making it sticky at all. The
+     header-row clipping bug this "hidden" used to guard against is now
+     fixed at the source (.section-heading wraps instead of overflowing). */
+  overflow: visible;
 }
 
 .admin-workspace > .section-heading {
@@ -7202,7 +7290,6 @@ progress {
 
 .app-theme-dark .admin-sticky-switcher,
 .app-theme-dark .admin-section-tabs,
-.app-theme-dark .admin-filter-bar,
 .app-theme-dark .admin-choice-grid,
 .app-theme-dark .admin-preview-backdrop {
   background: var(--app-bg);
@@ -7227,6 +7314,7 @@ progress {
 }
 
 .app-theme-dark .admin-pagination {
+  background: var(--app-bg);
   border-top-color: var(--app-line);
 }
 

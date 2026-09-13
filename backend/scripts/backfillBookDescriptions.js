@@ -13,7 +13,12 @@
 //   book's own text when one is available, same as the Edit modal button),
 //   and saves the result directly to that book's `description` field.
 //   Subjects are only filled in if the book doesn't already have any -
-//   existing subject tags are never overwritten.
+//   existing subject tags are never overwritten. While it's already
+//   looking up each book's Gutenberg catalog entry for the text excerpt,
+//   it also opportunistically copies that entry's reader URL onto
+//   `readerUrl` if the book doesn't already have one - this part isn't
+//   AI-generated, it's just data already sitting in book_metadata that
+//   never got copied over onto the Book document.
 //
 // BEFORE YOU RUN THIS ON THE WHOLE CATALOG
 //   - Cost: this calls an LLM once per book. With the default model
@@ -61,11 +66,8 @@ require('dotenv').config({ override: true });
 const connectDB = require('../config/db');
 const mongoose = require('mongoose');
 const Book = require('../models/Book');
-const BookMetadata = require('../models/BookMetadata');
-const { fetchGutenbergReaderText } = require('../utils/gutenbergReader');
+const { getBookAiContext } = require('../utils/bookAiContext');
 const { generateBookMetadataSuggestion, OpenRouterConfigError } = require('../utils/openrouter');
-
-const TEXT_EXCERPT_MAX_CHARS = 4000;
 
 function parseArgs(argv) {
   const args = { limit: null, concurrency: 3, delayMs: 500 };
@@ -82,29 +84,9 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getTextExcerpt(book) {
-  const typedChapter = book.chapters.find((chapter) => chapter.content);
-  if (typedChapter) {
-    return typedChapter.content.slice(0, TEXT_EXCERPT_MAX_CHARS);
-  }
-  if (!book.sourceEtextNumber) return '';
-
-  const metadata = await BookMetadata.findOne({ etextNumber: book.sourceEtextNumber });
-  if (!metadata || (!metadata.readOnlineUrl && !metadata.plainTextUtf8Url)) return '';
-
-  try {
-    const fullText = await fetchGutenbergReaderText({
-      readOnlineUrl: metadata.readOnlineUrl,
-      plainTextUtf8Url: metadata.plainTextUtf8Url,
-    });
-    return (fullText || '').slice(0, TEXT_EXCERPT_MAX_CHARS);
-  } catch {
-    return ''; // No excerpt - the AI still has title/author/category to go on.
-  }
-}
-
 async function processOneBook(book) {
-  const textExcerpt = await getTextExcerpt(book);
+  const { textExcerpt, readerUrlSuggestion } = await getBookAiContext(book);
+
   const suggestion = await generateBookMetadataSuggestion({
     title: book.title,
     author: book.author,
@@ -117,6 +99,9 @@ async function processOneBook(book) {
   const update = { description: suggestion.description };
   if (!book.subjects?.length && suggestion.subjects.length) {
     update.subjects = suggestion.subjects;
+  }
+  if (readerUrlSuggestion) {
+    update.readerUrl = readerUrlSuggestion;
   }
   await Book.updateOne({ _id: book._id }, { $set: update });
 }
@@ -140,7 +125,7 @@ async function run() {
   console.log('Press Ctrl+C to stop at any point - already-saved books stay saved, and re-running this script picks up where you left off.\n');
 
   const cursor = Book.find(filter)
-    .select('title author category subjects description chapters sourceEtextNumber')
+    .select('title author category subjects description readerUrl chapters sourceEtextNumber')
     .limit(totalToProcess)
     .cursor();
 

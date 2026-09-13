@@ -431,20 +431,6 @@ function AdminPage({
                   type="text"
                   value={catalogQueryInput}
                 />
-                {catalogQueryInput && (
-                  <button
-                    aria-label="Clear search"
-                    className="admin-catalog-search-clear"
-                    onClick={() => {
-                      setCatalogQueryInput('')
-                      setCatalogQuery('')
-                      setBookPage(1)
-                    }}
-                    type="button"
-                  >
-                    <i className="bi bi-x-lg" />
-                  </button>
-                )}
 
                 {catalogSuggestionsOpen && catalogQueryInput.trim().length >= 2 && (
                   <div className="admin-catalog-suggestions">
@@ -1194,6 +1180,7 @@ function BookFormModal({
       const data = await apiFetch(`/api/books/${adminBook.id}/ai-fill`, { method: 'POST' })
       if (data.description) updateAdminBook('description', data.description)
       if (data.subjects?.length) updateAdminBook('subjects', data.subjects.join(', '))
+      if (data.readerUrl) updateAdminBook('readerUrl', data.readerUrl)
     } catch (error) {
       setAiSuggestError(error.message)
     } finally {
@@ -1297,7 +1284,15 @@ function BookFormModal({
     setCatalogError('')
   }
 
+  // The server now tells us this authoritatively (entry.alreadyAdded,
+  // checked against the *entire* books collection - see
+  // searchBookMetadata in bookMetadataController.js). Fall back to the
+  // local managedBooks check only for entries that predate that field
+  // (or if it's ever missing) - managedBooks itself only holds this
+  // admin's first 200 pushed books, so it's not reliable on its own for a
+  // 72k+ catalog.
   function isEntryAlreadyAdded(entry) {
+    if (typeof entry.alreadyAdded === 'boolean') return entry.alreadyAdded
     const normalizedEntryTitle = (entry.title || '').trim().toLowerCase()
     return managedBooks.some((book) => {
       if (entry.etextNumber && book.sourceEtextNumber === entry.etextNumber) return true
