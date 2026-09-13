@@ -1,12 +1,13 @@
 const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
+const Book = require('../models/Book');
 const maskEmail = require('../utils/maskEmail');
 const { sendMail } = require('../utils/mailer');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 
-function sanitizeUser(user) {
-  return {
+function sanitizeUser(user, bookCount) {
+  const base = {
     id: user._id,
     displayId: user.displayId || '',
     name: user.name,
@@ -18,13 +19,26 @@ function sanitizeUser(user) {
     isResigned: user.isResigned,
     createdAt: user.createdAt,
   };
+  // Only meaningful for customers (see the role === 'customer' branch
+  // below) - leave it off entirely rather than send a misleading 0 for
+  // admin accounts.
+  if (typeof bookCount === 'number') {
+    base.bookCount = bookCount;
+  }
+  return base;
 }
 
-// @route GET /api/users?page=&limit=
+// @route GET /api/users?page=&limit=&role=
 // @desc  Admin-only account directory (customers, since manager/employee
 //        accounts were retired) - paginated for the User Contributions >
 //        Users panel. Display name + masked email only; real emails never
 //        leave this endpoint's sanitizeUser call.
+//        role=customer specifically ranks contributors by how many books
+//        they've pushed: pull every customer once, join in a per-user push
+//        count from the Book collection, sort by that count, then page in
+//        memory. The customer directory is real accounts (not the 72k-book
+//        catalog) so this stays cheap; every other role keeps the original
+//        DB-level pagination.
 const listUsers = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
@@ -34,13 +48,39 @@ const listUsers = asyncHandler(async (req, res) => {
     filter.role = req.query.role;
   }
 
+  if (filter.role === 'customer') {
+    const [users, counts] = await Promise.all([
+      User.find(filter).sort({ createdAt: -1 }),
+      Book.aggregate([
+        { $match: { createdByRole: 'customer' } },
+        { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const countByUser = new Map(counts.map((entry) => [String(entry._id), entry.count]));
+    const ranked = users
+      .map((user) => ({ user, bookCount: countByUser.get(String(user._id)) || 0 }))
+      .sort((a, b) => b.bookCount - a.bookCount || new Date(b.user.createdAt) - new Date(a.user.createdAt));
+
+    const total = ranked.length;
+    const start = (page - 1) * limit;
+    const pageItems = ranked.slice(start, start + limit);
+
+    return success(res, 200, 'Users retrieved successfully.', {
+      users: pageItems.map(({ user, bookCount }) => sanitizeUser(user, bookCount)),
+      page,
+      limit,
+      total,
+    });
+  }
+
   const [users, total] = await Promise.all([
     User.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     User.countDocuments(filter),
   ]);
 
   return success(res, 200, 'Users retrieved successfully.', {
-    users: users.map(sanitizeUser),
+    users: users.map((user) => sanitizeUser(user)),
     page,
     limit,
     total,

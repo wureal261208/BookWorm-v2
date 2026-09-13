@@ -535,7 +535,7 @@ function AdminPage({
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
-          <UserSubmissionsPanel canPushBooks={canPushBooks} onEdit={openEditBookModal} onToast={onToast} />
+          <UserSubmissionsPanel />
           <UsersDirectoryPanel onToast={onToast} />
         </>
       ) : null}
@@ -817,36 +817,10 @@ function AdminDashboard({ canPushBooks }) {
   )
 }
 
-function UserSubmissionsPanel({ onEdit, onToast }) {
-  const [submissions, setSubmissions] = useState([])
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const LIMIT = 10
-
-  useEffect(() => {
-    let ignore = false
-    setLoading(true)
-    apiFetch(`/api/books/mine?contributorRole=customer&page=${page}&limit=${LIMIT}`)
-      .then((data) => {
-        if (!ignore) {
-          setSubmissions(Array.isArray(data.books) ? data.books : [])
-          setTotal(data.total || 0)
-        }
-      })
-      .catch((error) => {
-        if (!ignore) onToast?.({ type: 'error', message: error.message })
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false)
-      })
-    return () => {
-      ignore = true
-    }
-  }, [page])
-
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
-
+function UserSubmissionsPanel() {
+  // The customer "push a book" review flow hasn't been wired into the new
+  // main-site redesign yet, so this panel is a placeholder until that work
+  // starts - no fetch, no loading state to get wrong.
   return (
     <section className="admin-workspace">
       <div className="section-heading">
@@ -858,34 +832,10 @@ function UserSubmissionsPanel({ onEdit, onToast }) {
       </div>
 
       <section className="admin-table">
-        {loading ? (
-          <AdminLoadingScreen fill label="Loading submissions..." />
-        ) : submissions.length ? (
-          submissions.map((book) => (
-            <div className="table-row admin-book-row admin-row-fade-in" key={book.id || book._id}>
-              <img alt="" src={getAdminCover(book)} onError={(event) => handleGutenbergCoverError(event, book.sourceEtextNumber)} />
-              <span>
-                {book.title}
-                <em className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</em>
-              </span>
-              <small>
-                {getAuthor(book)}
-                <span className="admin-contributor-tag" title={book.createdBy?.email ? maskEmail(book.createdBy.email) : ''}>
-                  <i className="bi bi-person" /> Customer
-                </span>
-              </small>
-              <div className="admin-row-actions">
-                <button className="edit-button" onClick={() => onEdit(book)} type="button">Review</button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p>No customer submissions yet.</p>
-        )}
-
-        {total > LIMIT && (
-          <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />
-        )}
+        <div className="admin-coming-soon">
+          <i className="bi bi-hourglass-split" />
+          <p>Coming soon</p>
+        </div>
       </section>
     </section>
   )
@@ -901,7 +851,10 @@ function UsersDirectoryPanel({ onToast }) {
   useEffect(() => {
     let ignore = false
     setLoading(true)
-    apiFetch(`/api/users?page=${page}&limit=${LIMIT}`)
+    // role=customer both drops admin accounts from this list and switches
+    // the backend to rank results by push count (see userController.js) -
+    // this panel only ever wants to show contributors, most active first.
+    apiFetch(`/api/users?role=customer&page=${page}&limit=${LIMIT}`)
       .then((data) => {
         if (!ignore) {
           setUsers(Array.isArray(data.users) ? data.users : [])
@@ -928,12 +881,12 @@ function UsersDirectoryPanel({ onToast }) {
           <p className="mono-eyebrow">User Contributions</p>
           <h2>Users</h2>
         </div>
-        <span>Every account on the site - display name and masked email only, for reference before any moderation action.</span>
+        <span>Customer accounts only - display name and masked email, ranked by how many books they've pushed.</span>
       </div>
 
       <section className="admin-table">
         {loading ? (
-          <AdminLoadingScreen fill label="Loading users..." />
+          <AdminLoadingScreen label="Loading users..." />
         ) : users.length ? (
           <>
             <div className="admin-users-directory">
@@ -945,7 +898,7 @@ function UsersDirectoryPanel({ onToast }) {
                     <small>{user.email}</small>
                   </span>
                   <span className="admin-contributor-tag">
-                    <i className="bi bi-person" /> {user.role}
+                    <i className="bi bi-journal-text" /> Pushed {user.bookCount || 0} books
                   </span>
                   {user.isRestricted && (
                     <span className="admin-status status-hidden">Restricted</span>
@@ -959,7 +912,7 @@ function UsersDirectoryPanel({ onToast }) {
             )}
           </>
         ) : (
-          <p>No users found.</p>
+          <p>No customer accounts found.</p>
         )}
       </section>
     </section>

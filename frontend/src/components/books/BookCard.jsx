@@ -1,4 +1,4 @@
-import { getAuthor, getCategory, getCover } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bookUtils'
 
 function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, viewCount = 0 }) {
   const totalReads = (book.download_count || 0) + viewCount
@@ -7,6 +7,11 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, viewCoun
     <article className="book-card">
       <button className="book-cover-button" onClick={() => onDetail(book)} type="button">
         <img loading="lazy" src={getCover(book)} alt={`${book.title} cover`} />
+        <span className="book-cover-overlay">
+          <strong>{book.title}</strong>
+          <em>{getAuthor(book)}</em>
+          <p>{getDescription(book)}</p>
+        </span>
       </button>
       <div className="book-card-body">
         <span className="category">{getCategory(book)}</span>

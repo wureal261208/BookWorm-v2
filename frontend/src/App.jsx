@@ -119,8 +119,6 @@ function App() {
   const [readerStartPage, setReaderStartPage] = useState(null)
   const [query, setQuery] = useState('')
   const [topic, setTopic] = useState('all')
-  const [searchResults, setSearchResults] = useState(null)
-  const [searchLoading, setSearchLoading] = useState(false)
   const [readerTheme, setReaderTheme] = useState(userDataDefaults.readerTheme)
   const [readerFontSize, setReaderFontSize] = useState(userDataDefaults.readerFontSize)
   const [websiteTheme, setWebsiteTheme] = useState(userDataDefaults.websiteTheme)
@@ -623,40 +621,25 @@ function App() {
     }
     return deduped
   }, [books, publishedManagedBooks])
-  const topics = useMemo(() => ['all', ...new Set(allBooks.map(getCategory).slice(0, 12))], [allBooks])
-  // Full-catalog search - the ~75k-book catalog is far larger than what's
-  // ever loaded into `books`, so typing a query hits the server's text
-  // index directly instead of filtering the small bounded set above.
+  // Real category list from the server (aggregated across the whole
+  // ~75k-book catalog), not just whatever categories happen to appear in
+  // the small `books`/`allBooks` batch loaded for Home - that batch is far
+  // too small a sample to represent the full catalog's topics.
+  const [categories, setCategories] = useState([])
   useEffect(() => {
-    const trimmed = query.trim()
-    if (!trimmed) {
-      setSearchResults(null)
-      setSearchLoading(false)
-      return
-    }
-
     let ignore = false
-    setSearchLoading(true)
-    const timeout = setTimeout(async () => {
-      try {
-        const data = await publicApiFetch(`/api/books?limit=60&q=${encodeURIComponent(trimmed)}`).catch(() => ({ books: [] }))
-        if (!ignore) setSearchResults(Array.isArray(data.books) ? data.books : [])
-      } finally {
-        if (!ignore) setSearchLoading(false)
-      }
-    }, 350)
-
+    publicApiFetch('/api/books/categories')
+      .then((data) => {
+        if (!ignore) setCategories(Array.isArray(data.categories) ? data.categories : [])
+      })
+      .catch(() => {
+        if (!ignore) setCategories([])
+      })
     return () => {
       ignore = true
-      clearTimeout(timeout)
     }
-  }, [query])
-
-  const filteredBooks = useMemo(() => {
-    const source = searchResults !== null ? searchResults : allBooks
-    if (topic === 'all') return source
-    return source.filter((book) => getCategory(book) === topic)
-  }, [allBooks, searchResults, topic])
+  }, [])
+  const topics = useMemo(() => ['all', ...categories.map((entry) => entry.name)], [categories])
 
   const handleAuth = useCallback(async (event) => {
     event.preventDefault()
@@ -1089,13 +1072,11 @@ function App() {
     ),
     discover: (
       <DiscoverPage
-        books={filteredBooks}
         favorites={favorites}
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
         query={query}
-        searchableBooks={allBooks}
         searchHistory={searchHistory}
         onSearchSubmit={handleSearchSubmit}
         setTopic={setTopic}

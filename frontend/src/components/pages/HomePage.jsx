@@ -1,29 +1,52 @@
 import { useEffect, useState } from 'react'
 import { getAuthor, getCategory, getCover } from '../../utils/bookUtils'
+import { publicApiFetch } from '../../utils/apiClient'
 import BookGrid from '../books/BookGrid'
+import BookCarousel from '../books/BookCarousel'
 
 function HomePage({ books, favorites, onDetail, onFavorite, onRead, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isHeroPaused, setIsHeroPaused] = useState(false)
-  const hotBooks = books.slice(0, 6)
+
+  // "Hot books" means most-read, not just whatever showed up first in the
+  // default recent-sorted batch - a dedicated sort=views fetch straight
+  // from the server (same as Discover's "Most read" sort) is what actually
+  // reflects that across the whole catalog.
+  const [hotBooks, setHotBooks] = useState([])
+  useEffect(() => {
+    let ignore = false
+    publicApiFetch('/api/books?limit=12&sort=views')
+      .then((data) => {
+        if (!ignore) setHotBooks(Array.isArray(data.books) ? data.books : [])
+      })
+      .catch(() => {
+        if (!ignore) setHotBooks([])
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const heroBooks = (hotBooks.length ? hotBooks : books).slice(0, 6)
+  const newBooks = books.slice(0, 12)
   const recommended = books.slice(6, 14)
   const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
-  const safeHeroIndex = hotBooks.length ? activeHeroIndex % hotBooks.length : 0
-  const featured = hotBooks[safeHeroIndex]
-  const centerSlot = hotBooks.length ? Math.floor(hotBooks.length / 2) : 0
-  const carouselBooks = hotBooks.map((_, index) => hotBooks[(safeHeroIndex - centerSlot + index + hotBooks.length) % hotBooks.length])
+  const safeHeroIndex = heroBooks.length ? activeHeroIndex % heroBooks.length : 0
+  const featured = heroBooks[safeHeroIndex]
+  const centerSlot = heroBooks.length ? Math.floor(heroBooks.length / 2) : 0
+  const carouselBooks = heroBooks.map((_, index) => heroBooks[(safeHeroIndex - centerSlot + index + heroBooks.length) % heroBooks.length])
 
   useEffect(() => {
-    if (hotBooks.length < 2 || isHeroPaused) {
+    if (heroBooks.length < 2 || isHeroPaused) {
       return undefined
     }
 
     const timer = window.setInterval(() => {
-      setActiveHeroIndex((currentIndex) => (currentIndex + 1) % hotBooks.length)
+      setActiveHeroIndex((currentIndex) => (currentIndex + 1) % heroBooks.length)
     }, 2800)
 
     return () => window.clearInterval(timer)
-  }, [hotBooks.length, isHeroPaused])
+  }, [heroBooks.length, isHeroPaused])
 
   return (
     <div className="home-page">
@@ -112,13 +135,33 @@ function HomePage({ books, favorites, onDetail, onFavorite, onRead, progress = {
             View library
           </button>
         </div>
-        <BookGrid
-          books={hotBooks}
+        <BookCarousel
+          books={hotBooks.length ? hotBooks : heroBooks}
           favorites={favorites}
           onDetail={onDetail}
           onFavorite={onFavorite}
           onRead={onRead}
-          variant="read"
+          viewCounts={viewCounts}
+          viewerCounts={viewerCounts}
+        />
+      </section>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <p className="mono-eyebrow">Just added</p>
+            <h2>New books</h2>
+          </div>
+          <button className="ghost-button" onClick={() => setPage('discover')} type="button">
+            View library
+          </button>
+        </div>
+        <BookCarousel
+          books={newBooks}
+          favorites={favorites}
+          onDetail={onDetail}
+          onFavorite={onFavorite}
+          onRead={onRead}
           viewCounts={viewCounts}
           viewerCounts={viewerCounts}
         />

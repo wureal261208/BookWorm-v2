@@ -1,5 +1,5 @@
 const express = require('express');
-const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText, incrementBookViews, getBookStats } = require('../controllers/bookController');
+const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText, incrementBookViews, getBookStats, listCategories } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
 const { identify, protect, authorize } = require('../middleware/auth');
 
@@ -16,6 +16,10 @@ router.get('/mine', protect, authorize('admin', 'manager', 'employee', 'customer
 
 // Admin Dashboard aggregate stats (totals, most viewed, most commented).
 router.get('/stats', protect, authorize('admin', 'manager', 'employee'), getBookStats);
+
+// Public - top categories with counts, for Discover's topic filter pills.
+// Must also come before GET /:id for the same reason as /mine and /stats.
+router.get('/categories', listCategories);
 
 router.get('/:id', identify, getBook);
 router.get('/:id/reader-text', identify, getBookReaderText);

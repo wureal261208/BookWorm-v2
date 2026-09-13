@@ -264,6 +264,7 @@ function AppShell({
       )}
 
       <main className={isAdminPage ? 'admin-page-shell' : 'page-shell'}>{children}</main>
+      {!isAdminPage && <ChatWidgetPlaceholder />}
       {!isAdminPage && <footer className="site-footer">
         <section className="footer-brand">
           <div className="footer-logo">
@@ -315,6 +316,40 @@ function formatNotificationTime(isoString) {
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
   return new Date(isoString).toLocaleDateString()
+}
+
+// Layout/placeholder only, per Wun's request - a real chatbox will be
+// wired into this slot later. Clicking it just shows a small "coming
+// soon" bubble instead of pretending to open a working chat.
+function ChatWidgetPlaceholder() {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="chat-widget">
+      {isOpen && (
+        <div className="chat-widget-panel" role="dialog" aria-label="Chat">
+          <div className="chat-widget-panel-header">
+            <strong>BookWorm Support</strong>
+            <button aria-label="Close chat" onClick={() => setIsOpen(false)} type="button">
+              <i className="bi bi-x-lg" />
+            </button>
+          </div>
+          <div className="chat-widget-panel-body">
+            <i className="bi bi-chat-dots" />
+            <p>Live chat is coming soon.</p>
+          </div>
+        </div>
+      )}
+      <button
+        aria-label="Chat with BookWorm"
+        className="chat-widget-bubble"
+        onClick={() => setIsOpen((value) => !value)}
+        type="button"
+      >
+        <i className={`bi ${isOpen ? 'bi-x-lg' : 'bi-chat-dots-fill'}`} />
+      </button>
+    </div>
+  )
 }
 
 export default AppShell

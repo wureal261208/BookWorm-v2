@@ -159,6 +159,26 @@ const listBooks = asyncHandler(async (req, res) => {
   return success(res, 200, 'Books retrieved successfully.', { books, page, limit, total });
 });
 
+// @route GET /api/books/categories
+// @desc  Distinct published categories with book counts, most popular
+//        first - powers Discover's topic filter pills. Has to come from
+//        the server: with ~75k books in the catalog, the handful loaded
+//        into any single page of results is never a representative sample
+//        of what categories actually exist.
+const listCategories = asyncHandler(async (req, res) => {
+  const categories = await Book.aggregate([
+    { $match: { status: 'published' } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 16 },
+  ]);
+
+  res.setHeader('Cache-Control', 'no-store');
+  return success(res, 200, 'Categories retrieved successfully.', {
+    categories: categories.map((entry) => ({ name: entry._id || 'General', count: entry.count })),
+  });
+});
+
 // @route GET /api/books/mine
 // @desc  Full book records (including chapters) for the staff admin panel.
 //        Not scoped to req.user - admin/manager/employee share one catalog,
@@ -408,6 +428,7 @@ const getBookStats = asyncHandler(async (req, res) => {
 module.exports = {
   createBook,
   listBooks,
+  listCategories,
   listMyBooks,
   getBook,
   updateBook,

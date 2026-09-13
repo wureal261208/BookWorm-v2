@@ -1,18 +1,26 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import BookGrid from '../books/BookGrid'
-import { getAuthor, getCover } from '../../utils/bookUtils'
+import { getCover } from '../../utils/bookUtils'
+import { publicApiFetch } from '../../utils/apiClient'
 
-const BOOKS_PER_PAGE = 12
+const BOOKS_PER_PAGE = 20
+const sortOptions = [
+  { id: 'recent', label: 'Newest', icon: 'bi-sparkle' },
+  { id: 'views', label: 'Most read', icon: 'bi-fire' },
+]
 
+// Discover has to browse a ~72,000-book catalog, so it can never just page
+// through a fixed array handed down from App.jsx (that only ever holds a
+// small recent sample). Every filter change below - search, topic, sort,
+// or page - re-queries the server directly, the same pattern Book
+// Management's own catalog fetch uses in AdminPage.jsx.
 function DiscoverPage({
-  books,
   favorites,
   onDetail,
   onFavorite,
   onRead,
   onSearchSubmit,
   query,
-  searchableBooks = [],
   searchHistory = [],
   setTopic,
   topic,
@@ -22,52 +30,98 @@ function DiscoverPage({
 }) {
   const [draftSearch, setDraftSearch] = useState(query)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [pagination, setPagination] = useState({ page: 1, scope: '' })
-  const normalizedDraft = draftSearch.trim().toLowerCase()
-  const paginationScope = `${query}|${topic}`
-  const dropdownItems = useMemo(() => {
-    const candidates = [
-      ...searchHistory.map((term) => {
-        const matchedBook = findSearchBook(term, searchableBooks)
-        return {
-          cover: matchedBook ? getCover(matchedBook) : '',
-          label: term,
-          type: matchedBook ? 'Recent book' : 'Recent',
-        }
-      }),
-      ...searchableBooks.flatMap((book) => [
-        { cover: getCover(book), label: book.title, type: 'Book' },
-        { cover: getCover(book), label: getAuthor(book), type: 'Author' },
-      ]),
-    ]
-    const seen = new Set()
+  const [sort, setSort] = useState('recent')
+  const [page, setPage] = useState(1)
 
-    return candidates
-      .filter((item) => {
-        const key = item.label.trim().toLowerCase()
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return !normalizedDraft || key.includes(normalizedDraft)
+  const [resultBooks, setResultBooks] = useState([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  const [suggestions, setSuggestions] = useState([])
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+
+  useEffect(() => {
+    setDraftSearch(query)
+  }, [query])
+
+  // Reset back to page 1 whenever the filters actually change, instead of
+  // staying on e.g. page 6 of a brand-new, much shorter result set.
+  useEffect(() => {
+    setPage(1)
+  }, [query, topic, sort])
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    setLoadError('')
+
+    const params = new URLSearchParams({ page: String(page), limit: String(BOOKS_PER_PAGE), sort })
+    if (topic && topic !== 'all') params.set('category', topic)
+    if (query.trim()) params.set('q', query.trim())
+
+    publicApiFetch(`/api/books?${params.toString()}`)
+      .then((data) => {
+        if (ignore) return
+        setResultBooks(Array.isArray(data.books) ? data.books : [])
+        setTotal(data.total || 0)
       })
-      .slice(0, 8)
-  }, [normalizedDraft, searchableBooks, searchHistory])
-  const totalPages = Math.max(1, Math.ceil(books.length / BOOKS_PER_PAGE))
-  const scopedPage = pagination.scope === paginationScope ? pagination.page : 1
-  const currentPage = Math.min(scopedPage, totalPages)
-  const pagedBooks = useMemo(() => {
-    const startIndex = (currentPage - 1) * BOOKS_PER_PAGE
-    return books.slice(startIndex, startIndex + BOOKS_PER_PAGE)
-  }, [books, currentPage])
+      .catch((error) => {
+        if (!ignore) setLoadError(error.message || 'Could not load books right now.')
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [page, query, sort, topic])
+
+  // Lightweight "did you mean" suggestions while typing, from the server -
+  // debounced and capped small (6 results) so it never re-runs the main,
+  // heavier paginated fetch above on every keystroke.
+  useEffect(() => {
+    const trimmed = draftSearch.trim()
+    if (trimmed.length < 2) {
+      setSuggestions([])
+      setSuggestionsLoading(false)
+      return undefined
+    }
+
+    let ignore = false
+    setSuggestionsLoading(true)
+    const timeout = setTimeout(() => {
+      publicApiFetch(`/api/books?limit=6&q=${encodeURIComponent(trimmed)}`)
+        .then((data) => {
+          if (!ignore) setSuggestions(Array.isArray(data.books) ? data.books : [])
+        })
+        .catch(() => {
+          if (!ignore) setSuggestions([])
+        })
+        .finally(() => {
+          if (!ignore) setSuggestionsLoading(false)
+        })
+    }, 300)
+
+    return () => {
+      ignore = true
+      clearTimeout(timeout)
+    }
+  }, [draftSearch])
+
+  const totalPages = Math.max(1, Math.ceil(total / BOOKS_PER_PAGE))
+  const normalizedDraft = draftSearch.trim().toLowerCase()
+  const historyItems = searchHistory
+    .filter((term) => !normalizedDraft || term.toLowerCase().includes(normalizedDraft))
+    .filter((term) => !suggestions.some((book) => book.title.toLowerCase() === term.toLowerCase()))
+    .slice(0, 4)
 
   function submitSearch(term = draftSearch) {
     const nextTerm = term.trim()
     setDraftSearch(nextTerm)
     setIsDropdownOpen(false)
     onSearchSubmit(nextTerm)
-  }
-
-  function goToPage(page) {
-    setPagination({ page, scope: paginationScope })
   }
 
   return (
@@ -93,23 +147,30 @@ function DiscoverPage({
                   setIsDropdownOpen(true)
                 }}
                 onFocus={() => setIsDropdownOpen(true)}
-                placeholder="Search title or author..."
+                placeholder="Search title or author across the whole catalog..."
               />
             </label>
             {isDropdownOpen && (
               <div className="search-dropdown">
-                {dropdownItems.length ? (
-                  dropdownItems.map((item) => (
-                    <button key={`${item.type}-${item.label}`} onMouseDown={() => submitSearch(item.label)} type="button">
-                      {item.cover ? (
-                        <img src={item.cover} alt="" />
-                      ) : (
+                {suggestionsLoading ? (
+                  <p><span className="admin-spin-small" /> Searching...</p>
+                ) : suggestions.length || historyItems.length ? (
+                  <>
+                    {historyItems.map((term) => (
+                      <button key={`history-${term}`} onMouseDown={() => submitSearch(term)} type="button">
                         <i className="bi bi-clock-history" />
-                      )}
-                      <span>{item.label}</span>
-                      <small>{item.type}</small>
-                    </button>
-                  ))
+                        <span>{term}</span>
+                        <small>Recent</small>
+                      </button>
+                    ))}
+                    {suggestions.map((book) => (
+                      <button key={book.id || book._id} onMouseDown={() => submitSearch(book.title)} type="button">
+                        <img alt="" src={getCover(book)} />
+                        <span>{book.title}</span>
+                        <small>Book</small>
+                      </button>
+                    ))}
+                  </>
                 ) : (
                   <p>No matching search.</p>
                 )}
@@ -127,6 +188,7 @@ function DiscoverPage({
             </button>
           )}
         </form>
+
         <div className="topic-row">
           {topics.map((item) => (
             <button className={topic === item ? 'active' : ''} onClick={() => setTopic(item)} key={item} type="button">
@@ -134,16 +196,41 @@ function DiscoverPage({
             </button>
           ))}
         </div>
+
+        <div className="topic-row discover-sort-row">
+          {sortOptions.map((option) => (
+            <button
+              className={sort === option.id ? 'active' : ''}
+              key={option.id}
+              onClick={() => setSort(option.id)}
+              type="button"
+            >
+              <i className={`bi ${option.icon}`} />
+              {option.label}
+            </button>
+          ))}
+        </div>
       </section>
 
-      {books.length ? (
+      {loading ? (
+        <div className="discover-loading-grid" aria-label="Loading books">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div className="book-card-skeleton" key={index} />
+          ))}
+        </div>
+      ) : loadError ? (
+        <div className="empty-state">
+          <i className="bi bi-exclamation-triangle" />
+          {loadError}
+        </div>
+      ) : resultBooks.length ? (
         <>
           <div className="results-summary">
-            <span>{books.length} books found</span>
-            <span>Page {currentPage} of {totalPages}</span>
+            <span>{total.toLocaleString()} books found</span>
+            <span>Page {page} of {totalPages}</span>
           </div>
           <BookGrid
-            books={pagedBooks}
+            books={resultBooks}
             favorites={favorites}
             onDetail={onDetail}
             onFavorite={onFavorite}
@@ -154,21 +241,25 @@ function DiscoverPage({
           />
           {totalPages > 1 && (
             <nav className="pagination" aria-label="Book results pagination">
-              <button disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)} type="button">
+              <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} type="button">
                 <i className="bi bi-chevron-left" />
                 Prev
               </button>
-              {getPageNumbers(currentPage, totalPages).map((page) => (
-                <button
-                  className={currentPage === page ? 'active' : ''}
-                  key={page}
-                  onClick={() => goToPage(page)}
-                  type="button"
-                >
-                  {page}
-                </button>
-              ))}
-              <button disabled={currentPage === totalPages} onClick={() => goToPage(currentPage + 1)} type="button">
+              {getPageNumbers(page, totalPages).map((item, index) =>
+                item === 'ellipsis' ? (
+                  <span className="pagination-ellipsis" key={`ellipsis-${index}`}>...</span>
+                ) : (
+                  <button
+                    className={page === item ? 'active' : ''}
+                    key={item}
+                    onClick={() => setPage(item)}
+                    type="button"
+                  >
+                    {item}
+                  </button>
+                ),
+              )}
+              <button disabled={page === totalPages} onClick={() => setPage((value) => value + 1)} type="button">
                 Next
                 <i className="bi bi-chevron-right" />
               </button>
@@ -182,20 +273,18 @@ function DiscoverPage({
   )
 }
 
-function findSearchBook(term, books) {
-  const normalizedTerm = term.trim().toLowerCase()
-  if (!normalizedTerm) return null
+function getPageNumbers(current, total) {
+  const items = []
+  const pages = new Set([1, total, current - 1, current, current + 1].filter((page) => page >= 1 && page <= total))
+  const sorted = [...pages].sort((first, second) => first - second)
 
-  return books.find((book) => {
-    const title = book.title.toLowerCase()
-    const author = getAuthor(book).toLowerCase()
-    return title === normalizedTerm || author === normalizedTerm || title.includes(normalizedTerm) || author.includes(normalizedTerm)
-  })
-}
-
-function getPageNumbers(currentPage, totalPages) {
-  const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
-  return [...pages].filter((page) => page >= 1 && page <= totalPages).sort((first, second) => first - second)
+  let previous = 0
+  for (const page of sorted) {
+    if (previous && page - previous > 1) items.push('ellipsis')
+    items.push(page)
+    previous = page
+  }
+  return items
 }
 
 export default DiscoverPage
