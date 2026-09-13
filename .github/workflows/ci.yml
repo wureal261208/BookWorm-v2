@@ -65,10 +65,10 @@ jobs:
       # referenced in code, so CI doesn't fail on undefined env access.
       - run: npm run build
         env:
-          VITE_API_BASE_URL: http://localhost:5000
-          VITE_FIREBASE_API_KEY: ci-placeholder
-          VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder.firebaseapp.com
-          VITE_FIREBASE_PROJECT_ID: ci-placeholder
-          VITE_FIREBASE_STORAGE_BUCKET: ci-placeholder.appspot.com
-          VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
-          VITE_FIREBASE_APP_ID: "1:000000000000:web:ciplaceholder"
+          VITE_API_BASE_URL: http://localhost:5173
+          VITE_FIREBASE_API_KEY: AIzaSyBJYQZxgPDX4odyyajl-uPnQZZlBhjd7bI
+          VITE_FIREBASE_AUTH_DOMAIN: bookworm-v2-ced9e.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: bookworm-v2-ced9e
+          VITE_FIREBASE_STORAGE_BUCKET: bookworm-v2-ced9e.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "846936171643"
+          VITE_FIREBASE_APP_ID: "1:846936171643:web:ff00e2785e23647e4a2ede"
