@@ -8,6 +8,14 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   plugins: [react()],
+  esbuild: {
+    // Vitest's own transform pipeline doesn't always inherit the
+    // "automatic" JSX runtime the way `vite build`/`vite dev` do through
+    // @vitejs/plugin-react, which otherwise surfaces as a spurious
+    // "React is not defined" in test files even though the app itself
+    // builds fine.
+    jsx: 'automatic',
+  },
   server: {
     fs: {
       // This is a monorepo (repo/frontend + repo/backend sharing one root
@@ -18,5 +26,12 @@ export default defineConfig({
       // repo root so this works regardless of which node_modules wins.
       allow: [resolve(import.meta.dirname, '..')],
     },
+  },
+  test: {
+    // Utility tests (bookUtils, chapterUtils, maskEmail) don't need a DOM,
+    // but component tests do - jsdom covers both without needing separate
+    // configs per test file.
+    environment: 'jsdom',
+    setupFiles: ['./src/setupTests.js'],
   },
 })

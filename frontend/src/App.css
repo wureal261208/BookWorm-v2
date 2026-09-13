@@ -4775,8 +4775,44 @@ progress {
      controls like pagination) with no way to get to it. */
   overflow-x: auto;
   overflow-y: auto;
+  /* Reserve the scrollbar's own width/height up front (support fallback:
+     'stable' below) so a scrollbar appearing doesn't itself trigger a
+     reflow, and so there's always a visible track/thumb rather than an
+     OS/browser "overlay" scrollbar that only appears while actively
+     scrolling. On macOS in particular ("Show scroll bars: When scrolling",
+     the default), an auto-hiding scrollbar here made this panel's content -
+     including the pagination controls at the bottom of a long book list -
+     look like it was just cut off with no way to reach it, when the
+     scroll region was actually working the whole time; it just never
+     showed a visible affordance for it. */
+  scrollbar-gutter: stable both-edges;
   padding: 28px clamp(16px, 3vw, 40px);
   animation: adminPanelFadeIn 0.28s ease both;
+}
+
+/* Force a classic, always-rendered scrollbar in WebKit/Blink browsers
+   (Chrome, Edge, Safari) instead of deferring to the OS's auto-hide/overlay
+   behavior - `scrollbar-gutter` above already reserves the space; this is
+   what actually paints a persistent track + thumb into it. Firefox already
+   shows a persistent (non-overlay) scrollbar by default, so no extra rule
+   is needed there. */
+.admin-shell-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.admin-shell-content::-webkit-scrollbar-track {
+  background: #ececE8;
+}
+
+.admin-shell-content::-webkit-scrollbar-thumb {
+  border: 3px solid #ececE8;
+  border-radius: 999px;
+  background: #b8b8b2;
+}
+
+.admin-shell-content::-webkit-scrollbar-thumb:hover {
+  background: #9a9a94;
 }
 
 .admin-catalog-search {
@@ -5400,6 +5436,30 @@ progress {
   grid-column: 1 / -1;
 }
 
+.admin-field-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-ai-fill-button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.admin-ai-fill-button i {
+  color: var(--app-accent, #16a09a);
+}
+
+.admin-field-error {
+  display: block;
+  margin-top: 4px;
+  color: #c33b32;
+  font-weight: 800;
+}
+
 .admin-form-actions {
   display: flex;
   grid-column: 1 / -1;
@@ -5836,6 +5896,29 @@ progress {
   gap: 18px;
   padding: 20px 22px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Same fix as .admin-shell-content above: a visible, always-rendered
+   scrollbar rather than an OS-hidden one, so the fields further down this
+   modal (Description, Subjects, Reader setup...) don't look like they've
+   been cut off with no way to reach them. */
+.admin-book-modal-body::-webkit-scrollbar {
+  width: 12px;
+}
+
+.admin-book-modal-body::-webkit-scrollbar-track {
+  background: #f2f2ed;
+}
+
+.admin-book-modal-body::-webkit-scrollbar-thumb {
+  border: 3px solid #f2f2ed;
+  border-radius: 999px;
+  background: #c7c7c0;
+}
+
+.admin-book-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a1;
 }
 
 .admin-book-modal-error {
@@ -6978,6 +7061,15 @@ progress {
   background: var(--app-line);
 }
 
+.app-theme-dark .admin-book-modal-body::-webkit-scrollbar-track {
+  background: var(--app-surface);
+}
+
+.app-theme-dark .admin-book-modal-body::-webkit-scrollbar-thumb {
+  border-color: var(--app-surface);
+  background: var(--app-line);
+}
+
 .app-theme-dark .admin-search-hero {
   background: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface));
   border-color: var(--app-line);
@@ -7075,6 +7167,15 @@ progress {
 
 .app-theme-dark .admin-sidebar-account-info small {
   color: var(--app-muted);
+}
+
+.app-theme-dark .admin-shell-content::-webkit-scrollbar-track {
+  background: var(--app-bg);
+}
+
+.app-theme-dark .admin-shell-content::-webkit-scrollbar-thumb {
+  border-color: var(--app-bg);
+  background: var(--app-line);
 }
 
 .app-theme-dark .admin-bar-track {

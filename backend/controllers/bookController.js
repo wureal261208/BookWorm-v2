@@ -5,6 +5,7 @@ const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { fetchGutenbergReaderText } = require('../utils/gutenbergReader');
+const { generateBookMetadataSuggestion, OpenRouterConfigError } = require('../utils/openrouter');
 const maskEmail = require('../utils/maskEmail');
 
 // Broadcasts a "new book" notification to every customer. Only ever called
@@ -357,6 +358,63 @@ const getBookReaderText = asyncHandler(async (req, res) => {
   }
 });
 
+// @route POST /api/books/:id/ai-fill
+// @desc  Suggests a description + subject tags for one book via an LLM
+//        (OpenRouter) - used by the Edit Book modal's "Generate with AI"
+//        button. This never writes to the database itself; it only
+//        returns a suggestion for the admin to review, edit, and save
+//        through the normal PUT /api/books/:id the same as any manual
+//        edit. Uses a real excerpt of the book's own text when one is
+//        available (via the same Gutenberg reader-text path as
+//        getBookReaderText above), which produces a far better summary
+//        than guessing from the title alone.
+const TEXT_EXCERPT_MAX_CHARS = 4000;
+
+const generateBookMetadata = asyncHandler(async (req, res) => {
+  const book = await Book.findById(req.params.id).select('title author category subjects description chapters sourceEtextNumber');
+
+  if (!book) {
+    return fail(res, 404, 'Book not found.');
+  }
+
+  let textExcerpt = '';
+  const typedChapter = book.chapters.find((chapter) => chapter.content);
+  if (typedChapter) {
+    textExcerpt = typedChapter.content.slice(0, TEXT_EXCERPT_MAX_CHARS);
+  } else if (book.sourceEtextNumber) {
+    const metadata = await BookMetadata.findOne({ etextNumber: book.sourceEtextNumber });
+    if (metadata && (metadata.readOnlineUrl || metadata.plainTextUtf8Url)) {
+      try {
+        const fullText = await fetchGutenbergReaderText({
+          readOnlineUrl: metadata.readOnlineUrl,
+          plainTextUtf8Url: metadata.plainTextUtf8Url,
+        });
+        textExcerpt = (fullText || '').slice(0, TEXT_EXCERPT_MAX_CHARS);
+      } catch {
+        // Fall through with no excerpt - the AI still has title/author/
+        // category/subjects to go on, it just writes a more generic blurb.
+      }
+    }
+  }
+
+  try {
+    const suggestion = await generateBookMetadataSuggestion({
+      title: book.title,
+      author: book.author,
+      category: book.category,
+      existingSubjects: book.subjects,
+      existingDescription: book.description,
+      textExcerpt,
+    });
+    return success(res, 200, 'AI suggestion generated.', suggestion);
+  } catch (error) {
+    if (error instanceof OpenRouterConfigError) {
+      return fail(res, 503, error.message);
+    }
+    return fail(res, 502, `Could not generate an AI suggestion: ${error.message}`);
+  }
+});
+
 // @route POST /api/books/:id/view
 // @desc  Records one real read/open of a book - anyone, including
 //        anonymous visitors, counts. Fire-and-forget from the frontend the
@@ -434,6 +492,7 @@ module.exports = {
   updateBook,
   deleteBook,
   getBookReaderText,
+  generateBookMetadata,
   incrementBookViews,
   getBookStats,
 };

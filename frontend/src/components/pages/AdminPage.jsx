@@ -1177,6 +1177,29 @@ function BookFormModal({
   const [publishBlockers, setPublishBlockers] = useState([])
   const [formBlockers, setFormBlockers] = useState([])
   const [submitting, setSubmitting] = useState(false)
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false)
+  const [aiSuggestError, setAiSuggestError] = useState('')
+
+  // Gutenberg's catalog has no plot description (see importCatalogBook
+  // below), so the ~72k imported books all land with an empty Description
+  // and often thin Subjects. This asks the backend's OpenRouter-backed
+  // /ai-fill endpoint for a suggestion built from the book's own text -
+  // it only fills the form fields here, nothing is saved until the admin
+  // reviews it and clicks Update book like any other edit.
+  async function generateWithAi() {
+    if (!adminBook.id) return
+    setAiSuggestLoading(true)
+    setAiSuggestError('')
+    try {
+      const data = await apiFetch(`/api/books/${adminBook.id}/ai-fill`, { method: 'POST' })
+      if (data.description) updateAdminBook('description', data.description)
+      if (data.subjects?.length) updateAdminBook('subjects', data.subjects.join(', '))
+    } catch (error) {
+      setAiSuggestError(error.message)
+    } finally {
+      setAiSuggestLoading(false)
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -1426,12 +1449,33 @@ function BookFormModal({
                 </div>
               </div>
               <label className="wide-field">
-                Description
+                <span className="admin-field-label-row">
+                  Description
+                  {isEditing && (
+                    <button
+                      className="ghost-button admin-ai-fill-button"
+                      disabled={aiSuggestLoading}
+                      onClick={generateWithAi}
+                      type="button"
+                    >
+                      {aiSuggestLoading ? (
+                        <>
+                          <span className="admin-spin-small" /> Generating...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-stars" /> Generate with AI
+                        </>
+                      )}
+                    </button>
+                  )}
+                </span>
                 <textarea
                   value={adminBook.description}
                   onChange={(event) => updateAdminBook('description', event.target.value)}
                   placeholder="Short book description shown on the detail page."
                 />
+                {aiSuggestError && <small className="admin-field-error">{aiSuggestError}</small>}
               </label>
               <label className="wide-field">
                 Subjects

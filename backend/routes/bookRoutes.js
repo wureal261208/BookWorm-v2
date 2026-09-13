@@ -1,5 +1,5 @@
 const express = require('express');
-const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText, incrementBookViews, getBookStats, listCategories } = require('../controllers/bookController');
+const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText, generateBookMetadata, incrementBookViews, getBookStats, listCategories } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
 const { identify, protect, authorize } = require('../middleware/auth');
 
@@ -26,6 +26,10 @@ router.get('/:id/reader-text', identify, getBookReaderText);
 router.get('/:id/comments', listComments);
 router.post('/:id/comments', protect, createComment);
 router.post('/:id/view', identify, incrementBookViews);
+// AI-assisted description/subjects suggestion for the Edit Book modal -
+// staff-only (same roles as editing itself), never writes to the DB on
+// its own.
+router.post('/:id/ai-fill', protect, authorize('admin', 'manager', 'employee'), generateBookMetadata);
 
 // Staff push books with whatever status they choose; customers can push
 // too now, but their submissions always land as a draft pending review

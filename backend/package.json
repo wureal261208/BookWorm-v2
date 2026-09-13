@@ -9,6 +9,7 @@
     "import:book-metadata": "node scripts/importBookMetadata.js",
     "dedupe-books": "node scripts/dedupeBooks.js",
     "import-metadata-to-books": "node scripts/importMetadataToBooks.js",
+    "backfill:descriptions": "node scripts/backfillBookDescriptions.js",
     "test": "jest"
   },
   "dependencies": {
