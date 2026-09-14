@@ -220,7 +220,13 @@ const listMyBooks = asyncHandler(async (req, res) => {
   const [books, total] = await Promise.all([
     Book.find(filter)
       .select('-chapters')
-      .sort({ createdAt: -1 })
+      // Tie-break on _id, same reasoning as the public /api/books listing
+      // below: a lot of these books were bulk-imported in the same
+      // millisecond, so createdAt alone doesn't fully order them and
+      // MongoDB's skip/limit pagination isn't guaranteed stable across
+      // requests without a fully deterministic sort. That's what was
+      // showing the same book on page 1, 2, and 3 in Book Management.
+      .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .populate('createdBy', 'name email role'),

@@ -38,10 +38,12 @@ import './App.css'
 
 const AdminPage = lazy(() => import('./components/pages/AdminPage'))
 const BookDetailPage = lazy(() => import('./components/pages/BookDetailPage'))
+const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
 const DiscoverPage = lazy(() => import('./components/pages/DiscoverPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
 const ReaderPage = lazy(() => import('./components/pages/ReaderPage'))
+const WritePage = lazy(() => import('./components/pages/WritePage'))
 
 const emptyAuthForm = { name: '', email: '', password: '' }
 const emptyAdminBook = {
@@ -64,6 +66,8 @@ const SEARCH_HISTORY_LIMIT = 8
 const PAGE_PATHS = {
   home: '/',
   discover: '/discover',
+  community: '/community',
+  write: '/write',
   detail: '/book',
   reader: '/reader',
   profile: '/profile',
@@ -167,7 +171,7 @@ function App() {
   const scrollToTopForPage = useCallback((page) => {
     if (typeof window === 'undefined') return
 
-    if (['home', 'discover', 'profile'].includes(page)) {
+    if (['home', 'discover', 'community', 'write', 'profile'].includes(page)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
     }
   }, [])
@@ -785,6 +789,16 @@ function App() {
     rememberSearchTerm(term)
   }
 
+  // Wattpad-style persistent header search box (AppShell) isn't on the
+  // Discover page itself, so it needs to both set the query Discover reads
+  // and actually navigate there - handleSearchSubmit alone only does the
+  // former (Discover already calls that directly since it's already on
+  // the page).
+  function handleHeaderSearch(term) {
+    handleSearchSubmit(term)
+    navigateTo('discover')
+  }
+
   function recordBookView(book) {
     setViewCounts((current) => ({ ...current, [book.id]: (current[book.id] || 0) + 1 }))
     setBookReaders((current) => {
@@ -1086,6 +1100,8 @@ function App() {
         viewerCounts={getViewerCounts(bookReaders)}
       />
     ),
+    community: <CommunityPage />,
+    write: <WritePage />,
     detail: (
       <BookDetailPage
         book={selectedBook}
@@ -1201,7 +1217,7 @@ function App() {
 
   return (
     <NavigationProvider value={navigation}>
-      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onNotificationClick={handleNotificationClick} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
+      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onHeaderSearch={handleHeaderSearch} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onNotificationClick={handleNotificationClick} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
         <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}

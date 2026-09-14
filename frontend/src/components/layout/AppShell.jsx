@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { getInitials } from '../../utils/bookUtils'
+import { getInitials, getCover } from '../../utils/bookUtils'
+import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
 import { hasAccess, normalizeRole } from '../../data/bookData'
 
+// Wattpad-style top nav: logo click already goes home (see handleLogoClick
+// below), so there's no separate "Home" link - just Browse/Community/Write
+// plus whatever staff-only links apply. "Browse" reuses the existing
+// Discover page/route as-is (same subject/category filtering, same
+// pagination) - it's a relabel for the nav, not a second page to maintain.
 const navItems = [
-  { id: 'home', label: 'Home', icon: 'bi-house' },
-  { id: 'discover', label: 'Discover', icon: 'bi-compass' },
+  { id: 'discover', label: 'Browse', icon: 'bi-compass' },
+  { id: 'community', label: 'Community', icon: 'bi-people' },
+  { id: 'write', label: 'Write', icon: 'bi-pencil-square', private: true },
   { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },
 ]
@@ -23,6 +30,7 @@ function AppShell({
   notifications = [],
   onAuth,
   onGuest,
+  onHeaderSearch,
   onLogout,
   onMarkAllNotificationsRead,
   onNotificationClick,
@@ -128,6 +136,8 @@ function AppShell({
             })}
           </nav>
         )}
+
+        {!isAdminPage && <HeaderSearch onSearch={onHeaderSearch} />}
 
         <div className="header-account">
           {!isGuest && (
@@ -299,6 +309,105 @@ function AppShell({
         <div className="route-loader" role="status">
           <img src={logo} alt="BookWorm logo" />
           <span>Opening page...</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Wattpad-style persistent header search: type to see live suggestions
+// (from admin-published books only - GET /api/books already filters to
+// status: 'published'), press Enter or click a result to jump to Browse
+// with that search applied. Loading state while a request is in flight,
+// and an explicit "no results" message rather than just an empty box.
+export function HeaderSearch({ onSearch }) {
+  const [term, setTerm] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const boxRef = useRef(null)
+
+  useEffect(() => {
+    const trimmed = term.trim()
+    if (trimmed.length < 2) {
+      setResults([])
+      setLoading(false)
+      return undefined
+    }
+
+    let ignore = false
+    setLoading(true)
+    const timeout = setTimeout(() => {
+      publicApiFetch(`/api/books?limit=6&q=${encodeURIComponent(trimmed)}`)
+        .then((data) => {
+          if (!ignore) setResults(Array.isArray(data.books) ? data.books : [])
+        })
+        .catch(() => {
+          if (!ignore) setResults([])
+        })
+        .finally(() => {
+          if (!ignore) setLoading(false)
+        })
+    }, 300)
+
+    return () => {
+      ignore = true
+      clearTimeout(timeout)
+    }
+  }, [term])
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    function handleOutsideClick(event) {
+      if (boxRef.current && !boxRef.current.contains(event.target)) setIsOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [isOpen])
+
+  function submit(nextTerm = term) {
+    const trimmed = nextTerm.trim()
+    if (!trimmed) return
+    setIsOpen(false)
+    onSearch?.(trimmed)
+  }
+
+  return (
+    <div className="header-search" ref={boxRef}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
+      >
+        <i className="bi bi-search" />
+        <input
+          aria-label="Search books"
+          onChange={(event) => {
+            setTerm(event.target.value)
+            setIsOpen(true)
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Search books..."
+          type="text"
+          value={term}
+        />
+      </form>
+
+      {isOpen && term.trim().length >= 2 && (
+        <div className="header-search-dropdown">
+          {loading ? (
+            <p><span className="admin-spin-small" /> Searching...</p>
+          ) : results.length ? (
+            results.map((book) => (
+              <button key={book.id || book._id} onClick={() => submit(book.title)} type="button">
+                <img alt="" src={getCover(book)} />
+                <span>{book.title}</span>
+              </button>
+            ))
+          ) : (
+            <p className="header-search-empty">No results found.</p>
+          )}
         </div>
       )}
     </div>
