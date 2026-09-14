@@ -10,6 +10,7 @@
     "dedupe-books": "node scripts/dedupeBooks.js",
     "import-metadata-to-books": "node scripts/importMetadataToBooks.js",
     "backfill:descriptions": "node scripts/backfillBookDescriptions.js",
+    "clean:category-prefixes": "node scripts/cleanCategoryPrefixes.js",
     "test": "jest"
   },
   "dependencies": {

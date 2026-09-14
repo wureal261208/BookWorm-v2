@@ -55,7 +55,12 @@ function toBookDoc(metadata, adminId) {
     title,
     author: metadata.authors || 'Unknown',
     description: '',
-    category: bookshelves[0] || subjects[0] || 'General',
+    // Same "Browsing: " site-chrome prefix issue as the admin UI's manual
+    // catalog-import path (see importCatalogBook in AdminPage.jsx) - some
+    // Gutenberg bookshelf names are real shelf names like "Browsing:
+    // History - Ancient", not corrupted data, but they read oddly once
+    // shown as a plain category label, so strip that prefix here too.
+    category: (bookshelves[0] || subjects[0] || 'General').replace(/^browsing:\s*/i, '').trim() || 'General',
     coverUrl: buildCoverUrl(metadata.etextNumber),
     readerUrl: metadata.readOnlineUrl || '',
     chapters: [],

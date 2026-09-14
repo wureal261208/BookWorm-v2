@@ -448,7 +448,7 @@ function AdminPage({
                           onClick={() => pickCatalogSuggestion(book)}
                           type="button"
                         >
-                          <span className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</span>
+                          <img alt="" src={getAdminCover(book)} onError={(event) => { event.currentTarget.src = NONE_COVER_URL }} />
                           <span className="admin-catalog-suggestion-title">{book.title}</span>
                           <small>{getAuthor(book)}</small>
                         </button>
@@ -1266,7 +1266,13 @@ function BookFormModal({
     // Revolutionary War; ..." - Category is a required field to push
     // (see getFormErrors), but catalog entries don't map to it directly, so
     // without this the Push button silently stayed disabled after import.
-    const guessedCategory = entry.bookshelves?.split(';')[0]?.trim() || ''
+    // Some Gutenberg bookshelf names carry their own site's UI chrome
+    // baked in verbatim, e.g. "Browsing: History - Ancient" (that's a real
+    // shelf name on gutenberg.org, not corrupted data) - strip that prefix
+    // so the category reads like a normal genre label instead.
+    const guessedCategory = (entry.bookshelves?.split(';')[0] || '')
+      .replace(/^browsing:\s*/i, '')
+      .trim()
 
     setAdminBook({
       ...adminBook,

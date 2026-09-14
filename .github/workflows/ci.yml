@@ -60,19 +60,18 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
-      # Real Firebase/API keys aren't needed just to confirm the app
-      # compiles - the build only needs *some* value for each VITE_ var
-      # referenced in code, so CI doesn't fail on undefined env access.
-      # Keep these as placeholders, not the real project's values: nothing
-      # in this build step ever calls Firebase or the API, so a real key
-      # buys nothing here and just leaves it sitting in the repo/Actions
-      # logs for no reason.
+      # These come from GitHub's own Secrets store (Settings > Secrets and
+      # variables > Actions), not from this file - only the *names* live
+      # here, never a value, real or placeholder. This build step doesn't
+      # actually call Firebase or the API either way, so any values you
+      # put in those secrets work fine, including simply reusing the
+      # placeholders this used to hardcode here directly.
       - run: npm run build
         env:
-          VITE_API_BASE_URL: http://localhost:5173
-          VITE_FIREBASE_API_KEY: AIzaSyBJYQZxgPDX4odyyajl-uPnQZZlBhjd7bI
-          VITE_FIREBASE_AUTH_DOMAIN: bookworm-v2-ced9e.firebaseapp.com
-          VITE_FIREBASE_PROJECT_ID: bookworm-v2-ced9e
-          VITE_FIREBASE_STORAGE_BUCKET: bookworm-v2-ced9e.appspot.com
-          VITE_FIREBASE_MESSAGING_SENDER_ID: "846936171643"
-          VITE_FIREBASE_APP_ID: "1:846936171643:web:ff00e2785e23647e4a2ede"
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
