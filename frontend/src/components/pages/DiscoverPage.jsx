@@ -9,6 +9,35 @@ const sortOptions = [
   { id: 'views', label: 'Most read', icon: 'bi-fire' },
 ]
 
+// The topic pills below come straight from whatever category text exists
+// in Mongo (see /api/books/categories) - real, but often Gutenberg's own
+// free-form bookshelf wording ("History - Ancient", "American
+// Revolutionary War"), not the familiar genre names a reader would think
+// to look for. This dropdown is a curated shortlist of those familiar
+// names instead. Selecting one reuses the exact same `topic` state as
+// clicking a pill - the backend now matches `category` case-insensitively
+// and as a substring (see listBooks in bookController.js), so picking
+// "Science Fiction" here correctly matches a raw category like "Science
+// Fiction - General" or "Fiction - Science Fiction" without needing an
+// exact string match.
+const FAMILIAR_GENRES = [
+  'Fiction',
+  'Romance',
+  'Mystery',
+  'Science Fiction',
+  'Fantasy',
+  'History',
+  'Biography',
+  'Poetry',
+  'Philosophy',
+  "Children's",
+  'Drama',
+  'Adventure',
+  'Horror',
+  'Religion',
+  'Science',
+]
+
 // Discover has to browse a ~72,000-book catalog, so it can never just page
 // through a fixed array handed down from App.jsx (that only ever holds a
 // small recent sample). Every filter change below - search, topic, sort,
@@ -196,6 +225,22 @@ function DiscoverPage({
             </button>
           ))}
         </div>
+
+        <label className="discover-genre-picker">
+          <i className="bi bi-bookmark-star" />
+          <span>Browse by genre</span>
+          <select
+            onChange={(event) => {
+              if (event.target.value) setTopic(event.target.value)
+            }}
+            value={FAMILIAR_GENRES.includes(topic) ? topic : ''}
+          >
+            <option value="">Pick a familiar genre...</option>
+            {FAMILIAR_GENRES.map((genre) => (
+              <option key={genre} value={genre}>{genre}</option>
+            ))}
+          </select>
+        </label>
 
         <div className="topic-row discover-sort-row">
           {sortOptions.map((option) => (

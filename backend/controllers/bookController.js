@@ -8,6 +8,7 @@ const { fetchGutenbergReaderText } = require('../utils/gutenbergReader');
 const { getBookAiContext } = require('../utils/bookAiContext');
 const { generateBookMetadataSuggestion, OpenRouterConfigError } = require('../utils/openrouter');
 const maskEmail = require('../utils/maskEmail');
+const escapeRegExp = require('../utils/escapeRegExp');
 
 // Broadcasts a "new book" notification to every customer. Only ever called
 // right after a book's status actually becomes 'published' - never for
@@ -121,17 +122,22 @@ const createBook = asyncHandler(async (req, res) => {
 // @desc  Public catalog listing - published books only, paginated. Staff use
 //        GET /api/books/mine (below) for the full catalog including
 //        drafts/hidden books. `q` full-text searches title/author/subjects,
-//        `category` filters exactly, `sort` is "recent" (default) or
-//        "views" (most-read first) - the search/pagination Discover and
-//        Home actually need now that the catalog can hold ~75k books, far
-//        too many to ever hand the browser in one go.
+//        `category` does a case-insensitive partial match (see
+//        escapeRegExp below - Gutenberg's own category text is free-form,
+//        e.g. "History - Ancient" or "American Revolutionary War", so a
+//        curated genre picker like "History" needs to match any category
+//        containing that word, not just an exact string), `sort` is
+//        "recent" (default) or "views" (most-read first) - the
+//        search/pagination Discover and Home actually need now that the
+//        catalog can hold ~75k books, far too many to ever hand the
+//        browser in one go.
 const listBooks = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 32));
 
   const filter = { status: 'published' };
   if (req.query.category && req.query.category !== 'all') {
-    filter.category = req.query.category;
+    filter.category = { $regex: escapeRegExp(req.query.category.trim()), $options: 'i' };
   }
   if (req.query.q && req.query.q.trim()) {
     filter.$text = { $search: req.query.q.trim() };

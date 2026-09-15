@@ -63,6 +63,12 @@ const emptyAdminBook = {
 }
 const guestAccount = { id: 'guest', name: 'None Account', email: 'guest@bookworm.local', role: 'guest' }
 const SEARCH_HISTORY_LIMIT = 8
+// A book only counts as "viewed" once someone has actually stuck around
+// the detail page or reader this long - see the dwell-timer effect near
+// recordBookView. Keeps a click-then-immediately-leave from inflating
+// view counts.
+const VIEW_DWELL_MS = 90_000
+
 const PAGE_PATHS = {
   home: '/',
   discover: '/discover',
@@ -102,7 +108,7 @@ function App() {
   const [pageState, dispatchPage] = useReducer(pageReducer, pageInitialState)
   const routeTimerRef = useRef(null)
   const [books, setBooks] = useState([])
-  const [, setBooksLoading] = useState(false)
+  const [booksLoading, setBooksLoading] = useState(true)
   const [managedBooks, setManagedBooks] = useState([])
   const [managedBooksError, setManagedBooksError] = useState('')
   const addBookInFlightRef = useRef(false)
@@ -558,7 +564,13 @@ function App() {
         // it is what the search box (searchBooksOnServer below) is for -
         // that hits the server's full-text index across the entire catalog
         // instead of filtering whatever happens to be loaded here.
-        const data = await publicApiFetch('/api/books?limit=60&page=1').catch((error) => {
+        // limit=96 (not the old 60): Home slices this into non-overlapping
+        // windows (new books 0-16, recommended 16-32) so both sections show
+        // distinct, real Mongo-backed books instead of static data or the
+        // same handful repeated - the extra headroom past 32 is also what
+        // "Continue reading" matches in-progress books against, so a wider
+        // pool means a better chance an in-progress book actually shows up.
+        const data = await publicApiFetch('/api/books?limit=96&page=1').catch((error) => {
           // A silent fallback here previously meant a real fetch failure
           // (wrong API URL, CORS, a 500) looked identical to "there just
           // aren't many books yet" - nothing in the console to tell them
@@ -817,9 +829,40 @@ function App() {
     publicApiFetch(`/api/books/${book.id}/view`, { method: 'POST' }).catch(() => {})
   }
 
+  // Genuine-engagement view counting: opening the detail page or reader
+  // used to call recordBookView() the instant the page mounted, so a
+  // click-then-immediately-leave still counted as a "view" - not a real
+  // read. Instead, this starts a timer the moment someone lands on the
+  // detail page or the reader for a book, and only actually records the
+  // view once they've stuck around VIEW_DWELL_MS - if they navigate away
+  // (or switch to a different book) before that, the effect's cleanup
+  // clears the timer and nothing gets recorded at all.
+  const recordedViewIdsRef = useRef(new Set())
+  useEffect(() => {
+    const isViewingBook = selectedBook && (activePage === 'detail' || activePage === 'reader')
+    if (!isViewingBook) {
+      // Left the detail/reader pages entirely - a later fresh visit to the
+      // same book should be able to count again, so clear the memory of
+      // what's already been recorded for "this sitting".
+      recordedViewIdsRef.current.clear()
+      return undefined
+    }
+
+    // Already counted for this book without having left detail/reader in
+    // between (e.g. they went detail -> reader for the same book) - don't
+    // start a second timer or double-count it.
+    if (recordedViewIdsRef.current.has(selectedBook.id)) return undefined
+
+    const timer = window.setTimeout(() => {
+      recordedViewIdsRef.current.add(selectedBook.id)
+      recordBookView(selectedBook)
+    }, VIEW_DWELL_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [selectedBook, activePage])
+
   function openDetail(book) {
     setSelectedBook(book)
-    recordBookView(book)
     navigateTo('detail')
   }
 
@@ -831,7 +874,6 @@ function App() {
       setHistory((current) => [book.id, ...current.filter((id) => id !== book.id)].slice(0, 20))
       recordReadingDay()
     }
-    if (activePage !== 'detail') recordBookView(book)
   }
 
   function openChapter(book, chapter) {
@@ -1073,6 +1115,7 @@ function App() {
     home: (
       <HomePage
         books={allBooks}
+        booksLoading={booksLoading}
         favorites={favorites}
         onDetail={openDetail}
         onFavorite={toggleFavorite}

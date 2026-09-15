@@ -2041,6 +2041,54 @@ progress {
   color: #ffffff;
 }
 
+/* Loading placeholder for the hero while both hotBooks and the shared
+   `books` fetch are still in flight - same dark card, no jarring blank
+   flash where the whole top of Home used to just be empty. */
+.hero-carousel-skeleton {
+  display: block;
+}
+
+.hero-copy-skeleton {
+  display: grid;
+  gap: 16px;
+  max-width: 420px;
+}
+
+.skeleton-line,
+.skeleton-pill {
+  border-radius: 6px;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.08) 30%, rgba(255, 255, 255, 0.18) 50%, rgba(255, 255, 255, 0.08) 70%);
+  background-size: 220% 100%;
+  animation: skeletonShimmer 1.3s ease-in-out infinite;
+}
+
+.skeleton-line-eyebrow {
+  width: 140px;
+  height: 14px;
+}
+
+.skeleton-line-title {
+  width: 100%;
+  height: 40px;
+}
+
+.skeleton-line-meta {
+  width: 60%;
+  height: 18px;
+}
+
+.skeleton-pill-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.skeleton-pill {
+  width: 130px;
+  height: 42px;
+  border-radius: 999px;
+}
+
 .carousel-track {
   position: relative;
   display: block;
@@ -2588,6 +2636,38 @@ progress {
 
 .discover-sort-row {
   margin-top: 4px;
+}
+
+.discover-genre-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid #d8d8d3;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #74746f;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.discover-genre-picker i {
+  color: var(--app-accent, #16a09a);
+}
+
+.discover-genre-picker select {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  color: #111111;
+  font-weight: 800;
+}
+
+.discover-genre-picker select:focus {
+  outline: none;
 }
 
 .admin-spin-small {
