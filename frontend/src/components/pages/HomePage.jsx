@@ -1,134 +1,75 @@
 import { useEffect, useState } from 'react'
-import { getAuthor, getCategory, getCover } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
 import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 
-function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
-  const [activeHeroIndex, setActiveHeroIndex] = useState(0)
-  const [isHeroPaused, setIsHeroPaused] = useState(false)
+// Small helper for the several "row of books from a specific real query"
+// sections below (Hot books, Top picks, Recommended, ...) - same
+// loading/fetch shape each time, just a different query string, so this
+// keeps four near-identical useState/useEffect blocks from being
+// copy-pasted four times.
+function useBookRow(query) {
+  const [books, setBooks] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  // "Hot books" means most-read, not just whatever showed up first in the
-  // default recent-sorted batch - a dedicated sort=views fetch straight
-  // from the server (same as Discover's "Most read" sort) is what actually
-  // reflects that across the whole catalog.
-  const [hotBooks, setHotBooks] = useState([])
-  const [hotBooksLoading, setHotBooksLoading] = useState(true)
   useEffect(() => {
     let ignore = false
-    setHotBooksLoading(true)
-    publicApiFetch('/api/books?limit=18&sort=views')
+    setLoading(true)
+    publicApiFetch(`/api/books?${query}`)
       .then((data) => {
-        if (!ignore) setHotBooks(Array.isArray(data.books) ? data.books : [])
+        if (!ignore) setBooks(Array.isArray(data.books) ? data.books : [])
       })
       .catch(() => {
-        if (!ignore) setHotBooks([])
+        if (!ignore) setBooks([])
       })
       .finally(() => {
-        if (!ignore) setHotBooksLoading(false)
+        if (!ignore) setLoading(false)
       })
     return () => {
       ignore = true
     }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
-  // `books` is one shared, larger fetch (App.jsx) sliced into three
-  // non-overlapping windows here, rather than three separate API calls -
-  // cheap way to fill out the page with more (still 100% Mongo-backed,
-  // never static/hardcoded) books without extra round trips.
-  const heroBooks = (hotBooks.length ? hotBooks : books).slice(0, 6)
+  return [books, loading]
+}
+
+function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
+  // "Hot books" means most-read, not just whatever showed up first in the
+  // default recent-sorted batch - a dedicated sort=views fetch straight
+  // from the server (same as Discover's "Most read" sort) is what actually
+  // reflects that across the whole catalog.
+  const [hotBooks, hotBooksLoading] = useBookRow('limit=18&sort=views')
+
+  // None of these four rows are real per-user personalization - there's no
+  // recommendation engine (no reading-history model, no collaborative
+  // filtering) behind this site. Rather than fake that with a label like
+  // "Recommended for you" hiding what's really just another arbitrary
+  // slice, each row is genuinely a different real query against Mongo:
+  // "Top picks" and "We think you'll enjoy" are honest random samples
+  // (sort=random, a fresh $sample from the whole published catalog on
+  // every page load - see listBooks in bookController.js), "Recommended"
+  // is the next tier of most-read books after what Hot books already
+  // shows, and the history row is a real category filter. Different
+  // books, different real criteria, every time - just not personalized.
+  const [topPicks, topPicksLoading] = useBookRow('limit=16&sort=random')
+  const [recommended, recommendedLoading] = useBookRow('limit=16&sort=views&page=2')
+  const [enjoyPicks, enjoyPicksLoading] = useBookRow('limit=16&sort=random')
+  const [historyPicks, historyPicksLoading] = useBookRow('limit=16&category=History')
+
   const newBooks = books.slice(0, 16)
-  const recommended = books.slice(16, 32)
   const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
-  const safeHeroIndex = heroBooks.length ? activeHeroIndex % heroBooks.length : 0
-  const featured = heroBooks[safeHeroIndex]
-  const centerSlot = heroBooks.length ? Math.floor(heroBooks.length / 2) : 0
-  const carouselBooks = heroBooks.map((_, index) => heroBooks[(safeHeroIndex - centerSlot + index + heroBooks.length) % heroBooks.length])
-
-  useEffect(() => {
-    if (heroBooks.length < 2 || isHeroPaused) {
-      return undefined
-    }
-
-    const timer = window.setInterval(() => {
-      setActiveHeroIndex((currentIndex) => (currentIndex + 1) % heroBooks.length)
-    }, 2800)
-
-    return () => window.clearInterval(timer)
-  }, [heroBooks.length, isHeroPaused])
-
-  // The hero is fed by hotBooks first, falling back to books only until
-  // hotBooks arrives - so it's only genuinely "nothing to show yet" while
-  // BOTH are still loading and empty. Avoids a blank flash where the
-  // whole top of the page was empty white space while either fetch was
-  // still in flight.
-  const isHeroLoading = !featured && (hotBooksLoading || booksLoading)
 
   return (
     <div className="home-page">
-      {isHeroLoading ? (
-        <section className="hero-carousel hero-carousel-skeleton" aria-label="Loading featured book">
-          <div className="hero-copy-skeleton">
-            <div className="skeleton-line skeleton-line-eyebrow" />
-            <div className="skeleton-line skeleton-line-title" />
-            <div className="skeleton-line skeleton-line-title" style={{ width: '70%' }} />
-            <div className="skeleton-line skeleton-line-meta" />
-            <div className="skeleton-pill-row">
-              <div className="skeleton-pill" />
-              <div className="skeleton-pill" />
-            </div>
-          </div>
-        </section>
-      ) : featured ? (
-        <section className="hero-carousel">
-          <div className="hero-copy" key={featured.id}>
-            <p className="mono-eyebrow">Featured reading</p>
-            <h1>{featured.title}</h1>
-            <p>{getAuthor(featured)} · {getCategory(featured)}</p>
-            <div className="hero-actions">
-              <button
-                className="primary-button"
-                onBlur={() => setIsHeroPaused(false)}
-                onClick={() => onRead(featured)}
-                onFocus={() => setIsHeroPaused(true)}
-                onMouseEnter={() => setIsHeroPaused(true)}
-                onMouseLeave={() => setIsHeroPaused(false)}
-                type="button"
-              >
-                <i className="bi bi-journal-text" />
-                Read now
-              </button>
-              <button
-                className="ghost-button"
-                onBlur={() => setIsHeroPaused(false)}
-                onClick={() => onDetail(featured)}
-                onFocus={() => setIsHeroPaused(true)}
-                onMouseEnter={() => setIsHeroPaused(true)}
-                onMouseLeave={() => setIsHeroPaused(false)}
-                type="button"
-              >
-                <i className="bi bi-info-circle" />
-                Detail
-              </button>
-            </div>
-          </div>
-          <div className="carousel-track" aria-label="Hot books carousel">
-            <div className="carousel-track-inner" key={featured.id}>
-              {carouselBooks.map((book, index) => (
-                <button
-                  className={index === centerSlot ? 'active' : ''}
-                  key={`${book.id}-${index}`}
-                  onClick={() => onDetail(book)}
-                  type="button"
-                >
-                  <img loading={index === centerSlot ? 'eager' : 'lazy'} src={getCover(book)} alt={`${book.title} cover`} />
-                  <span>{book.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
+      {/* Placeholder for a real promotional/editorial banner (illustrated
+          artwork + a headline + a CTA button, like Wattpad's "Before you
+          knew better" banner on wattpad.com/home) - not book-cover data,
+          so there's nothing to fetch here. Swap PromoBannerPlaceholder for
+          real slide content once you have banner images/copy ready; the
+          arrow buttons are already wired up as a shell to build the real
+          carousel into. */}
+      <PromoBannerPlaceholder />
 
       {continueReading.length > 0 && (
         <section className="section-block">
@@ -154,80 +95,91 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         </section>
       )}
 
-      <section className="section-block">
-        <div className="section-heading">
-          <div>
-            <p className="mono-eyebrow">Popular now</p>
-            <h2>Hot books</h2>
-          </div>
-          <button className="ghost-button" onClick={() => setPage('discover')} type="button">
-            View library
-          </button>
-        </div>
-        {hotBooksLoading ? (
-          <CarouselSkeleton />
-        ) : (
-          <BookCarousel
-            books={hotBooks.length ? hotBooks : heroBooks}
-            favorites={favorites}
-            onDetail={onDetail}
-            onFavorite={onFavorite}
-            onRead={onRead}
-            viewCounts={viewCounts}
-            viewerCounts={viewerCounts}
-          />
-        )}
-      </section>
+      <BookRowSection
+        actionLabel="View library"
+        books={hotBooks}
+        eyebrow="Popular now"
+        favorites={favorites}
+        loading={hotBooksLoading}
+        onAction={() => setPage('discover')}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="Hot books"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
 
-      <section className="section-block">
-        <div className="section-heading">
-          <div>
-            <p className="mono-eyebrow">Just added</p>
-            <h2>New books</h2>
-          </div>
-          <button className="ghost-button" onClick={() => setPage('discover')} type="button">
-            View library
-          </button>
-        </div>
-        {booksLoading ? <CarouselSkeleton /> : (
-          <BookCarousel
-            books={newBooks}
-            favorites={favorites}
-            onDetail={onDetail}
-            onFavorite={onFavorite}
-            onRead={onRead}
-            viewCounts={viewCounts}
-            viewerCounts={viewerCounts}
-          />
-        )}
-      </section>
+      <BookRowSection
+        actionLabel="View library"
+        books={booksLoading ? [] : newBooks}
+        eyebrow="Just added"
+        favorites={favorites}
+        loading={booksLoading}
+        onAction={() => setPage('discover')}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="New books"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
 
-      <section className="section-block">
-        <div className="section-heading">
-          <div>
-            <p className="mono-eyebrow">For your shelf</p>
-            <h2>Recommended</h2>
-          </div>
-        </div>
-        {booksLoading ? (
-          <div className="discover-loading-grid" aria-label="Loading recommended books">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div className="book-card-skeleton" key={index} />
-            ))}
-          </div>
-        ) : (
-          <BookGrid
-            books={recommended}
-            favorites={favorites}
-            onDetail={onDetail}
-            onFavorite={onFavorite}
-            onRead={onRead}
-            variant="read"
-            viewCounts={viewCounts}
-            viewerCounts={viewerCounts}
-          />
-        )}
-      </section>
+      <BookRowSection
+        books={topPicks}
+        eyebrow="Worth a look"
+        favorites={favorites}
+        loading={topPicksLoading}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="Top picks for you"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
+
+      <BookRowSection
+        actionLabel="View library"
+        books={recommended}
+        eyebrow="For your shelf"
+        favorites={favorites}
+        loading={recommendedLoading}
+        onAction={() => setPage('discover')}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="Recommended for you"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
+
+      <BookRowSection
+        books={enjoyPicks}
+        eyebrow="Give it a try"
+        favorites={favorites}
+        loading={enjoyPicksLoading}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="We think you'll enjoy"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
+
+      <BookRowSection
+        actionLabel="View library"
+        books={historyPicks}
+        eyebrow="A look back"
+        favorites={favorites}
+        loading={historyPicksLoading}
+        onAction={() => setPage('discover', 'History')}
+        onDetail={onDetail}
+        onFavorite={onFavorite}
+        onRead={onRead}
+        title="Turn back to history"
+        viewCounts={viewCounts}
+        viewerCounts={viewerCounts}
+      />
 
       <section className="section-block">
         <div className="section-heading">
@@ -249,9 +201,43 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
   )
 }
 
+// One "row of books" section: heading (+ optional "View library" action)
+// above a horizontal carousel, with its own loading skeleton. Every row on
+// Home is one of these, just pointed at a different real query.
+function BookRowSection({ actionLabel, books, eyebrow, favorites, loading, onAction, onDetail, onFavorite, onRead, title, viewCounts, viewerCounts }) {
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+        {onAction && (
+          <button className="ghost-button" onClick={onAction} type="button">
+            {actionLabel}
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <CarouselSkeleton />
+      ) : (
+        <BookCarousel
+          books={books}
+          favorites={favorites}
+          onDetail={onDetail}
+          onFavorite={onFavorite}
+          onRead={onRead}
+          viewCounts={viewCounts}
+          viewerCounts={viewerCounts}
+        />
+      )}
+    </section>
+  )
+}
+
 // A row of blank cover-shaped placeholders the same width as a real
-// BookCarousel item - reused for both "Hot books" and "New books" so
-// there's never a blank gap under either heading while they load.
+// BookCarousel item - so there's never a blank gap under a heading while
+// its row is still loading.
 function CarouselSkeleton() {
   return (
     <div className="book-carousel">
@@ -263,6 +249,29 @@ function CarouselSkeleton() {
         ))}
       </div>
     </div>
+  )
+}
+
+// Empty shell for a future hand-made promotional banner (illustration +
+// headline + CTA, like Wattpad's rotating "Before you knew better" style
+// banner) - deliberately not wired to any book data. The arrow buttons are
+// inert placeholders for now; once there's real slide content to rotate
+// through, wire onClick handlers here the same way BookCarousel's arrows
+// scroll its track.
+function PromoBannerPlaceholder() {
+  return (
+    <section className="promo-banner-placeholder" aria-label="Promotional banner - add your own artwork here">
+      <button aria-label="Previous banner" className="promo-banner-arrow promo-banner-arrow-prev" disabled type="button">
+        <i className="bi bi-chevron-left" />
+      </button>
+      <div className="promo-banner-placeholder-content">
+        <i className="bi bi-image" />
+        <p>Add your promotional banner image(s) here</p>
+      </div>
+      <button aria-label="Next banner" className="promo-banner-arrow promo-banner-arrow-next" disabled type="button">
+        <i className="bi bi-chevron-right" />
+      </button>
+    </section>
   )
 }
 

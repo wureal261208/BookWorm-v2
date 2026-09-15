@@ -127,7 +127,13 @@ const createBook = asyncHandler(async (req, res) => {
 //        e.g. "History - Ancient" or "American Revolutionary War", so a
 //        curated genre picker like "History" needs to match any category
 //        containing that word, not just an exact string), `sort` is
-//        "recent" (default) or "views" (most-read first) - the
+//        "recent" (default), "views" (most-read first), or "random" (a
+//        fresh, genuinely random sample each call - see the $sample branch
+//        below; there's no real per-user personalization/recommendation
+//        engine behind Home's "Top picks for you" style rows, so random
+//        sampling from the real published catalog is the honest way to
+//        give those rows different books on every visit rather than
+//        quietly faking a "recommendation" that isn't one) - the
 //        search/pagination Discover and Home actually need now that the
 //        catalog can hold ~75k books, far too many to ever hand the
 //        browser in one go.
@@ -141,6 +147,17 @@ const listBooks = asyncHandler(async (req, res) => {
   }
   if (req.query.q && req.query.q.trim()) {
     filter.$text = { $search: req.query.q.trim() };
+  }
+
+  // Random sampling can't use .sort()/.skip() (there's no stable "page 2"
+  // of a fresh random draw) - it's a separate aggregation pipeline branch.
+  if (req.query.sort === 'random') {
+    const [books, total] = await Promise.all([
+      Book.aggregate([{ $match: filter }, { $sample: { size: limit } }, { $project: { chapters: 0 } }]),
+      Book.countDocuments(filter),
+    ]);
+    res.setHeader('Cache-Control', 'no-store');
+    return success(res, 200, 'Books retrieved successfully.', { books, page: 1, limit, total });
   }
 
   const sort = req.query.sort === 'views'

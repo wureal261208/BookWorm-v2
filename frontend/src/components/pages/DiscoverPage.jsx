@@ -221,7 +221,7 @@ function DiscoverPage({
         <div className="topic-row">
           {topics.map((item) => (
             <button className={topic === item ? 'active' : ''} onClick={() => setTopic(item)} key={item} type="button">
-              {item}
+              {item === 'all' ? 'All' : item}
             </button>
           ))}
         </div>

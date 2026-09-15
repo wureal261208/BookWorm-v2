@@ -62,3 +62,25 @@ describe('listBooks category filter', () => {
     expect(Book.find).toHaveBeenCalledWith({ status: 'published' });
   });
 });
+
+describe('listBooks sort=random', () => {
+  test('uses a $sample aggregation instead of .sort()/.skip(), honestly random each call', async () => {
+    Book.aggregate = jest.fn().mockResolvedValue([{ title: 'A' }, { title: 'B' }]);
+    Book.countDocuments = jest.fn().mockResolvedValue(500);
+    Book.find = jest.fn();
+
+    const res = mockRes();
+    listBooks({ query: { sort: 'random', limit: '16', category: 'History' } }, res);
+    await flush();
+
+    expect(Book.find).not.toHaveBeenCalled();
+    expect(Book.aggregate).toHaveBeenCalledWith([
+      { $match: { status: 'published', category: { $regex: 'History', $options: 'i' } } },
+      { $sample: { size: 16 } },
+      { $project: { chapters: 0 } },
+    ]);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data.books).toEqual([{ title: 'A' }, { title: 'B' }]);
+    expect(payload.data.total).toBe(500);
+  });
+});
