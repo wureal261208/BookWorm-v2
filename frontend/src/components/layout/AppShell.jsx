@@ -54,6 +54,7 @@ function AppShell({
   const unreadNotifications = unreadNotificationItems.length
 
   const [showNotifications, setShowNotifications] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const notificationRef = useRef(null)
   const visibleNavItems = navItems.filter((item) => {
@@ -62,6 +63,14 @@ function AppShell({
     if (item.private && isGuest) return false
     return true
   })
+
+  // Safety net alongside the explicit close-on-click handlers below (nav
+  // item click, search submit, backdrop click) - covers navigation that
+  // doesn't go through any of those, like the browser's own back/forward
+  // buttons, so the mobile menu never gets left open over a new page.
+  useEffect(() => {
+    setIsMobileNavOpen(false)
+  }, [activePage])
 
   useEffect(() => {
     let isCurrent = true
@@ -116,7 +125,17 @@ function AppShell({
           <span>BookWorm</span>
         </button>
 
-        {!isAdminPage && (
+        <button
+          aria-expanded={isMobileNavOpen}
+          aria-label={isMobileNavOpen ? 'Close menu' : 'Open menu'}
+          className="mobile-nav-toggle"
+          onClick={() => setIsMobileNavOpen((value) => !value)}
+          type="button"
+        >
+          <i className={`bi ${isMobileNavOpen ? 'bi-x-lg' : 'bi-list'}`} />
+        </button>
+
+        <div className={`main-nav-group${isMobileNavOpen ? ' open' : ''}`}>
           <nav className="main-nav" aria-label="Main navigation">
             {visibleNavItems.map((item) => {
               if (item.admin && !canShowAdminNav) return null
@@ -126,7 +145,10 @@ function AppShell({
                 <button
                   className={activePage === item.id ? 'active' : ''}
                   key={item.id}
-                  onClick={() => navigateTo(item.id)}
+                  onClick={() => {
+                    setIsMobileNavOpen(false)
+                    navigateTo(item.id)
+                  }}
                   type="button"
                 >
                   <i className={`bi ${item.icon}`} />
@@ -135,9 +157,11 @@ function AppShell({
               )
             })}
           </nav>
-        )}
 
-        {!isAdminPage && <HeaderSearch onSearch={onHeaderSearch} />}
+          <HeaderSearch onSearch={(term) => { setIsMobileNavOpen(false); onHeaderSearch?.(term) }} />
+        </div>
+
+        {isMobileNavOpen && <button aria-label="Close menu" className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} type="button" />}
 
         <div className="header-account">
           {!isGuest && (

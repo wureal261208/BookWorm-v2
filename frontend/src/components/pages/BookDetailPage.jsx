@@ -50,7 +50,6 @@ function BookDetailPage({
   const effectiveDetailTab = !hasChapters && activeDetailTab === 'chapters' ? 'comments' : activeDetailTab
   const language = book.languages?.join(', ').toUpperCase() || 'EN'
   const readingTime = Math.max(1, Math.round(totalPages * 2.2))
-  const rating = Math.min(5, Math.max(3.8, (book.download_count || 1000) / 25000 + 3.6)).toFixed(1)
   const checkpointKey = getCheckpointKey(account, book)
   const checkpoint = account?.role === 'guest' ? null : checkpoints[checkpointKey]
   const latestComments = getLatestComments(comments)
@@ -111,7 +110,6 @@ function BookDetailPage({
         onRead={onRead}
         onSaveBook={handleSaveBook}
         onToggleSavePrompt={setShowSavePrompt}
-        rating={rating}
         readingTime={readingTime}
         showSavePrompt={showSavePrompt}
         totalChapters={totalChapters}

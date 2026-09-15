@@ -10,7 +10,6 @@ function DetailHero({
   onRead,
   onSaveBook,
   onToggleSavePrompt,
-  rating,
   readingTime,
   showSavePrompt,
   totalChapters,
@@ -24,12 +23,9 @@ function DetailHero({
         <p className="mono-eyebrow">{getCategory(book)}</p>
         <h1>{book.title}</h1>
         <p className="detail-author">{getAuthor(book)}</p>
-        <div className="rating-row" aria-label={`${rating} out of 5 stars`}>
-          <span>{rating}</span>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <i className={`bi ${star <= Math.round(rating) ? 'bi-star-fill' : 'bi-star'}`} key={star} />
-          ))}
-          <small>{totalReads.toLocaleString()} reads</small>
+        <div className="rating-row">
+          <i className="bi bi-eye" />
+          <span>{totalReads.toLocaleString()} reads</span>
         </div>
         <div className="detail-meta-grid">
           <article>

@@ -1705,6 +1705,95 @@ progress {
   box-shadow: none;
 }
 
+/* Wraps .main-nav + the header search box together so both can be
+   collapsed into one mobile dropdown panel below 900px - see the
+   .mobile-nav-toggle / .main-nav-group.open rules further down. On
+   desktop this is just a plain flex item, not a visible container. */
+.main-nav-group {
+  display: contents;
+}
+
+.mobile-nav-toggle {
+  display: none;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.mobile-nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-nav-toggle {
+    display: grid;
+    place-items: center;
+  }
+
+  /* .header-account comes after this in the DOM and would otherwise still
+     claim its usual spot in the flex row once the toggle button appears -
+     margin-left: auto on the toggle already pushes it right, so drop
+     .header-account's own margin-left: auto to avoid the two fighting
+     over the same remaining space. */
+  .header-account {
+    margin-left: 0;
+  }
+
+  .main-nav-group {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    flex-direction: column;
+    gap: 14px;
+    max-height: calc(100svh - 100%);
+    overflow-y: auto;
+    padding: 16px clamp(16px, 4vw, 42px) 24px;
+    border-bottom: 1px solid var(--app-line);
+    background: var(--app-bg);
+    box-shadow: 0 18px 30px rgba(0, 0, 0, 0.16);
+  }
+
+  .main-nav-group.open {
+    display: flex;
+  }
+
+  .main-nav {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .main-nav button {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .header-search {
+    max-width: none;
+  }
+
+  .header-search-dropdown {
+    position: static;
+    margin-top: 8px;
+    box-shadow: none;
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    border: 0;
+    background: rgba(0, 0, 0, 0.32);
+  }
+}
+
 .header-search {
   position: relative;
   flex: 1 1 200px;
@@ -2765,6 +2854,10 @@ progress {
   align-items: center;
   color: #111111;
   font-weight: 900;
+}
+
+.rating-row i {
+  color: var(--app-accent, #16a09a);
 }
 
 .detail-meta-grid {
@@ -6799,7 +6892,6 @@ progress {
 }
 
 @media (max-width: 980px) {
-  .site-header,
   .hero-carousel,
   .detail-layout,
   .reader-main,
@@ -7033,21 +7125,6 @@ progress {
 }
 
 @media (max-width: 560px) {
-  .site-header {
-    grid-template-columns: 1fr;
-  }
-
-  .brand-button,
-  .main-nav,
-  .header-account {
-    justify-self: center;
-  }
-
-  .header-account {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
   .carousel-track,
   .book-grid,
   .category-grid {
