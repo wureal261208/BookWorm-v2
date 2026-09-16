@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { publicApiFetch } from '../../utils/apiClient'
 import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
+import PromoBanner from '../books/PromoBanner'
 
 // Small helper for the several "row of books from a specific real query"
 // sections below (Hot books, Top picks, Recommended, ...) - same
@@ -62,14 +63,9 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
 
   return (
     <div className="home-page">
-      {/* Placeholder for a real promotional/editorial banner (illustrated
-          artwork + a headline + a CTA button, like Wattpad's "Before you
-          knew better" banner on wattpad.com/home) - not book-cover data,
-          so there's nothing to fetch here. Swap PromoBannerPlaceholder for
-          real slide content once you have banner images/copy ready; the
-          arrow buttons are already wired up as a shell to build the real
-          carousel into. */}
-      <PromoBannerPlaceholder />
+      {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
+          opens Browse pre-filtered to that genre. */}
+      <PromoBanner onSelectCategory={(category) => setPage('discover', category)} />
 
       {continueReading.length > 0 && (
         <section className="section-block">
@@ -258,21 +254,4 @@ function CarouselSkeleton() {
 // inert placeholders for now; once there's real slide content to rotate
 // through, wire onClick handlers here the same way BookCarousel's arrows
 // scroll its track.
-function PromoBannerPlaceholder() {
-  return (
-    <section className="promo-banner-placeholder" aria-label="Promotional banner - add your own artwork here">
-      <button aria-label="Previous banner" className="promo-banner-arrow promo-banner-arrow-prev" disabled type="button">
-        <i className="bi bi-chevron-left" />
-      </button>
-      <div className="promo-banner-placeholder-content">
-        <i className="bi bi-image" />
-        <p>Add your promotional banner image(s) here</p>
-      </div>
-      <button aria-label="Next banner" className="promo-banner-arrow promo-banner-arrow-next" disabled type="button">
-        <i className="bi bi-chevron-right" />
-      </button>
-    </section>
-  )
-}
-
 export default HomePage

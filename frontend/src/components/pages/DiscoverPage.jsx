@@ -2,40 +2,12 @@ import { useEffect, useState } from 'react'
 import BookGrid from '../books/BookGrid'
 import { getCover } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
+import { FAMILIAR_GENRES } from '../../data/genres'
 
 const BOOKS_PER_PAGE = 20
 const sortOptions = [
   { id: 'recent', label: 'Newest', icon: 'bi-sparkle' },
   { id: 'views', label: 'Most read', icon: 'bi-fire' },
-]
-
-// The topic pills below come straight from whatever category text exists
-// in Mongo (see /api/books/categories) - real, but often Gutenberg's own
-// free-form bookshelf wording ("History - Ancient", "American
-// Revolutionary War"), not the familiar genre names a reader would think
-// to look for. This dropdown is a curated shortlist of those familiar
-// names instead. Selecting one reuses the exact same `topic` state as
-// clicking a pill - the backend now matches `category` case-insensitively
-// and as a substring (see listBooks in bookController.js), so picking
-// "Science Fiction" here correctly matches a raw category like "Science
-// Fiction - General" or "Fiction - Science Fiction" without needing an
-// exact string match.
-const FAMILIAR_GENRES = [
-  'Fiction',
-  'Romance',
-  'Mystery',
-  'Science Fiction',
-  'Fantasy',
-  'History',
-  'Biography',
-  'Poetry',
-  'Philosophy',
-  "Children's",
-  'Drama',
-  'Adventure',
-  'Horror',
-  'Religion',
-  'Science',
 ]
 
 // Discover has to browse a ~72,000-book catalog, so it can never just page

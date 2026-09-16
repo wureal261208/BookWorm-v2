@@ -126,24 +126,31 @@ const createBook = asyncHandler(async (req, res) => {
 //        escapeRegExp below - Gutenberg's own category text is free-form,
 //        e.g. "History - Ancient" or "American Revolutionary War", so a
 //        curated genre picker like "History" needs to match any category
-//        containing that word, not just an exact string), `sort` is
+//        containing that word, not just an exact string); pass several
+//        comma-separated (e.g. "Romance,Fantasy") to match ANY of them -
+//        used by the Random page's up-to-5-genre picker. `sort` is
 //        "recent" (default), "views" (most-read first), or "random" (a
 //        fresh, genuinely random sample each call - see the $sample branch
 //        below; there's no real per-user personalization/recommendation
-//        engine behind Home's "Top picks for you" style rows, so random
-//        sampling from the real published catalog is the honest way to
-//        give those rows different books on every visit rather than
-//        quietly faking a "recommendation" that isn't one) - the
-//        search/pagination Discover and Home actually need now that the
-//        catalog can hold ~75k books, far too many to ever hand the
-//        browser in one go.
+//        engine behind Home's "Top picks for you" style rows or the Random
+//        page, so random sampling from the real published catalog is the
+//        honest way to give those a different, real set of books on every
+//        call rather than quietly faking a "recommendation" that isn't
+//        one) - the search/pagination Discover, Home, and Random actually
+//        need now that the catalog can hold ~75k books, far too many to
+//        ever hand the browser in one go.
 const listBooks = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 32));
 
   const filter = { status: 'published' };
   if (req.query.category && req.query.category !== 'all') {
-    filter.category = { $regex: escapeRegExp(req.query.category.trim()), $options: 'i' };
+    const categories = req.query.category.split(',').map((entry) => entry.trim()).filter(Boolean).slice(0, 5);
+    if (categories.length === 1) {
+      filter.category = { $regex: escapeRegExp(categories[0]), $options: 'i' };
+    } else if (categories.length > 1) {
+      filter.$or = categories.map((entry) => ({ category: { $regex: escapeRegExp(entry), $options: 'i' } }));
+    }
   }
   if (req.query.q && req.query.q.trim()) {
     filter.$text = { $search: req.query.q.trim() };

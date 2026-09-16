@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getInitials, getCover } from '../../utils/bookUtils'
+import { getInitials, getCover, getAuthor } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
@@ -12,6 +12,7 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 // pagination) - it's a relabel for the nav, not a second page to maintain.
 const navItems = [
   { id: 'discover', label: 'Browse', icon: 'bi-compass' },
+  { id: 'random', label: 'Random', icon: 'bi-shuffle' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
   { id: 'write', label: 'Write', icon: 'bi-pencil-square', private: true },
   { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
@@ -420,18 +421,26 @@ export function HeaderSearch({ onSearch }) {
 
       {isOpen && term.trim().length >= 2 && (
         <div className="header-search-dropdown">
-          {loading ? (
-            <p><span className="admin-spin-small" /> Searching...</p>
-          ) : results.length ? (
-            results.map((book) => (
-              <button key={book.id || book._id} onClick={() => submit(book.title)} type="button">
-                <img alt="" src={getCover(book)} />
-                <span>{book.title}</span>
-              </button>
-            ))
-          ) : (
-            <p className="header-search-empty">No results found.</p>
-          )}
+          <div className="header-search-results">
+            {loading ? (
+              <p><span className="admin-spin-small" /> Searching...</p>
+            ) : results.length ? (
+              results.map((book) => (
+                <button key={book.id || book._id} onClick={() => submit(book.title)} type="button">
+                  <img alt="" src={getCover(book)} />
+                  <span className="header-search-result-text">
+                    <strong>{book.title}</strong>
+                    <small>{getAuthor(book)}</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="header-search-empty">No results found.</p>
+            )}
+          </div>
+          <button className="header-search-submit" onClick={() => submit()} type="button">
+            Enter to search
+          </button>
         </div>
       )}
     </div>

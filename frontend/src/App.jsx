@@ -40,6 +40,7 @@ const AdminPage = lazy(() => import('./components/pages/AdminPage'))
 const BookDetailPage = lazy(() => import('./components/pages/BookDetailPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
 const DiscoverPage = lazy(() => import('./components/pages/DiscoverPage'))
+const RandomPage = lazy(() => import('./components/pages/RandomPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
 const ReaderPage = lazy(() => import('./components/pages/ReaderPage'))
@@ -73,6 +74,7 @@ const PAGE_PATHS = {
   home: '/',
   discover: '/discover',
   community: '/community',
+  random: '/random',
   write: '/write',
   detail: '/book',
   reader: '/reader',
@@ -177,7 +179,7 @@ function App() {
   const scrollToTopForPage = useCallback((page) => {
     if (typeof window === 'undefined') return
 
-    if (['home', 'discover', 'community', 'write', 'profile'].includes(page)) {
+    if (['home', 'discover', 'community', 'write', 'random', 'profile'].includes(page)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
     }
   }, [])
@@ -1145,6 +1147,16 @@ function App() {
     ),
     community: <CommunityPage />,
     write: <WritePage />,
+    random: (
+      <RandomPage
+        favorites={favorites}
+        onDetail={openDetail}
+        onFavorite={toggleFavorite}
+        onRead={openBook}
+        viewCounts={viewCounts}
+        viewerCounts={getViewerCounts(bookReaders)}
+      />
+    ),
     detail: (
       <BookDetailPage
         book={selectedBook}

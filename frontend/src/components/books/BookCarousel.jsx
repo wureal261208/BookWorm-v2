@@ -16,16 +16,23 @@ function BookCarousel({ books, favorites, onDetail, onFavorite, onRead, viewCoun
 
   if (!books.length) return null
 
+  // A single book has nothing to scroll to - showing arrows that do
+  // nothing (or just nudge the lone card a few px and back) reads as
+  // broken, not as a real carousel.
+  const showArrows = books.length > 1
+
   return (
     <div className="book-carousel">
-      <button
-        aria-label="Scroll to previous books"
-        className="book-carousel-arrow book-carousel-arrow-prev"
-        onClick={() => scrollByPage(-1)}
-        type="button"
-      >
-        <i className="bi bi-chevron-left" />
-      </button>
+      {showArrows && (
+        <button
+          aria-label="Scroll to previous books"
+          className="book-carousel-arrow book-carousel-arrow-prev"
+          onClick={() => scrollByPage(-1)}
+          type="button"
+        >
+          <i className="bi bi-chevron-left" />
+        </button>
+      )}
 
       <div className="book-carousel-track" ref={trackRef}>
         {books.map((book) => (
@@ -42,14 +49,16 @@ function BookCarousel({ books, favorites, onDetail, onFavorite, onRead, viewCoun
         ))}
       </div>
 
-      <button
-        aria-label="Scroll to more books"
-        className="book-carousel-arrow book-carousel-arrow-next"
-        onClick={() => scrollByPage(1)}
-        type="button"
-      >
-        <i className="bi bi-chevron-right" />
-      </button>
+      {showArrows && (
+        <button
+          aria-label="Scroll to more books"
+          className="book-carousel-arrow book-carousel-arrow-next"
+          onClick={() => scrollByPage(1)}
+          type="button"
+        >
+          <i className="bi bi-chevron-right" />
+        </button>
+      )}
     </div>
   )
 }

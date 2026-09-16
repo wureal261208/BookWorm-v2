@@ -61,6 +61,29 @@ describe('listBooks category filter', () => {
 
     expect(Book.find).toHaveBeenCalledWith({ status: 'published' });
   });
+
+  test('several comma-separated categories match ANY of them (used by the Random page genre picker)', async () => {
+    setupChain();
+    listBooks({ query: { category: 'Romance, Fantasy' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { category: { $regex: 'Romance', $options: 'i' } },
+        { category: { $regex: 'Fantasy', $options: 'i' } },
+      ],
+    });
+  });
+
+  test('caps a comma-separated category list at 5 entries', async () => {
+    setupChain();
+    listBooks({ query: { category: 'A,B,C,D,E,F,G' } }, mockRes());
+    await flush();
+
+    const filter = Book.find.mock.calls[0][0];
+    expect(filter.$or).toHaveLength(5);
+  });
 });
 
 describe('listBooks sort=random', () => {
