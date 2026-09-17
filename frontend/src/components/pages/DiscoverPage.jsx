@@ -284,7 +284,7 @@ function DiscoverPage({
           )}
         </>
       ) : (
-        <div className="empty-state">No books match your search.</div>
+        <div className="empty-state">Nothing here yet - coming soon as more books get added.</div>
       )}
     </div>
   )

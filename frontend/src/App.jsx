@@ -1122,6 +1122,7 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
+        onSearchGenre={handleHeaderSearch}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}

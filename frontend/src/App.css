@@ -948,7 +948,7 @@ textarea {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -2116,12 +2116,18 @@ progress {
 }
 
 /* Real promotional banner carousel (see PromoBanner.jsx) - Wun's own
-   genre artwork, not book-cover data. Sized close to the old hero so
-   Home's overall layout doesn't jump. */
+   genre artwork, not book-cover data. Full-bleed (edge to edge of the
+   viewport, like waka.vn's top banner) rather than boxed inside
+   .page-shell's usual centered/padded width - the standard "break out of
+   a centered container" trick: width:100vw plus a matching negative
+   margin on both sides, which only works because .page-shell itself is
+   horizontally centered (margin: 0 auto). */
 .promo-banner {
   position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   margin-bottom: 34px;
-  border-radius: 8px;
   overflow: hidden;
   background: #f6f6f3;
   aspect-ratio: 1168 / 784;
@@ -2156,6 +2162,13 @@ progress {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.promo-banner-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 0;
 }
 
 .promo-banner-arrow {
@@ -2241,10 +2254,6 @@ progress {
   flex: 1 1 240px;
   min-width: 0;
   max-width: 100%;
-}
-
-.book-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .book-card {

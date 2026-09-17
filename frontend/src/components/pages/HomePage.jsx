@@ -35,7 +35,7 @@ function useBookRow(query) {
   return [books, loading]
 }
 
-function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
+function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, onSearchGenre, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
   // "Hot books" means most-read, not just whatever showed up first in the
   // default recent-sorted batch - a dedicated sort=views fetch straight
   // from the server (same as Discover's "Most read" sort) is what actually
@@ -64,8 +64,9 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
   return (
     <div className="home-page">
       {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
-          opens Browse pre-filtered to that genre. */}
-      <PromoBanner onSelectCategory={(category) => setPage('discover', category)} />
+          searches Browse by that genre (matches subjects too, not just
+          category - same as typing it into the header search box). */}
+      <PromoBanner onSelectGenre={onSearchGenre} />
 
       {continueReading.length > 0 && (
         <section className="section-block">
