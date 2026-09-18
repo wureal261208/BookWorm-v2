@@ -122,13 +122,14 @@ const createBook = asyncHandler(async (req, res) => {
 // @desc  Public catalog listing - published books only, paginated. Staff use
 //        GET /api/books/mine (below) for the full catalog including
 //        drafts/hidden books. `q` full-text searches title/author/subjects,
-//        `category` does a case-insensitive partial match (see
-//        escapeRegExp below - Gutenberg's own category text is free-form,
-//        e.g. "History - Ancient" or "American Revolutionary War", so a
-//        curated genre picker like "History" needs to match any category
-//        containing that word, not just an exact string); pass several
-//        comma-separated (e.g. "Romance,Fantasy") to match ANY of them -
-//        used by the Random page's up-to-5-genre picker. `sort` is
+//        `category` does a case-insensitive partial match against both the
+//        book's `category` field AND its `subjects` array (see
+//        escapeRegExp below - Gutenberg's own category/subject text is
+//        free-form, e.g. "History - Ancient" or "American Revolutionary
+//        War", so a genre pill like "History" needs to match anything
+//        containing that word, not just an exact category string); pass
+//        several comma-separated (e.g. "Romance,Fantasy") to match ANY of
+//        them - used by the Random page's up-to-5-genre picker. `sort` is
 //        "recent" (default), "views" (most-read first), or "random" (a
 //        fresh, genuinely random sample each call - see the $sample branch
 //        below; there's no real per-user personalization/recommendation
@@ -146,10 +147,16 @@ const listBooks = asyncHandler(async (req, res) => {
   const filter = { status: 'published' };
   if (req.query.category && req.query.category !== 'all') {
     const categories = req.query.category.split(',').map((entry) => entry.trim()).filter(Boolean).slice(0, 5);
-    if (categories.length === 1) {
-      filter.category = { $regex: escapeRegExp(categories[0]), $options: 'i' };
-    } else if (categories.length > 1) {
-      filter.$or = categories.map((entry) => ({ category: { $regex: escapeRegExp(entry), $options: 'i' } }));
+    if (categories.length) {
+      // Match on the book's one `category` field OR anywhere in its
+      // `subjects` array (a regex against an array field matches if ANY
+      // element matches) - a genre pill/banner for "Romance" should catch
+      // a book whose category is something unrelated but whose subjects
+      // include "Romance", not just an exact category match.
+      filter.$or = categories.flatMap((entry) => {
+        const pattern = { $regex: escapeRegExp(entry), $options: 'i' };
+        return [{ category: pattern }, { subjects: pattern }];
+      });
     }
   }
   if (req.query.q && req.query.q.trim()) {

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import BookGrid from '../books/BookGrid'
-import { getCover } from '../../utils/bookUtils'
+import { formatTopicLabel, getCover } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
-import { FAMILIAR_GENRES } from '../../data/genres'
 
 const BOOKS_PER_PAGE = 20
 const sortOptions = [
@@ -193,26 +192,10 @@ function DiscoverPage({
         <div className="topic-row">
           {topics.map((item) => (
             <button className={topic === item ? 'active' : ''} onClick={() => setTopic(item)} key={item} type="button">
-              {item === 'all' ? 'All' : item}
+              {formatTopicLabel(item)}
             </button>
           ))}
         </div>
-
-        <label className="discover-genre-picker">
-          <i className="bi bi-bookmark-star" />
-          <span>Browse by genre</span>
-          <select
-            onChange={(event) => {
-              if (event.target.value) setTopic(event.target.value)
-            }}
-            value={FAMILIAR_GENRES.includes(topic) ? topic : ''}
-          >
-            <option value="">Pick a familiar genre...</option>
-            {FAMILIAR_GENRES.map((genre) => (
-              <option key={genre} value={genre}>{genre}</option>
-            ))}
-          </select>
-        </label>
 
         <div className="topic-row discover-sort-row">
           {sortOptions.map((option) => (

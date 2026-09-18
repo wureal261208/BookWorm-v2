@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { publicApiFetch } from '../../utils/apiClient'
+import { formatTopicLabel } from '../../utils/bookUtils'
 import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 import PromoBanner from '../books/PromoBanner'
@@ -35,7 +36,7 @@ function useBookRow(query) {
   return [books, loading]
 }
 
-function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, onSearchGenre, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
+function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, onSelectGenre, progress = {}, setPage, topics, viewCounts, viewerCounts }) {
   // "Hot books" means most-read, not just whatever showed up first in the
   // default recent-sorted batch - a dedicated sort=views fetch straight
   // from the server (same as Discover's "Most read" sort) is what actually
@@ -64,9 +65,9 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
   return (
     <div className="home-page">
       {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
-          searches Browse by that genre (matches subjects too, not just
-          category - same as typing it into the header search box). */}
-      <PromoBanner onSelectGenre={onSearchGenre} />
+          filters Browse by that genre's topic pill (also matches by
+          subject, not just category - see the $or in listBooks). */}
+      <PromoBanner onSelectGenre={onSelectGenre} />
 
       {continueReading.length > 0 && (
         <section className="section-block">
@@ -189,7 +190,7 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
           {topics.slice(1, 9).map((topic) => (
             <button key={topic} onClick={() => setPage('discover', topic)} type="button">
               <i className="bi bi-tag" />
-              <span>{topic}</span>
+              <span>{formatTopicLabel(topic)}</span>
             </button>
           ))}
         </div>

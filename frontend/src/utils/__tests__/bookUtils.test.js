@@ -1,7 +1,21 @@
 import { describe, expect, test } from 'vitest'
-import { getAuthor, getCategory, getInitials } from '../bookUtils'
+import { formatTopicLabel, getAuthor, getCategory, getInitials } from '../bookUtils'
 
 describe('utils/bookUtils', () => {
+  describe('formatTopicLabel', () => {
+    test('shows "All" for the "all" filter value', () => {
+      expect(formatTopicLabel('all')).toBe('All')
+    })
+
+    test('strips a leading "Browsing: " prefix from raw Gutenberg category text', () => {
+      expect(formatTopicLabel('Browsing: History - Ancient')).toBe('History - Ancient')
+    })
+
+    test('leaves an already-clean category untouched', () => {
+      expect(formatTopicLabel('Science Fiction')).toBe('Science Fiction')
+    })
+  })
+
   describe('getAuthor', () => {
     test('joins multiple Gutenberg-style author objects by name', () => {
       const book = { authors: [{ name: 'Twain, Mark' }, { name: 'Doe, Jane' }] }

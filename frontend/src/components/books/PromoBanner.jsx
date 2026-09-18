@@ -8,23 +8,22 @@ import mysteryThriller from '../../assets/promo-banners/mystery-thriller.jpg'
 import romance from '../../assets/promo-banners/romance.jpg'
 import sciFi from '../../assets/promo-banners/sci-fi.jpg'
 
-// One slide per genre banner. `searchTerm` is what actually gets searched
-// on click - Wun asked for this to match by the book's *subjects*, not
-// just its one category field, so clicking a slide reuses the exact same
-// full-text search the header search box uses (title/author/subjects are
-// all text-indexed together - see the schema in models/Book.js). That's
-// also why "Sci-fi" here says "Science Fiction": that's the wording that
-// actually shows up in real subjects/category text (Gutenberg's own
-// wording), not the banner artwork's own display text.
+// One slide per genre banner. `topic` is what actually gets filtered on
+// click - the same category-or-subject partial match Browse's own genre
+// pills/dropdown use (see the $or in listBooks in bookController.js), so
+// clicking a slide behaves exactly like clicking that genre's pill would.
+// That's also why "Sci-fi" here says "Science Fiction": that's the
+// wording that actually shows up in real category/subjects text
+// (Gutenberg's own wording), not the banner artwork's own display text.
 const SLIDES = [
-  { id: 'romance', image: romance, searchTerm: 'Romance' },
-  { id: 'fantasy', image: fantasy, searchTerm: 'Fantasy' },
-  { id: 'sci-fi', image: sciFi, searchTerm: 'Science Fiction' },
-  { id: 'mystery-thriller', image: mysteryThriller, searchTerm: 'Mystery' },
-  { id: 'horror', image: horror, searchTerm: 'Horror' },
-  { id: 'history', image: history, searchTerm: 'History' },
-  { id: 'literary', image: literary, searchTerm: 'Literary' },
-  { id: 'biography-memoir', image: biographyMemoir, searchTerm: 'Biography' },
+  { id: 'romance', image: romance, topic: 'Romance' },
+  { id: 'fantasy', image: fantasy, topic: 'Fantasy' },
+  { id: 'sci-fi', image: sciFi, topic: 'Science Fiction' },
+  { id: 'mystery-thriller', image: mysteryThriller, topic: 'Mystery' },
+  { id: 'horror', image: horror, topic: 'Horror' },
+  { id: 'history', image: history, topic: 'History' },
+  { id: 'literary', image: literary, topic: 'Literary' },
+  { id: 'biography-memoir', image: biographyMemoir, topic: 'Biography' },
 ]
 
 const AUTO_ROTATE_MS = 6000
@@ -32,8 +31,8 @@ const AUTO_ROTATE_MS = 6000
 // Promotional banner carousel (the "hero banner carousel" style element
 // from wattpad.com/home) - unlike the rest of Home, these slides are
 // static artwork, not book data from Mongo. Clicking a slide still does
-// something real, though: it opens Browse with that genre searched (by
-// subject, same as above), same as typing it into the search box.
+// something real, though: it filters Browse by that genre, same as
+// clicking one of Browse's own topic pills.
 function PromoBanner({ onSelectGenre }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -71,7 +70,7 @@ function PromoBanner({ onSelectGenre }) {
         <i className="bi bi-chevron-left" />
       </button>
 
-      <button className="promo-banner-slide" onClick={() => onSelectGenre(activeSlide.searchTerm)} type="button">
+      <button className="promo-banner-slide" onClick={() => onSelectGenre(activeSlide.topic)} type="button">
         <img
           alt={`${activeSlide.id} genre banner`}
           key={activeSlide.id}

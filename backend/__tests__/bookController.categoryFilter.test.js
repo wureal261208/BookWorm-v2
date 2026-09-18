@@ -32,14 +32,17 @@ describe('listBooks category filter', () => {
     return chain;
   }
 
-  test('does a case-insensitive partial match, not an exact match', async () => {
+  test('matches either the category field or the subjects array, case-insensitively', async () => {
     setupChain();
     listBooks({ query: { category: 'history' } }, mockRes());
     await flush();
 
     expect(Book.find).toHaveBeenCalledWith({
       status: 'published',
-      category: { $regex: 'history', $options: 'i' },
+      $or: [
+        { category: { $regex: 'history', $options: 'i' } },
+        { subjects: { $regex: 'history', $options: 'i' } },
+      ],
     });
   });
 
@@ -50,7 +53,10 @@ describe('listBooks category filter', () => {
 
     expect(Book.find).toHaveBeenCalledWith({
       status: 'published',
-      category: { $regex: 'Sci-Fi \\(2000\\+\\)', $options: 'i' },
+      $or: [
+        { category: { $regex: 'Sci-Fi \\(2000\\+\\)', $options: 'i' } },
+        { subjects: { $regex: 'Sci-Fi \\(2000\\+\\)', $options: 'i' } },
+      ],
     });
   });
 
@@ -62,7 +68,7 @@ describe('listBooks category filter', () => {
     expect(Book.find).toHaveBeenCalledWith({ status: 'published' });
   });
 
-  test('several comma-separated categories match ANY of them (used by the Random page genre picker)', async () => {
+  test('several comma-separated categories match ANY of them, by category or subject (used by the Random page genre picker)', async () => {
     setupChain();
     listBooks({ query: { category: 'Romance, Fantasy' } }, mockRes());
     await flush();
@@ -71,18 +77,20 @@ describe('listBooks category filter', () => {
       status: 'published',
       $or: [
         { category: { $regex: 'Romance', $options: 'i' } },
+        { subjects: { $regex: 'Romance', $options: 'i' } },
         { category: { $regex: 'Fantasy', $options: 'i' } },
+        { subjects: { $regex: 'Fantasy', $options: 'i' } },
       ],
     });
   });
 
-  test('caps a comma-separated category list at 5 entries', async () => {
+  test('caps a comma-separated category list at 5 entries (10 $or clauses: category + subjects each)', async () => {
     setupChain();
     listBooks({ query: { category: 'A,B,C,D,E,F,G' } }, mockRes());
     await flush();
 
     const filter = Book.find.mock.calls[0][0];
-    expect(filter.$or).toHaveLength(5);
+    expect(filter.$or).toHaveLength(10);
   });
 });
 
@@ -98,7 +106,15 @@ describe('listBooks sort=random', () => {
 
     expect(Book.find).not.toHaveBeenCalled();
     expect(Book.aggregate).toHaveBeenCalledWith([
-      { $match: { status: 'published', category: { $regex: 'History', $options: 'i' } } },
+      {
+        $match: {
+          status: 'published',
+          $or: [
+            { category: { $regex: 'History', $options: 'i' } },
+            { subjects: { $regex: 'History', $options: 'i' } },
+          ],
+        },
+      },
       { $sample: { size: 16 } },
       { $project: { chapters: 0 } },
     ]);

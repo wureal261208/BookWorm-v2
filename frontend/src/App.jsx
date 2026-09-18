@@ -1084,7 +1084,16 @@ function App() {
   }
 
   function jumpPage(page, nextTopic) {
-    if (nextTopic) setTopic(nextTopic)
+    if (nextTopic) {
+      // Jumping to a topic-filtered view (a "Featured categories" tile, a
+      // promo banner genre, ...) - clear any leftover free-text search so
+      // the search box and the active topic pill can't disagree about
+      // what's actually being shown (that mismatch is exactly what caused
+      // the search box to say "Romance" while a stale "Biographies" pill
+      // stayed highlighted).
+      setQuery('')
+      setTopic(nextTopic)
+    }
     navigateTo(page)
   }
 
@@ -1122,7 +1131,7 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
-        onSearchGenre={handleHeaderSearch}
+        onSelectGenre={(genre) => jumpPage('discover', genre)}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}

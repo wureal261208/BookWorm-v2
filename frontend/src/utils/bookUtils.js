@@ -44,3 +44,17 @@ export function getInitials(name = '') {
     .join('')
     .toUpperCase()
 }
+
+// Some raw category text still carries Gutenberg's own site-chrome prefix
+// verbatim (e.g. "Browsing: History - Ancient" is a real shelf name on
+// gutenberg.org, not corrupted data - see the comment on guessedCategory
+// in AdminPage.jsx). Newly-imported books already have this stripped at
+// import time; this is a display-only cleanup for topic pills/tiles built
+// from categories that were imported before that fix. Running
+// backend/scripts/cleanCategoryPrefixes.js --apply fixes it at the data
+// level instead, permanently, for every reader of it - do that when
+// convenient rather than relying on this forever.
+export function formatTopicLabel(topic) {
+  if (topic === 'all') return 'All'
+  return topic.replace(/^browsing:\s*/i, '')
+}

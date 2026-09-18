@@ -2130,8 +2130,13 @@ progress {
   margin-bottom: 34px;
   overflow: hidden;
   background: #f6f6f3;
+  /* No max-height here on purpose: with the aspect-ratio matching the
+     banner artwork's own real proportions (1168x784) exactly, the box
+     always has the same shape as the image itself, so object-fit: cover
+     never needs to crop anything off the sides or top/bottom - capping
+     the height while staying full-bleed width was what forced a crop
+     before, cutting off the top/bottom of the artwork on wide screens. */
   aspect-ratio: 1168 / 784;
-  max-height: 440px;
 }
 
 .promo-banner-slide {
@@ -2720,38 +2725,6 @@ progress {
   margin-top: 4px;
 }
 
-.discover-genre-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  margin-top: 10px;
-  padding: 0 14px;
-  border: 1px solid #d8d8d3;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #74746f;
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: none;
-}
-
-.discover-genre-picker i {
-  color: var(--app-accent, #16a09a);
-}
-
-.discover-genre-picker select {
-  min-height: 38px;
-  border: 0;
-  background: transparent;
-  color: #111111;
-  font-weight: 800;
-}
-
-.discover-genre-picker select:focus {
-  outline: none;
-}
-
 /* Random page (RandomPage.jsx) - reuses .tool-panel/.topic-row/.page-title
    from Discover for the panel chrome and pill buttons, just adds the
    two-column advanced layout and the genre multi-select grid. */
@@ -2846,7 +2819,7 @@ progress {
 
 .discover-loading-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -2873,7 +2846,7 @@ progress {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 820px) {
   .discover-loading-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
