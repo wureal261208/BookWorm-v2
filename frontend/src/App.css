@@ -1930,6 +1930,45 @@ progress {
   gap: 8px;
 }
 
+.header-random-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: #d34a45;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.header-random-button:hover {
+  background: #b93531;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(179, 53, 49, 0.28);
+}
+
+.header-random-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+@media (max-width: 620px) {
+  .header-random-button {
+    width: 38px;
+    padding: 0;
+  }
+
+  .header-random-button span {
+    display: none;
+  }
+}
+
 .avatar-chip {
   min-width: 0;
   padding: 4px 6px 4px 4px;

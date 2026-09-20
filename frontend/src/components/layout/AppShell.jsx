@@ -12,7 +12,6 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 // pagination) - it's a relabel for the nav, not a second page to maintain.
 const navItems = [
   { id: 'discover', label: 'Browse', icon: 'bi-compass' },
-  { id: 'random', label: 'Random', icon: 'bi-shuffle' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
   { id: 'write', label: 'Write', icon: 'bi-pencil-square', private: true },
   { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
@@ -238,6 +237,10 @@ function AppShell({
               </button>
             </div>
           )}
+          <button className="header-random-button" onClick={() => navigateTo('random')} type="button">
+            <i className="bi bi-shuffle" />
+            <span>Random book</span>
+          </button>
           <button className="avatar-chip" onClick={() => (isGuest ? onAuth() : navigateTo('profile'))} type="button">
             <span>
               {account?.avatar ? <img src={account.avatar} alt="" /> : getInitials(displayName)}
