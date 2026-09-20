@@ -22,8 +22,24 @@ const app = express();
 // Trimmed and stripped of any trailing slash - a copy-paste extra space or
 // "/" at the end would otherwise silently mismatch the browser's Origin
 // header (which never has a trailing slash) and break every request.
-const allowedFrontendOrigin = (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
-app.use(cors(allowedFrontendOrigin ? { origin: allowedFrontendOrigin } : {}));
+const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // server-to-server, curl and same-origin calls
+  return configuredOrigins.includes(origin) || /^https:\/\/book-worm-v2(?:-[a-z0-9]+)?\.vercel\.app$/i.test(origin);
+}
+
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, isAllowedOrigin(origin));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+}));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 if (process.env.NODE_ENV !== 'test') {
@@ -82,7 +98,7 @@ app.get('/api/health/db', async (req, res) => {
 
   return success(res, 200, 'Database diagnostic.', {
     mongoose: states[mongoose.connection.readyState] || 'unknown',
-    frontendUrlConfigured: allowedFrontendOrigin || '(not set - CORS is open to all origins)',
+    frontendUrlConfigured: configuredOrigins.join(', ') || '(Vercel BookWorm deployments are allowed)',
     envPresent: {
       MONGODB_URI: Boolean(process.env.MONGODB_URI),
       FIREBASE_SERVICE_ACCOUNT_JSON: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
