@@ -237,10 +237,6 @@ function AppShell({
               </button>
             </div>
           )}
-          <button className="header-random-button" onClick={() => navigateTo('random')} type="button">
-            <i className="bi bi-shuffle" />
-            <span>Random book</span>
-          </button>
           <button className="avatar-chip" onClick={() => (isGuest ? onAuth() : navigateTo('profile'))} type="button">
             <span>
               {account?.avatar ? <img src={account.avatar} alt="" /> : getInitials(displayName)}

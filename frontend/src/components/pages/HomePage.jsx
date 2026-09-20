@@ -67,7 +67,18 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
       {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
           filters Browse by that genre's topic pill (also matches by
           subject, not just category - see the $or in listBooks). */}
-      <PromoBanner onSelectGenre={onSelectGenre} />
+      <section className="home-promo-layout">
+        <PromoBanner onSelectGenre={onSelectGenre} />
+        <aside className="random-feature-panel">
+          <p className="mono-eyebrow">Need inspiration?</p>
+          <h2>What should I read today?</h2>
+          <p>Can&apos;t decide on your next story? Let BookWorm pick a book from the library for you.</p>
+          <button className="random-feature-button" onClick={() => setPage('random')} type="button">
+            <i className="bi bi-shuffle" />
+            Find a random book
+          </button>
+        </aside>
+      </section>
 
       {continueReading.length > 0 && (
         <section className="section-block">

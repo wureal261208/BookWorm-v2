@@ -1930,44 +1930,6 @@ progress {
   gap: 8px;
 }
 
-.header-random-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 7px;
-  background: #d34a45;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.header-random-button:hover {
-  background: #b93531;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(179, 53, 49, 0.28);
-}
-
-.header-random-button:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-@media (max-width: 620px) {
-  .header-random-button {
-    width: 38px;
-    padding: 0;
-  }
-
-  .header-random-button span {
-    display: none;
-  }
-}
 
 .avatar-chip {
   min-width: 0;
@@ -2154,19 +2116,21 @@ progress {
   letter-spacing: 0;
 }
 
-/* Real promotional banner carousel (see PromoBanner.jsx) - Wun's own
-   genre artwork, not book-cover data. Full-bleed (edge to edge of the
-   viewport, like waka.vn's top banner) rather than boxed inside
-   .page-shell's usual centered/padded width - the standard "break out of
-   a centered container" trick: width:100vw plus a matching negative
-   margin on both sides, which only works because .page-shell itself is
-   horizontally centered (margin: 0 auto). */
+.home-promo-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  width: 100vw;
+  margin: 0 calc(50% - 50vw) 34px;
+  background: var(--app-surface-soft);
+}
+
+/* The promotional carousel intentionally fills its column. Its individual
+   slides are measured in PromoBanner.jsx, so dragging stays accurate when
+   this layout changes width. */
 .promo-banner {
   position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  margin-bottom: 34px;
+  width: 100%;
+  margin: 0;
   overflow: hidden;
   background: #f6f6f3;
   /* Keep the hero at a familiar carousel height instead of letting the
@@ -2183,8 +2147,7 @@ progress {
 }
 
 .promo-banner-slide {
-  flex: 0 0 100vw;
-  width: 100vw;
+  flex: 0 0 auto;
   height: 100%;
   padding: 0;
   border: 0;
@@ -2242,6 +2205,69 @@ progress {
 .promo-banner-dots button.active {
   background: #ffffff;
   transform: scale(1.3);
+}
+
+.random-feature-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 16px;
+  padding: clamp(26px, 3vw, 52px);
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.random-feature-panel .mono-eyebrow {
+  margin: 0;
+}
+
+.random-feature-panel h2,
+.random-feature-panel p {
+  margin: 0;
+}
+
+.random-feature-panel h2 {
+  font-size: clamp(25px, 2.4vw, 38px);
+  line-height: 1.08;
+}
+
+.random-feature-panel > p:not(.mono-eyebrow) {
+  color: var(--app-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.random-feature-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 7px;
+  background: #d34a45;
+  color: #ffffff;
+  font-weight: 900;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.random-feature-button:hover {
+  background: #b93531;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(179, 53, 49, 0.28);
+}
+
+@media (max-width: 880px) {
+  .home-promo-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .random-feature-panel {
+    align-items: center;
+    padding: 28px clamp(20px, 6vw, 46px);
+    text-align: center;
+  }
 }
 
 .section-heading {

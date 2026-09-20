@@ -31,6 +31,8 @@ function PromoBanner({ onSelectGenre }) {
   const [isAnimating, setIsAnimating] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [isFirstImageReady, setIsFirstImageReady] = useState(false)
+  const [bannerWidth, setBannerWidth] = useState(0)
+  const bannerRef = useRef(null)
   const dragStartX = useRef(null)
   const didDrag = useRef(false)
 
@@ -44,6 +46,20 @@ function PromoBanner({ onSelectGenre }) {
     }, AUTO_ROTATE_MS)
     return () => window.clearInterval(timer)
   }, [isPaused])
+
+  useEffect(() => {
+    const banner = bannerRef.current
+    if (!banner) return undefined
+    const updateWidth = () => setBannerWidth(banner.clientWidth)
+    updateWidth()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth)
+      return () => window.removeEventListener('resize', updateWidth)
+    }
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(banner)
+    return () => observer.disconnect()
+  }, [])
 
   function goTo(index) {
     setIsAnimating(true)
@@ -114,6 +130,7 @@ function PromoBanner({ onSelectGenre }) {
       className="promo-banner"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
+      ref={bannerRef}
     >
       {!isFirstImageReady && <div className="promo-banner-skeleton book-card-skeleton" aria-hidden="true" />}
 
@@ -121,12 +138,12 @@ function PromoBanner({ onSelectGenre }) {
         className="promo-banner-track"
         onTransitionEnd={handleTransitionEnd}
         style={{
-          transform: `translate3d(calc(-${slidePosition * 100}vw + ${dragOffset}px), 0, 0)`,
+          transform: `translate3d(${-slidePosition * bannerWidth + dragOffset}px, 0, 0)`,
           transition: isAnimating ? undefined : 'none',
         }}
       >
         {loopedSlides.map((slide, index) => (
-          <div aria-hidden={index !== slidePosition} className="promo-banner-slide" key={`${slide.id}-${index}`}>
+          <div aria-hidden={index !== slidePosition} className="promo-banner-slide" key={`${slide.id}-${index}`} style={{ width: bannerWidth }}>
             <img alt={`${slide.id} genre banner`} draggable="false" onLoad={() => setIsFirstImageReady(true)} src={slide.image} />
           </div>
         ))}
