@@ -1919,6 +1919,12 @@ progress {
   .header-search {
     display: none;
   }
+
+  /* Search remains available inside the opened navigation drawer. */
+  .main-nav-group .header-search {
+    display: block;
+    width: 100%;
+  }
 }
 
 .header-account {
@@ -1928,6 +1934,69 @@ progress {
   justify-content: flex-end;
   margin-left: auto;
   gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .site-header {
+    gap: 10px;
+    padding: 10px clamp(12px, 3vw, 22px);
+  }
+
+  .avatar-chip strong,
+  .guest-preview-button span,
+  .header-logout-button span {
+    display: none;
+  }
+
+  .guest-preview-button,
+  .header-logout-button {
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    place-items: center;
+    padding: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .site-header {
+    gap: 7px;
+  }
+
+  .brand-button {
+    font-size: 18px;
+  }
+
+  .brand-button img {
+    width: 30px;
+    height: 30px;
+  }
+
+  .header-account {
+    gap: 5px;
+  }
+
+  .quick-theme-toggle button,
+  .mobile-nav-toggle {
+    width: 38px;
+    height: 38px;
+  }
+
+  .primary-button {
+    min-height: 38px;
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .brand-button > span {
+    display: none;
+  }
+
+  .guest-preview-button {
+    display: none;
+  }
 }
 
 

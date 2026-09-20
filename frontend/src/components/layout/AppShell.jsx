@@ -245,16 +245,18 @@ function AppShell({
           </button>
           {isGuest ? (
             <>
-              <button className="ghost-button" onClick={onGuest} type="button">
-                None account
+              <button aria-label="Continue without an account" className="ghost-button guest-preview-button" onClick={onGuest} type="button">
+                <i className="bi bi-person" />
+                <span>None account</span>
               </button>
               <button className="primary-button" onClick={onAuth} type="button">
                 Login
               </button>
             </>
           ) : (
-            <button className="ghost-button" onClick={() => setShowLogoutConfirm(true)} type="button">
-              Logout
+            <button aria-label="Log out" className="ghost-button header-logout-button" onClick={() => setShowLogoutConfirm(true)} type="button">
+              <i className="bi bi-box-arrow-right" />
+              <span>Logout</span>
             </button>
           )}
         </div>

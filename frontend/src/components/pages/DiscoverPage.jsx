@@ -111,6 +111,12 @@ function DiscoverPage({
   }, [draftSearch])
 
   const totalPages = Math.max(1, Math.ceil(total / BOOKS_PER_PAGE))
+  // Promo artwork can target a subject such as "Science Fiction", which
+  // may not be in the server's top-category list. Keep that selected genre
+  // visible as a real, active filter pill after arriving from Home.
+  const topicOptions = topic && !topics.includes(topic)
+    ? ['all', topic, ...topics.filter((item) => item !== 'all')]
+    : topics
   const normalizedDraft = draftSearch.trim().toLowerCase()
   const historyItems = searchHistory
     .filter((term) => !normalizedDraft || term.toLowerCase().includes(normalizedDraft))
@@ -190,7 +196,7 @@ function DiscoverPage({
         </form>
 
         <div className="topic-row">
-          {topics.map((item) => (
+          {topicOptions.map((item) => (
             <button className={topic === item ? 'active' : ''} onClick={() => setTopic(item)} key={item} type="button">
               {formatTopicLabel(item)}
             </button>
