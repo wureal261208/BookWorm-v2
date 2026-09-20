@@ -8,13 +8,6 @@ import mysteryThriller from '../../assets/promo-banners/mystery-thriller.jpg'
 import romance from '../../assets/promo-banners/romance.jpg'
 import sciFi from '../../assets/promo-banners/sci-fi.jpg'
 
-// One slide per genre banner. `topic` is what actually gets filtered on
-// click - the same category-or-subject partial match Browse's own genre
-// pills/dropdown use (see the $or in listBooks in bookController.js), so
-// clicking a slide behaves exactly like clicking that genre's pill would.
-// That's also why "Sci-fi" here says "Science Fiction": that's the
-// wording that actually shows up in real category/subjects text
-// (Gutenberg's own wording), not the banner artwork's own display text.
 const SLIDES = [
   { id: 'romance', image: romance, topic: 'Romance' },
   { id: 'fantasy', image: fantasy, topic: 'Fantasy' },
@@ -28,72 +21,92 @@ const SLIDES = [
 
 const AUTO_ROTATE_MS = 6000
 
-// Promotional banner carousel (the "hero banner carousel" style element
-// from wattpad.com/home) - unlike the rest of Home, these slides are
-// static artwork, not book data from Mongo. Clicking a slide still does
-// something real, though: it filters Browse by that genre, same as
-// clicking one of Browse's own topic pills.
 function PromoBanner({ onSelectGenre }) {
-  const [activeIndex, setActiveIndex] = useState(0)
+  // Edge clones allow a seamless animation when moving from the final
+  // banner to the first (and vice versa).
+  const loopedSlides = [SLIDES[SLIDES.length - 1], ...SLIDES, SLIDES[0]]
+  const [slidePosition, setSlidePosition] = useState(1)
+  const [dragOffset, setDragOffset] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
+  const [isFirstImageReady, setIsFirstImageReady] = useState(false)
   const dragStartX = useRef(null)
   const didDrag = useRef(false)
-  // Local bundled images still have to be fetched/decoded by the browser
-  // like any other <img> - this just avoids the first slide popping in
-  // abruptly once that resolves. It's not tied to any network request, so
-  // it naturally clears well before the book rows below (those wait on
-  // real API calls) - no artificial delay needed to make that true.
-  const [isFirstImageReady, setIsFirstImageReady] = useState(false)
+
+  const activeIndex = (slidePosition - 1 + SLIDES.length) % SLIDES.length
 
   useEffect(() => {
     if (SLIDES.length < 2 || isPaused) return undefined
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % SLIDES.length)
+      setIsAnimating(true)
+      setSlidePosition((current) => current + 1)
     }, AUTO_ROTATE_MS)
     return () => window.clearInterval(timer)
   }, [isPaused])
 
-  function goTo(nextIndex) {
-    setActiveIndex((nextIndex + SLIDES.length) % SLIDES.length)
+  function goTo(index) {
+    setIsAnimating(true)
+    setSlidePosition(index + 1)
+  }
+
+  function moveBy(direction) {
+    setIsAnimating(true)
+    setSlidePosition((current) => current + direction)
   }
 
   function handlePointerDown(event) {
-    // Only use the primary mouse/finger button, leaving the button's normal
-    // keyboard behavior intact.
     if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
     dragStartX.current = event.clientX
     didDrag.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
+    setIsAnimating(false)
+    setIsDragging(true)
     if (event.pointerType !== 'mouse') setIsPaused(true)
   }
 
-  function handlePointerUp(event) {
+  function handlePointerMove(event) {
+    if (dragStartX.current !== null) setDragOffset(event.clientX - dragStartX.current)
+  }
+
+  function finishDrag(event) {
     if (dragStartX.current === null) return
     const distance = event.clientX - dragStartX.current
+    const shouldChangeSlide = Math.abs(distance) >= event.currentTarget.clientWidth * 0.15
     dragStartX.current = null
+    setDragOffset(0)
+    setIsDragging(false)
+    setIsAnimating(true)
+    if (event.pointerType !== 'mouse') setIsPaused(false)
 
-    // A short movement is still a normal banner click. Swiping/dragging at
-    // least 40px changes exactly one slide in the expected direction.
-    if (Math.abs(distance) < 40) return
-    didDrag.current = true
-    goTo(activeIndex + (distance < 0 ? 1 : -1))
+    if (Math.abs(distance) > 5) didDrag.current = true
+    if (!shouldChangeSlide) return
+    moveBy(distance < 0 ? 1 : -1)
+  }
+
+  function cancelDrag(event) {
+    dragStartX.current = null
+    setDragOffset(0)
+    setIsDragging(false)
+    setIsAnimating(true)
     if (event.pointerType !== 'mouse') setIsPaused(false)
   }
 
-  function handlePointerCancel(event) {
-    dragStartX.current = null
-    if (event.pointerType !== 'mouse') setIsPaused(false)
-  }
-
-  function handleSlideClick() {
+  function handleBannerClick() {
     if (didDrag.current) {
       didDrag.current = false
       return
     }
-    onSelectGenre(activeSlide.topic)
+    onSelectGenre(SLIDES[activeIndex].topic)
   }
 
-  const activeSlide = SLIDES[activeIndex]
+  function handleTransitionEnd(event) {
+    if (event.propertyName !== 'transform') return
+    if (slidePosition !== 0 && slidePosition !== SLIDES.length + 1) return
+    setIsAnimating(false)
+    setSlidePosition(slidePosition === 0 ? SLIDES.length : 1)
+    window.requestAnimationFrame(() => setIsAnimating(true))
+  }
 
   return (
     <section
@@ -104,23 +117,32 @@ function PromoBanner({ onSelectGenre }) {
     >
       {!isFirstImageReady && <div className="promo-banner-skeleton book-card-skeleton" aria-hidden="true" />}
 
-      <button
-        className="promo-banner-slide"
-        onClick={handleSlideClick}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        type="button"
+      <div
+        className="promo-banner-track"
+        onTransitionEnd={handleTransitionEnd}
+        style={{
+          transform: `translate3d(calc(-${slidePosition * 100}vw + ${dragOffset}px), 0, 0)`,
+          transition: isAnimating ? undefined : 'none',
+        }}
       >
-        <img
-          alt={`${activeSlide.id} genre banner`}
-          key={activeSlide.id}
-          onLoad={() => setIsFirstImageReady(true)}
-          draggable="false"
-          src={activeSlide.image}
-          style={isFirstImageReady ? undefined : { visibility: 'hidden' }}
-        />
-      </button>
+        {loopedSlides.map((slide, index) => (
+          <div aria-hidden={index !== slidePosition} className="promo-banner-slide" key={`${slide.id}-${index}`}>
+            <img alt={`${slide.id} genre banner`} draggable="false" onLoad={() => setIsFirstImageReady(true)} src={slide.image} />
+          </div>
+        ))}
+      </div>
+
+      <div
+        aria-label="Drag to browse featured genres"
+        className={`promo-banner-drag-layer${isDragging ? ' is-dragging' : ''}`}
+        onClick={handleBannerClick}
+        onPointerCancel={cancelDrag}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishDrag}
+        role="button"
+        tabIndex="0"
+      />
 
       <div className="promo-banner-dots" role="tablist" aria-label="Choose a banner">
         {SLIDES.map((slide, index) => (
