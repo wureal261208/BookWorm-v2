@@ -1,4 +1,8 @@
 jest.mock('../models/Book');
+jest.mock('../models/BookMetadata');
+jest.mock('../models/Notification');
+jest.mock('../models/User');
+jest.mock('../utils/gutenbergReader');
 
 const Book = require('../models/Book');
 const { listBooks } = require('../controllers/bookController');
@@ -7,47 +11,115 @@ function mockRes() {
   const res = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.setHeader = jest.fn();
   return res;
 }
 
-function setupChain() {
-  const chain = { sort: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), limit: jest.fn().mockResolvedValue([]) };
-  Book.find = jest.fn().mockReturnValue(chain);
-  Book.countDocuments = jest.fn().mockResolvedValue(0);
+function flush() {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
-describe('listBooks new catalog filters', () => {
-  test('only exposes approved catalog records and filters the categories array case-insensitively', async () => {
+describe('listBooks category filter', () => {
+  function setupChain() {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    };
+    Book.find = jest.fn().mockReturnValue(chain);
+    Book.countDocuments = jest.fn().mockResolvedValue(0);
+    return chain;
+  }
+
+  test('matches either the category field or the subjects array, case-insensitively', async () => {
     setupChain();
-    await listBooks({ query: { categories: 'history' } }, mockRes());
+    listBooks({ query: { category: 'history' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { category: { $regex: 'history', $options: 'i' } },
+        { subjects: { $regex: 'history', $options: 'i' } },
+      ],
+    });
+  });
+
+  test('escapes regex special characters in the category value', async () => {
+    setupChain();
+    listBooks({ query: { category: 'Sci-Fi (2000+)' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { category: { $regex: 'Sci-Fi \\(2000\\+\\)', $options: 'i' } },
+        { subjects: { $regex: 'Sci-Fi \\(2000\\+\\)', $options: 'i' } },
+      ],
+    });
+  });
+
+  test('"all" (or no category) skips the filter entirely', async () => {
+    setupChain();
+    listBooks({ query: { category: 'all' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({ status: 'published' });
+  });
+
+  test('several comma-separated categories match ANY of them, by category or subject (used by the Random page genre picker)', async () => {
+    setupChain();
+    listBooks({ query: { category: 'Romance, Fantasy' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { category: { $regex: 'Romance', $options: 'i' } },
+        { subjects: { $regex: 'Romance', $options: 'i' } },
+        { category: { $regex: 'Fantasy', $options: 'i' } },
+        { subjects: { $regex: 'Fantasy', $options: 'i' } },
+      ],
+    });
+  });
+
+  test('caps a comma-separated category list at 5 entries (10 $or clauses: category + subjects each)', async () => {
+    setupChain();
+    listBooks({ query: { category: 'A,B,C,D,E,F,G' } }, mockRes());
+    await flush();
+
     const filter = Book.find.mock.calls[0][0];
-    expect(filter.moderationStatus).toBe('approved');
-    expect(filter.categories.$in[0]).toEqual(new RegExp('history', 'i'));
+    expect(filter.$or).toHaveLength(10);
   });
+});
 
-  test('keeps category as a backward-compatible URL alias and escapes regex input', async () => {
-    setupChain();
-    await listBooks({ query: { category: 'Sci-Fi (2000+)' } }, mockRes());
-    expect(Book.find.mock.calls[0][0].categories.$in[0]).toEqual(new RegExp('Sci-Fi \\(2000\\+\\)', 'i'));
-  });
-
-  test('supports type, language, source, and no category for "all"', async () => {
-    setupChain();
-    await listBooks({ query: { category: 'all', type: 'audiobook', language: 'EN', source: 'LibriVox' } }, mockRes());
-    expect(Book.find).toHaveBeenCalledWith({ moderationStatus: 'approved', type: 'audiobook', language: 'en', source: 'LibriVox' });
-  });
-
-  test('uses random sampling for the legacy Random page without dropping new moderation filtering', async () => {
-    Book.aggregate = jest.fn().mockResolvedValue([{ title: 'A' }]);
-    Book.countDocuments = jest.fn().mockResolvedValue(1);
+describe('listBooks sort=random', () => {
+  test('uses a $sample aggregation instead of .sort()/.skip(), honestly random each call', async () => {
+    Book.aggregate = jest.fn().mockResolvedValue([{ title: 'A' }, { title: 'B' }]);
+    Book.countDocuments = jest.fn().mockResolvedValue(500);
     Book.find = jest.fn();
+
     const res = mockRes();
-    await listBooks({ query: { sort: 'random', limit: '16', category: 'History' } }, res);
+    listBooks({ query: { sort: 'random', limit: '16', category: 'History' } }, res);
+    await flush();
+
     expect(Book.find).not.toHaveBeenCalled();
     expect(Book.aggregate).toHaveBeenCalledWith([
-      { $match: { moderationStatus: 'approved', categories: { $in: [new RegExp('History', 'i')] } } },
+      {
+        $match: {
+          status: 'published',
+          $or: [
+            { category: { $regex: 'History', $options: 'i' } },
+            { subjects: { $regex: 'History', $options: 'i' } },
+          ],
+        },
+      },
       { $sample: { size: 16 } },
+      { $project: { chapters: 0 } },
     ]);
-    expect(res.json.mock.calls[0][0].data.books).toEqual([{ title: 'A' }]);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data.books).toEqual([{ title: 'A' }, { title: 'B' }]);
+    expect(payload.data.total).toBe(500);
   });
 });

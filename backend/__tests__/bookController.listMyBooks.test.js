@@ -42,6 +42,6 @@ describe('listMyBooks', () => {
     listMyBooks(req, mockRes());
     await flush();
 
-    expect(sortMock).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(sortMock).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
   });
 });

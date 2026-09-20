@@ -37,14 +37,18 @@ function initFirebaseAdmin() {
   const serviceAccount = loadServiceAccount();
 
   if (!serviceAccount) {
-    console.error(
+    // NOTE: this used to be process.exit(1). That's fine for a local
+    // `npm run dev` process, but on Vercel this function runs inside a
+    // shared serverless runtime - killing the process here doesn't just
+    // fail the current request, it takes down the whole warm instance,
+    // which is what showed up as "BACKEND_BOOT_FAILURE" / every route
+    // 500ing at once. Throwing instead lets api/index.js's existing
+    // try/catch turn this into a normal per-request 500 and keeps the
+    // instance alive for the next request.
+    throw new Error(
       'Firebase Admin credentials are missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or ' +
-        'FIREBASE_SERVICE_ACCOUNT_PATH in your .env (see README for how to generate one).'
+        'FIREBASE_SERVICE_ACCOUNT_PATH in your .env (or Vercel project env vars).'
     );
-    // Never terminate a serverless function while loading a module. The
-    // caller can return a useful 401/503 response instead of turning every
-    // endpoint (including /health and CORS preflight) into a Vercel 500.
-    throw new Error('Firebase Admin credentials are missing. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.');
   }
 
   admin.initializeApp({
@@ -54,9 +58,4 @@ function initFirebaseAdmin() {
   return admin;
 }
 
-function hasFirebaseAdminConfig() {
-  return Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-}
-
 module.exports = initFirebaseAdmin;
-module.exports.hasFirebaseAdminConfig = hasFirebaseAdminConfig;

@@ -9,7 +9,6 @@ require('dotenv').config({ override: true });
 const app = require('./app');
 const connectDB = require('./config/db');
 const seedAdmin = require('./utils/seedAdmin');
-const { hasFirebaseAdminConfig } = require('./config/firebaseAdmin');
 
 const PORT = process.env.PORT || 5000;
 
@@ -20,13 +19,7 @@ async function start() {
     process.exit(1);
   }
 
-  // The public catalog can run with MongoDB alone. Authentication/admin
-  // provisioning becomes available after Firebase credentials are added.
-  if (hasFirebaseAdminConfig()) {
-    await seedAdmin();
-  } else {
-    console.warn('Firebase Admin is not configured; starting catalog API without Firebase authentication.');
-  }
+  await seedAdmin();
 
   app.listen(PORT, () => {
     console.log(`BookWorm API listening on port ${PORT}`);

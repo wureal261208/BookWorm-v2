@@ -1,23 +1,44 @@
 const express = require('express');
-const controller = require('../controllers/bookController');
+const { createBook, listBooks, listMyBooks, getBook, updateBook, deleteBook, getBookReaderText, generateBookMetadata, incrementBookViews, getBookStats, listCategories } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
 const { identify, protect, authorize } = require('../middleware/auth');
-const upload = require('../middleware/upload');
-const catalog = require('../controllers/catalogController');
 
 const router = express.Router();
-router.get('/', identify, controller.listBooks);
-router.get('/categories', controller.listCategories);
-router.get('/stats', protect, authorize('admin', 'manager', 'employee'), controller.getBookStats);
-router.get('/mine', protect, controller.listMyBooks);
-router.get('/external/search', protect, authorize('admin', 'manager', 'employee'), catalog.searchExternalCatalog);
-router.post('/external/import', protect, authorize('admin', 'manager', 'employee'), catalog.importExternalBook);
-router.post('/upload', protect, upload.fields([{ name: 'bookFile', maxCount: 1 }, { name: 'coverImage', maxCount: 1 }]), catalog.uploadBook);
-router.get('/:id', identify, controller.getBook);
-router.get('/:id/comments', controller.listComments || listComments);
+
+// Anyone (including anonymous) can browse and read, with chapter limits enforced in the controller.
+router.get('/', identify, listBooks);
+
+// Staff-only full catalog (with chapters) for the Admin panel. Must come
+// before GET /:id, or Express would match "mine" as an :id and 400 on the
+// ObjectId cast. Customers can hit this too now (see listMyBooks) - they
+// just get their own submissions back instead of the whole catalog.
+router.get('/mine', protect, authorize('admin', 'manager', 'employee', 'customer'), listMyBooks);
+
+// Admin Dashboard aggregate stats (totals, most viewed, most commented).
+router.get('/stats', protect, authorize('admin', 'manager', 'employee'), getBookStats);
+
+// Public - top categories with counts, for Discover's topic filter pills.
+// Must also come before GET /:id for the same reason as /mine and /stats.
+router.get('/categories', listCategories);
+
+router.get('/:id', identify, getBook);
+router.get('/:id/reader-text', identify, getBookReaderText);
+router.get('/:id/comments', listComments);
 router.post('/:id/comments', protect, createComment);
-router.post('/', protect, controller.createBook);
-router.patch('/:id/review', protect, authorize('admin', 'manager', 'employee'), controller.reviewBook);
-router.patch('/:id', protect, authorize('admin', 'manager', 'employee'), controller.updateBook);
-router.delete('/:id', protect, authorize('admin'), controller.deleteBook);
+router.post('/:id/view', identify, incrementBookViews);
+// AI-assisted description/subjects suggestion for the Edit Book modal -
+// staff-only (same roles as editing itself), never writes to the DB on
+// its own.
+router.post('/:id/ai-fill', protect, authorize('admin', 'manager', 'employee'), generateBookMetadata);
+
+// Staff push books with whatever status they choose; customers can push
+// too now, but their submissions always land as a draft pending review
+// (see createBook) rather than going straight onto the public site.
+router.post('/', protect, authorize('admin', 'manager', 'employee', 'customer'), createBook);
+router.put('/:id', protect, authorize('admin', 'manager', 'employee'), updateBook);
+router.patch('/:id', protect, authorize('admin', 'manager', 'employee'), updateBook);
+// Deleting is admin-only - managers/employees can still edit (above) but
+// not permanently remove a book.
+router.delete('/:id', protect, authorize('admin'), deleteBook);
+
 module.exports = router;

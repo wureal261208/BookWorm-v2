@@ -44,12 +44,6 @@ const UserSchema = new mongoose.Schema(
     // /:id/view) - purely a simple activity counter for the Admin
     // "Top readers" stat, not a full reading-history log.
     booksReadCount: { type: Number, default: 0 },
-    preferences: {
-      categories: { type: [String], default: [] },
-      languages: { type: [String], default: [] },
-      formats: { type: [String], enum: ['ebook', 'audiobook'], default: [] },
-      completedAt: { type: Date, default: null },
-    },
   },
   { timestamps: true, collection: 'user_profiles' }
 );

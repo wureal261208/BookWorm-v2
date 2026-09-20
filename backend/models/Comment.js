@@ -10,7 +10,6 @@ const CommentSchema = new mongoose.Schema(
     book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true, index: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     text: { type: String, required: true, trim: true, maxlength: 2000 },
-    rating: { type: Number, min: 1, max: 5, default: null },
   },
   { timestamps: true, collection: 'comments' }
 );
