@@ -48,11 +48,6 @@ async function resolveUserFromToken(token) {
     user.bannedAt = null;
     await user.save();
 
-    try {
-      await admin.auth().updateUser(user.firebaseUid, { disabled: false });
-    } catch (error) {
-      console.warn('Could not lift Firebase Auth disable after ban expiry:', error.message);
-    }
   }
 
   return user;

@@ -2,6 +2,7 @@ const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
 const Book = require('../models/Book');
 const maskEmail = require('../utils/maskEmail');
+const escapeRegExp = require('../utils/escapeRegExp');
 const { sendMail } = require('../utils/mailer');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
@@ -28,7 +29,7 @@ function sanitizeUser(user, bookCount) {
   return base;
 }
 
-// @route GET /api/users?page=&limit=&role=
+// @route GET /api/users?page=&limit=&role=&q=
 // @desc  Admin-only account directory (customers, since manager/employee
 //        accounts were retired) - paginated for the User Contributions >
 //        Users panel. Display name + masked email only; real emails never
@@ -46,6 +47,12 @@ const listUsers = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.role) {
     filter.role = req.query.role;
+  }
+  // Search the customer nickname/display name only - the real email never
+  // leaves this endpoint. Escape input so it is always a literal substring.
+  const query = String(req.query.q || '').trim().slice(0, 80);
+  if (query) {
+    filter.name = { $regex: escapeRegExp(query), $options: 'i' };
   }
 
   if (filter.role === 'customer') {
@@ -119,12 +126,9 @@ const banCustomer = asyncHandler(async (req, res) => {
   target.bannedAt = new Date();
   await target.save();
 
-  try {
-    const admin = initFirebaseAdmin();
-    await admin.auth().updateUser(target.firebaseUid, { disabled: true });
-  } catch (error) {
-    console.warn('Could not sync ban to Firebase Auth:', error.message);
-  }
+  // Keep the Firebase identity enabled. Otherwise Firebase rejects login
+  // before this app can show the reader the restriction reason and expiry.
+  // The protect middleware blocks every authenticated app request instead.
 
   return success(res, 200, 'Customer account banned successfully.', { user: sanitizeUser(target) });
 });
@@ -148,13 +152,6 @@ const unbanCustomer = asyncHandler(async (req, res) => {
   target.bannedBy = null;
   target.bannedAt = null;
   await target.save();
-
-  try {
-    const admin = initFirebaseAdmin();
-    await admin.auth().updateUser(target.firebaseUid, { disabled: false });
-  } catch (error) {
-    console.warn('Could not sync unban to Firebase Auth:', error.message);
-  }
 
   return success(res, 200, 'Customer account unbanned successfully.', { user: sanitizeUser(target) });
 });
