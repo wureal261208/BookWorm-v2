@@ -2,6 +2,14 @@ import { auth } from '../features/auth-firebase/firebaseConfig'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
 
+export class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function request(path, { method = 'GET', body, requireAuth = false } = {}) {
   const headers = { 'Content-Type': 'application/json' }
 
@@ -9,7 +17,7 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
     const token = await auth.currentUser.getIdToken()
     headers.Authorization = `Bearer ${token}`
   } else if (requireAuth) {
-    throw new Error('You must log in to do this.')
+    throw new ApiError('You must log in to do this.', 401)
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -26,7 +34,7 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
   }
 
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.message || `Request failed with status ${response.status}`)
+    throw new ApiError(payload?.message || `Request failed with status ${response.status}`, response.status)
   }
 
   return payload?.data ?? {}

@@ -171,8 +171,11 @@ function App() {
       // The backend's ban check (middleware/auth.js `protect`) returns a
       // specific "Your account has been banned... Reason: ..." message -
       // surface that verbatim in the ban popup instead of a generic toast.
-      const banMessage = /banned/i.test(error.message || '') ? error.message : ''
-      return { role: 'customer', id: '', displayId: '', themePreference: '', banMessage }
+      // Never infer a ban from a failed network/CORS request. Only the
+      // backend's explicit 403 response may sign the Firebase user out and
+      // show the restriction modal.
+      const banMessage = error.status === 403 && /banned/i.test(error.message || '') ? error.message : ''
+      return { role: 'customer', id: '', displayId: '', themePreference: '', banMessage, errorStatus: error.status || 0 }
     }
   }, [])
 
@@ -465,7 +468,7 @@ function App() {
         if (trustedProfile.banMessage) {
           setBanNotice(trustedProfile.banMessage)
         } else {
-          setToast({ type: 'error', message: "We couldn't verify this account. If it was banned or restricted, contact a manager or admin." })
+          setToast({ type: 'error', message: "Firebase sign-in succeeded, but the BookWorm API is unavailable. Please try again after the backend is restored." })
         }
         setAuthReady(true)
         return
@@ -687,7 +690,7 @@ function App() {
       await signInWithEmailAndPassword(auth, email, password)
 
       setAuthForm(emptyAuthForm)
-      setToast({ type: 'success', message: 'Login successful. Welcome back.' })
+      setToast({ type: 'loading', message: 'Signing in and verifying your BookWorm profile...' })
     } catch (error) {
       const nextError = getAuthMessage(error.code)
       setAuthError(nextError.message)
