@@ -39,8 +39,11 @@ function buildCatalogFilter(query, includePending = false) {
   if (query.type && ['ebook', 'audiobook'].includes(query.type)) filter.type = query.type;
   if (query.language) filter.language = String(query.language).toLowerCase();
   if (query.source && ['Gutenberg', 'LibriVox', 'User'].includes(query.source)) filter.source = query.source;
-  if (query.categories) {
-    const values = String(query.categories).split(',').map((item) => item.trim()).filter(Boolean);
+  // `category` is retained as a query-string alias for older frontend
+  // links. Data is always read from the new `categories` array.
+  const categoryQuery = query.categories || query.category;
+  if (categoryQuery && categoryQuery !== 'all') {
+    const values = String(categoryQuery).split(',').map((item) => item.trim()).filter(Boolean).slice(0, 5);
     if (values.length) filter.categories = { $in: values.map((item) => new RegExp(escapeRegExp(item), 'i')) };
   }
   return filter;
@@ -50,6 +53,13 @@ const listBooks = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   const filter = buildCatalogFilter(req.query, isStaff(req.user) && req.query.includePending === 'true');
+  if (req.query.sort === 'random') {
+    const [books, total] = await Promise.all([
+      Book.aggregate([{ $match: filter }, { $sample: { size: limit } }]),
+      Book.countDocuments(filter),
+    ]);
+    return success(res, 200, 'Books retrieved.', { books, page: 1, limit, total });
+  }
   const [books, total] = await Promise.all([
     Book.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
     Book.countDocuments(filter),
