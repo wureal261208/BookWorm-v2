@@ -5,7 +5,7 @@ const {
   unbanCustomer,
   notifyPasswordChanged,
 } = require('../controllers/userController');
-const { getMe, updateMyTheme } = require('../controllers/authController');
+const { getMe, updateMyTheme, updatePreferences } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -15,6 +15,7 @@ router.use(protect);
 // Alias for /api/auth/me, kept for frontend compatibility.
 router.get('/me', getMe);
 router.patch('/me/theme', updateMyTheme);
+router.patch('/me/preferences', updatePreferences);
 
 // Called after Firebase reauth + updatePassword already succeeded
 // client-side - see components/pages/ProfilePage.jsx.

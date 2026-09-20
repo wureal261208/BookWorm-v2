@@ -9,6 +9,7 @@ function serializeComment(comment) {
     id: comment._id,
     bookId: comment.book,
     text: comment.text,
+    rating: comment.rating,
     createdAt: comment.createdAt,
     author: {
       name: comment.user?.name || 'Reader',
@@ -40,6 +41,9 @@ const createComment = asyncHandler(async (req, res) => {
   if (!text) {
     return fail(res, 400, 'Comment text is required.');
   }
+  if (req.body.rating !== undefined && req.body.rating !== null && req.body.rating !== '' && (!Number.isInteger(Number(req.body.rating)) || Number(req.body.rating) < 1 || Number(req.body.rating) > 5)) {
+    return fail(res, 400, 'rating must be an integer from 1 to 5.');
+  }
 
   const book = await Book.findById(req.params.id).select('_id');
   if (!book) {
@@ -50,6 +54,7 @@ const createComment = asyncHandler(async (req, res) => {
     book: book._id,
     user: req.user._id,
     text,
+    rating: req.body.rating === undefined || req.body.rating === null || req.body.rating === '' ? null : Number(req.body.rating),
   });
   await comment.populate('user', 'name role email');
 

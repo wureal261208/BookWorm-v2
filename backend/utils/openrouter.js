@@ -96,4 +96,19 @@ async function generateBookMetadataSuggestion({ title, author, category, existin
   };
 }
 
-module.exports = { generateBookMetadataSuggestion, OpenRouterConfigError };
+async function generateRecommendationReply(question, books) {
+  if (!process.env.OPENROUTER_API_KEY) return null;
+  const candidates = books.slice(0, 8).map((book) => `- ${book.title} — ${book.author} (${book.type || 'ebook'})`).join('\n');
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
+    body: JSON.stringify({ model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini', messages: [
+      { role: 'system', content: 'You are a concise, helpful book librarian. Recommend only from the supplied catalog candidates. Reply in the user\'s language.' },
+      { role: 'user', content: `Question: ${question}\n\nCatalog candidates:\n${candidates || '(none)'}` },
+    ], temperature: 0.5 }),
+  });
+  if (!response.ok) throw new Error(`OpenRouter request failed (${response.status}).`);
+  return (await response.json()).choices?.[0]?.message?.content?.trim() || null;
+}
+
+module.exports = { generateBookMetadataSuggestion, generateRecommendationReply, OpenRouterConfigError };

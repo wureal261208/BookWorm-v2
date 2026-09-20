@@ -1,86 +1,55 @@
 const mongoose = require('mongoose');
 
-const ChapterSchema = new mongoose.Schema(
+// Every readable/downloadable rendition belonging to a catalog record.
+const FileSchema = new mongoose.Schema(
   {
-    order: { type: Number, required: true },
-    title: { type: String, required: true, trim: true },
-    content: { type: String, required: true },
+    format: { type: String, required: true, trim: true, lowercase: true },
+    url: { type: String, required: true, trim: true },
   },
   { _id: false }
 );
 
+// This is intentionally a fresh catalog model.  `deleteModel` prevents
+// Mongoose's development hot-reload cache from retaining the legacy Book
+// schema that used category/chapters/status fields.
+if (mongoose.models.Book) {
+  mongoose.deleteModel('Book');
+}
+
 const BookSchema = new mongoose.Schema(
   {
+    type: { type: String, enum: ['ebook', 'audiobook'], required: true, index: true },
     title: { type: String, required: true, trim: true },
     author: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
-    category: { type: String, default: 'General' },
-    coverUrl: { type: String, default: '' },
-    // The Gutenberg (or other) reader page URL a manually-typed book uses -
-    // catalog-linked books (sourceEtextNumber set) don't need this, since
-    // getBookReaderText fetches live from book_metadata.readOnlineUrl
-    // instead, but manually-typed books have no other reader source.
-    readerUrl: { type: String, default: '' },
-    chapters: { type: [ChapterSchema], default: [] },
-    // Publishing state set from the admin "Status" dropdown. Hidden/draft
-    // books still live in Mongo (so staff can keep editing them) but should
-    // be filtered out of the public catalog - see listBooks below.
-    status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
-    subjects: { type: [String], default: [] },
-    language: { type: String, default: 'en' },
-    // Staff member (admin/manager/employee) OR customer who pushed this
-    // book - customers can now submit books too (see createBook), tagged
-    // via createdByRole below so listings can show "Admin"/"Customer" etc.
-    // without populating the User document on every row.
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    // Denormalized copy of the pusher's role *at the time they pushed this
-    // book* - kept even if that account's role changes later, since this
-    // describes how the book got here, not the account's current standing.
-    createdByRole: { type: String, enum: ['admin', 'manager', 'employee', 'customer'], required: true },
-    // Real, persisted read count - incremented via POST /:id/view. Powers
-    // the "most viewed" dashboard stat; the old client-only counter never
-    // survived a refresh or counted anything for other visitors.
-    views: { type: Number, default: 0 },
-    // Links this Book back to its BookMetadata entry (book_metadata.etextNumber)
-    // when it was pushed via "Import from catalog" or manually tagged to a
-    // Gutenberg record. Optional - manually-typed books can leave this null.
-    sourceEtextNumber: { type: Number, default: null, index: true },
-    // Lowercase/trimmed mirror of `title`, kept in sync in the pre-validate
-    // hook below. A plain unique index on `title` itself can't be
-    // case/whitespace-insensitive, so this is the field that actually gets
-    // the uniqueness constraint - it's what makes duplicate-title pushes
-    // impossible even when two requests race each other (see createBook),
-    // since MongoDB enforces this atomically at write time, unlike an
-    // application-level "does this already exist?" check beforehand.
-    normalizedTitle: { type: String, unique: true },
+    categories: { type: [String], default: [], index: true },
+    language: { type: String, default: 'en', trim: true, lowercase: true, index: true },
+    release_date: { type: Date, default: null },
+    cover_image: { type: String, default: '' },
+    source: { type: String, enum: ['Gutenberg', 'LibriVox', 'User'], required: true, index: true },
+    files: {
+      type: [FileSchema],
+      validate: {
+        validator: (files) => Array.isArray(files) && files.length > 0,
+        message: 'At least one book file is required.',
+      },
+    },
+
+    // Moderation metadata for user contributions. Imported sources are
+    // published by default; user content is pending until staff approves it.
+    moderationStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved', index: true },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date, default: null },
+    rejectionReason: { type: String, default: '' },
+    externalId: { type: String, default: '', index: true },
   },
-  { timestamps: true }
+  // Separate collection means legacy `books` documents are never mixed with
+  // the new catalog shape. This also makes rollout reversible.
+  { timestamps: true, collection: 'catalog_books' }
 );
 
-BookSchema.pre('validate', function setNormalizedTitle(next) {
-  this.normalizedTitle = (this.title || '').trim().toLowerCase();
-  next();
-});
+BookSchema.index({ title: 'text', author: 'text', categories: 'text' });
+BookSchema.index({ source: 1, externalId: 1 }, { unique: true, sparse: true });
 
-// Powers the `q=` search param on GET /api/books - needed once the catalog
-// can hold tens of thousands of books and a plain regex scan is too slow.
-BookSchema.index({ title: 'text', author: 'text', subjects: 'text' });
-
-const Book = mongoose.model('Book', BookSchema);
-
-// Surfaces a failed index build in the server logs instead of it failing
-// silently - the most common cause is leftover duplicate titles already in
-// the collection from before this unique index existed (MongoDB can't build
-// a unique index over data that already violates it). If you see this, use
-// Admin > Remove to delete the duplicate-titled books, then restart the
-// server so the index can build.
-Book.on('index', (error) => {
-  if (error) {
-    console.error('Book collection index build failed (likely duplicate titles already in the database):', error.message);
-  }
-});
-
-// The number of chapters an anonymous (not logged in) reader may access.
-BookSchema.statics.ANONYMOUS_CHAPTER_LIMIT = 3;
-
-module.exports = Book;
+module.exports = mongoose.model('Book', BookSchema);

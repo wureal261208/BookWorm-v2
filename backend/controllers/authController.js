@@ -14,6 +14,7 @@ function sanitizeUser(user) {
     banExpiresAt: user.banExpiresAt,
     createdAt: user.createdAt,
     themePreference: user.themePreference || null,
+    preferences: user.preferences || { categories: [], languages: [], formats: [], completedAt: null },
   };
 }
 
@@ -41,4 +42,19 @@ const updateMyTheme = asyncHandler(async (req, res) => {
   return success(res, 200, 'Theme preference saved.', { themePreference: theme });
 });
 
-module.exports = { getMe, sanitizeUser, updateMyTheme };
+const updatePreferences = asyncHandler(async (req, res) => {
+  const values = req.body || {};
+  const categories = Array.isArray(values.categories) ? values.categories : [];
+  const languages = Array.isArray(values.languages) ? values.languages : [];
+  const formats = Array.isArray(values.formats) ? values.formats.filter((format) => ['ebook', 'audiobook'].includes(format)) : [];
+  req.user.preferences = {
+    categories: categories.map(String).map((value) => value.trim()).filter(Boolean).slice(0, 12),
+    languages: languages.map(String).map((value) => value.trim().toLowerCase()).filter(Boolean).slice(0, 8),
+    formats,
+    completedAt: new Date(),
+  };
+  await req.user.save();
+  return success(res, 200, 'Reading preferences saved.', { preferences: req.user.preferences });
+});
+
+module.exports = { getMe, sanitizeUser, updateMyTheme, updatePreferences };
