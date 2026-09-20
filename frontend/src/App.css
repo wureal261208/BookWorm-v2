@@ -2130,13 +2130,9 @@ progress {
   margin-bottom: 34px;
   overflow: hidden;
   background: #f6f6f3;
-  /* No max-height here on purpose: with the aspect-ratio matching the
-     banner artwork's own real proportions (1168x784) exactly, the box
-     always has the same shape as the image itself, so object-fit: cover
-     never needs to crop anything off the sides or top/bottom - capping
-     the height while staying full-bleed width was what forced a crop
-     before, cutting off the top/bottom of the artwork on wide screens. */
-  aspect-ratio: 1168 / 784;
+  /* Keep the hero at a familiar carousel height instead of letting the
+     portrait-ish source artwork fill most of a desktop screen. */
+  height: clamp(240px, 34vw, 480px);
 }
 
 .promo-banner-slide {
@@ -2145,6 +2141,13 @@ progress {
   height: 100%;
   padding: 0;
   border: 0;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.promo-banner-slide:active {
+  cursor: grabbing;
 }
 
 .promo-banner-slide img {
@@ -2174,35 +2177,6 @@ progress {
   inset: 0;
   z-index: 1;
   border-radius: 0;
-}
-
-.promo-banner-arrow {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  color: #111111;
-  transform: translateY(-50%);
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.promo-banner-arrow:hover {
-  background: #ffffff;
-  transform: translateY(-50%) scale(1.08);
-}
-
-.promo-banner-arrow-prev {
-  left: 14px;
-}
-
-.promo-banner-arrow-next {
-  right: 14px;
 }
 
 .promo-banner-dots {

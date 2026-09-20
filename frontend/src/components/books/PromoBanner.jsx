@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import biographyMemoir from '../../assets/promo-banners/biography-memoir.jpg'
 import fantasy from '../../assets/promo-banners/fantasy.jpg'
 import history from '../../assets/promo-banners/history.jpg'
@@ -36,6 +36,8 @@ const AUTO_ROTATE_MS = 6000
 function PromoBanner({ onSelectGenre }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const dragStartX = useRef(null)
+  const didDrag = useRef(false)
   // Local bundled images still have to be fetched/decoded by the browser
   // like any other <img> - this just avoids the first slide popping in
   // abruptly once that resolves. It's not tied to any network request, so
@@ -55,6 +57,42 @@ function PromoBanner({ onSelectGenre }) {
     setActiveIndex((nextIndex + SLIDES.length) % SLIDES.length)
   }
 
+  function handlePointerDown(event) {
+    // Only use the primary mouse/finger button, leaving the button's normal
+    // keyboard behavior intact.
+    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
+    dragStartX.current = event.clientX
+    didDrag.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+    if (event.pointerType !== 'mouse') setIsPaused(true)
+  }
+
+  function handlePointerUp(event) {
+    if (dragStartX.current === null) return
+    const distance = event.clientX - dragStartX.current
+    dragStartX.current = null
+
+    // A short movement is still a normal banner click. Swiping/dragging at
+    // least 40px changes exactly one slide in the expected direction.
+    if (Math.abs(distance) < 40) return
+    didDrag.current = true
+    goTo(activeIndex + (distance < 0 ? 1 : -1))
+    if (event.pointerType !== 'mouse') setIsPaused(false)
+  }
+
+  function handlePointerCancel(event) {
+    dragStartX.current = null
+    if (event.pointerType !== 'mouse') setIsPaused(false)
+  }
+
+  function handleSlideClick() {
+    if (didDrag.current) {
+      didDrag.current = false
+      return
+    }
+    onSelectGenre(activeSlide.topic)
+  }
+
   const activeSlide = SLIDES[activeIndex]
 
   return (
@@ -66,22 +104,22 @@ function PromoBanner({ onSelectGenre }) {
     >
       {!isFirstImageReady && <div className="promo-banner-skeleton book-card-skeleton" aria-hidden="true" />}
 
-      <button aria-label="Previous banner" className="promo-banner-arrow promo-banner-arrow-prev" onClick={() => goTo(activeIndex - 1)} type="button">
-        <i className="bi bi-chevron-left" />
-      </button>
-
-      <button className="promo-banner-slide" onClick={() => onSelectGenre(activeSlide.topic)} type="button">
+      <button
+        className="promo-banner-slide"
+        onClick={handleSlideClick}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        type="button"
+      >
         <img
           alt={`${activeSlide.id} genre banner`}
           key={activeSlide.id}
           onLoad={() => setIsFirstImageReady(true)}
+          draggable="false"
           src={activeSlide.image}
           style={isFirstImageReady ? undefined : { visibility: 'hidden' }}
         />
-      </button>
-
-      <button aria-label="Next banner" className="promo-banner-arrow promo-banner-arrow-next" onClick={() => goTo(activeIndex + 1)} type="button">
-        <i className="bi bi-chevron-right" />
       </button>
 
       <div className="promo-banner-dots" role="tablist" aria-label="Choose a banner">
