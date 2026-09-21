@@ -12,7 +12,7 @@ const listContent = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 24, 100);
   const page = Math.max(Number(req.query.page) || 1, 1);
 
-  const filter = { status: 'approved' };
+  const filter = { status: 'published' };
   if (type === 'ebook' || type === 'audiobook') filter.type = type;
   if (category) filter.categories = category;
   if (language) filter.language = language;

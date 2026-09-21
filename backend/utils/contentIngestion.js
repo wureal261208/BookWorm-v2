@@ -8,9 +8,9 @@
 // Wun's call: start bounded, raise the limit later to pull in more).
 const Content = require('../models/Content');
 const SyncState = require('../models/SyncState');
+const { fetchLibrivoxAudiobooks } = require('./librivoxFetcher');
 
 const GUTENDEX_BASE_URL = process.env.GUTENDEX_BASE_URL || 'https://gutendex.com/books/';
-const LIBRIVOX_BASE_URL = process.env.LIBRIVOX_BASE_URL || 'https://librivox.org/api/feed/audiobooks';
 
 // How many pages/batches to walk forward in a single run - kept small so
 // one cron invocation stays well inside Vercel's execution time limit.
@@ -73,38 +73,42 @@ function gutendexToContent(book) {
     source: 'Gutenberg',
     files,
     externalId: String(book.id),
-    status: 'approved',
+    // Gutenberg content is already public/curated - no admin review needed
+    // before it's visible, unlike a User upload (see models/Content.js).
+    // Matches the same lowercase draft/published/hidden values Book.js
+    // already uses, so the admin panel's status vocabulary stays one thing.
+    status: 'published',
     downloadCount: book.download_count || 0,
     lastSyncedAt: new Date(),
   };
 }
 
-function librivoxToContent(book) {
-  // Only the whole-book zip + RSS feed are in the non-extended feed shape;
-  // per-chapter mp3 URLs require `extended=1`'s "sections" array, which
-  // this ingestion doesn't request (keeping the payload small/fast) - so
-  // there's no per-chapter file list here yet.
+// Adapts librivoxFetcher.js's shapeLibrivoxBook() output (title, author,
+// description, categories, language, url_zip_file, url_text_source,
+// url_librivox, cover_image - the exact fields asked for) into the Content
+// schema's shape (type/source/files/status/...). Both the live preview
+// route (routes/librivoxRoutes.js) and this cached ingestion path share the
+// same underlying mapping, so a fix to one never drifts from the other.
+function shapedLibrivoxBookToContent(book) {
   const files = [
     book.url_zip_file ? { format: 'zip', url: book.url_zip_file } : null,
-    book.url_rss ? { format: 'rss', url: book.url_rss } : null,
+    book.url_text_source ? { format: 'text_source', url: book.url_text_source } : null,
   ].filter(Boolean);
-
-  const iarchiveMatch = (book.url_iarchive || '').match(/archive\.org\/details\/([^/?#]+)/);
 
   return {
     type: 'audiobook',
-    title: book.title || 'Untitled',
-    author: joinNames(book.authors, (person) => `${person.first_name || ''} ${person.last_name || ''}`.trim()),
-    description: book.description || '',
-    categories: (book.genres || []).map((genre) => genre.name).filter(Boolean),
-    language: book.language || 'English',
-    release_date: null,
-    cover_image: iarchiveMatch ? `https://archive.org/services/img/${iarchiveMatch[1]}` : '',
+    title: book.title,
+    author: book.author,
+    description: book.description,
+    categories: book.categories,
+    language: book.language,
+    release_date: book.release_date,
+    cover_image: book.cover_image,
     source: 'LibriVox',
     files,
-    externalId: String(book.id),
-    status: 'approved',
-    downloadCount: 0,
+    externalId: book.id,
+    status: 'published',
+    downloadCount: 0, // LibriVox has no equivalent popularity metric
     lastSyncedAt: new Date(),
   };
 }
@@ -185,9 +189,8 @@ async function ingestLibrivox() {
 
   if (state.initialBackfillComplete) {
     try {
-      const data = await fetchJson(`${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=0`);
-      const books = data.books || [];
-      const { upserted, updated } = await upsertContent('LibriVox', books.map(librivoxToContent));
+      const books = await fetchLibrivoxAudiobooks({ limit: LIBRIVOX_BATCH_SIZE, offset: 0 });
+      const { upserted, updated } = await upsertContent('LibriVox', books.map(shapedLibrivoxBookToContent));
       state.lastRunAt = new Date();
       await state.save();
       return { source: 'LibriVox', mode: 'top-up', fetched: books.length, upserted, updated };
@@ -207,12 +210,11 @@ async function ingestLibrivox() {
 
   while (batchesThisRun < LIBRIVOX_BATCHES_PER_RUN && state.totalImported < INITIAL_IMPORT_LIMIT) {
     const currentOffset = state.nextCursor;
-    const url = `${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=${currentOffset}`;
 
-    let data;
+    let books;
     try {
       // eslint-disable-next-line no-await-in-loop
-      data = await fetchJson(url);
+      books = await fetchLibrivoxAudiobooks({ limit: LIBRIVOX_BATCH_SIZE, offset: currentOffset });
     } catch (error) {
       // LibriVox's own feed has known quirks where a specific record in a
       // batch (e.g. an uncommon language value) makes their server error
@@ -228,14 +230,13 @@ async function ingestLibrivox() {
       continue;
     }
 
-    const books = data.books || [];
     if (!books.length) {
       state.initialBackfillComplete = true;
       break;
     }
 
     // eslint-disable-next-line no-await-in-loop
-    await upsertContent('LibriVox', books.map(librivoxToContent));
+    await upsertContent('LibriVox', books.map(shapedLibrivoxBookToContent));
 
     state.totalImported += books.length;
     fetchedThisRun += books.length;

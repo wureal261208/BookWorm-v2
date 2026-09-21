@@ -105,6 +105,12 @@ function AdminPage({
 
   const [activeAdminSection, setActiveAdminSection] = useState(availableSections[0] || 'dashboard')
   const [contributionsTab, setContributionsTab] = useState('submissions')
+  // Which sub-view Book Management shows: the existing hand-curated
+  // catalog (Push Book / edit / delete) vs the new Gutendex/LibriVox
+  // synced Content collection (see ContentManagementPanel below) - two
+  // different collections with two different workflows, so they're kept
+  // as separate sub-tabs rather than merged into one table.
+  const [bookManagementView, setBookManagementView] = useState('catalog')
   const [bookFilter, setBookFilter] = useState('all')
   const [bookPage, setBookPage] = useState(1)
   const [showPreview, setShowPreview] = useState(false)
@@ -393,6 +399,18 @@ function AdminPage({
 
       {activeAdminSection === 'book' && canPushBooks ? (
         <>
+          <div className="admin-filter-bar admin-book-management-tabs" aria-label="Book Management view">
+            <button className={bookManagementView === 'catalog' ? 'active' : ''} onClick={() => setBookManagementView('catalog')} type="button">
+              Catalog books
+            </button>
+            <button className={bookManagementView === 'synced' ? 'active' : ''} onClick={() => setBookManagementView('synced')} type="button">
+              Synced content (Gutenberg/LibriVox)
+            </button>
+          </div>
+
+          {bookManagementView === 'synced' && <ContentManagementPanel />}
+
+          {bookManagementView === 'catalog' && (
           <section className="admin-workspace admin-book-toolbar">
             <div className="section-heading">
               <div>
@@ -516,6 +534,7 @@ function AdminPage({
               )}
             </section>
           </section>
+          )}
         </>
       ) : null}
 
@@ -666,6 +685,269 @@ function AdminLoadingScreen({ fill, label }) {
   )
 }
 
+const CONTENT_STATUS_FILTERS = [
+  { id: '', label: 'All statuses' },
+  { id: 'published', label: 'Published' },
+  { id: 'draft', label: 'Draft' },
+  { id: 'hidden', label: 'Hidden' },
+]
+
+const CONTENT_PER_PAGE = 20
+
+// Same placeholder used for the catalog book grid above, reused here so a
+// missing cover_image (a Content doc synced without one) doesn't leave a
+// blank cell in the table.
+const CONTENT_NONE_COVER_URL = NONE_COVER_URL
+
+// Book Management's "Synced content" sub-tab: everything in the Content
+// collection (see backend/models/Content.js), which is a completely
+// different collection/workflow from the hand-curated catalog above - this
+// is auto-synced from Gutendex/LibriVox by the daily cron (see
+// backend/utils/contentIngestion.js), not pushed one book at a time by an
+// admin, so there's no Add/Edit here - only filtering, inspecting, and
+// Publish/Hide.
+function ContentManagementPanel() {
+  const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [categoryInput, setCategoryInput] = useState('')
+  const [authorInput, setAuthorInput] = useState('')
+  const [detailItem, setDetailItem] = useState(null)
+  const [actionError, setActionError] = useState('')
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    setError('')
+
+    const params = new URLSearchParams({ page: String(page), limit: String(CONTENT_PER_PAGE) })
+    if (typeFilter) params.set('type', typeFilter)
+    if (statusFilter) params.set('status', statusFilter)
+    if (categoryInput.trim()) params.set('category', categoryInput.trim())
+    if (authorInput.trim()) params.set('author', authorInput.trim())
+
+    apiFetch(`/api/admin/content?${params.toString()}`)
+      .then((data) => {
+        if (ignore) return
+        setItems(Array.isArray(data.items) ? data.items : [])
+        setTotal(data.total || 0)
+      })
+      .catch((err) => {
+        if (!ignore) setError(err.message)
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [page, typeFilter, statusFilter, categoryInput, authorInput])
+
+  // Any filter change starts back on page 1 - staying on e.g. page 4 of a
+  // filter that now only has 1 page would just show an empty table.
+  function updateFilter(setter, value) {
+    setter(value)
+    setPage(1)
+  }
+
+  async function changeStatus(item, status) {
+    setActionError('')
+    try {
+      await apiFetch(`/api/admin/content/${item._id}/status`, { method: 'PATCH', body: { status } })
+      setItems((current) => current.map((row) => (row._id === item._id ? { ...row, status } : row)))
+      setDetailItem((current) => (current && current._id === item._id ? { ...current, status } : current))
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / CONTENT_PER_PAGE))
+
+  return (
+    <section className="admin-workspace admin-book-toolbar">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">Auto-synced</p>
+          <h2>Synced content</h2>
+        </div>
+        <span>Ebooks from Gutenberg and audiobooks from LibriVox, kept fresh by the daily sync job.</span>
+      </div>
+
+      {actionError && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {actionError}</p>}
+
+      <div className="admin-filter-bar" aria-label="Filter synced content">
+        {[{ id: '', label: 'All types' }, { id: 'ebook', label: 'Ebooks' }, { id: 'audiobook', label: 'Audiobooks' }].map((option) => (
+          <button
+            className={typeFilter === option.id ? 'active' : ''}
+            key={option.id || 'all-types'}
+            onClick={() => updateFilter(setTypeFilter, option.id)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+        {CONTENT_STATUS_FILTERS.map((option) => (
+          <button
+            className={statusFilter === option.id ? 'active' : ''}
+            key={option.id || 'all-statuses'}
+            onClick={() => updateFilter(setStatusFilter, option.id)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+        <input
+          onChange={(event) => updateFilter(setCategoryInput, event.target.value)}
+          placeholder="Filter by category..."
+          type="text"
+          value={categoryInput}
+        />
+        <input
+          onChange={(event) => updateFilter(setAuthorInput, event.target.value)}
+          placeholder="Filter by author..."
+          type="text"
+          value={authorInput}
+        />
+      </div>
+
+      <section className="admin-table admin-book-grid">
+        <div className="admin-table-heading">
+          <h2>Content</h2>
+          <span className="admin-count-pill">{total.toLocaleString()}</span>
+        </div>
+
+        {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
+
+        {loading ? (
+          <AdminLoadingScreen label="Loading synced content..." />
+        ) : items.length ? (
+          <div className="admin-book-grid-rows">
+            {items.map((item) => (
+              <div className="table-row admin-book-row admin-row-fade-in" key={item._id}>
+                <img
+                  alt=""
+                  onError={(event) => {
+                    event.currentTarget.src = CONTENT_NONE_COVER_URL
+                  }}
+                  onClick={() => setDetailItem(item)}
+                  src={item.cover_image || CONTENT_NONE_COVER_URL}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span onClick={() => setDetailItem(item)} style={{ cursor: 'pointer' }}>
+                  {item.title}
+                  <em className={`admin-status status-${item.status}`}>{item.status}</em>
+                </span>
+                <small>
+                  {item.author} - {item.type === 'ebook' ? 'Ebook' : 'Audiobook'} - {item.source}
+                  {item.categories?.length ? ` - ${item.categories.slice(0, 2).join(', ')}` : ''}
+                </small>
+                <div className="admin-row-actions">
+                  <button className="edit-button" onClick={() => setDetailItem(item)} type="button">
+                    View
+                  </button>
+                  {item.status !== 'published' && (
+                    <button className="primary-button" onClick={() => changeStatus(item, 'published')} type="button">
+                      Publish
+                    </button>
+                  )}
+                  {item.status !== 'hidden' && (
+                    <button className="danger-button" onClick={() => changeStatus(item, 'hidden')} type="button">
+                      Hide
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No content matches this filter.</p>
+        )}
+
+        {total > CONTENT_PER_PAGE && <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />}
+      </section>
+
+      {detailItem && <ContentDetailModal item={detailItem} onChangeStatus={changeStatus} onClose={() => setDetailItem(null)} />}
+    </section>
+  )
+}
+
+// Full metadata + file list for one Content document - opened by clicking a
+// row in ContentManagementPanel above. Reuses the same modal shell classes
+// as the "Push Book" modal (admin-book-modal / -header / -body) so it
+// matches the rest of the admin panel without new CSS.
+function ContentDetailModal({ item, onChangeStatus, onClose }) {
+  return (
+    <div aria-labelledby="content-detail-title" aria-modal="true" className="reader-modal-backdrop admin-content-detail-backdrop" role="dialog">
+      <div className="admin-book-modal">
+        <header className="admin-book-modal-header">
+          <div>
+            <p className="mono-eyebrow">{item.type === 'ebook' ? 'Ebook' : 'Audiobook'} - {item.source}</p>
+            <h2 id="content-detail-title">{item.title}</h2>
+          </div>
+          <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+            <i className="bi bi-x-lg" />
+          </button>
+        </header>
+
+        <div className="admin-book-modal-body">
+          <div className="admin-search-hero">
+            <img alt="" src={item.cover_image || NONE_COVER_URL} style={{ width: 96, height: 134, objectFit: 'cover', borderRadius: 6 }} />
+            <div className="admin-search-hero-label">
+              <div>
+                <strong>{item.author}</strong>
+                <span>
+                  {item.language} - <em className={`admin-status status-${item.status}`}>{item.status}</em>
+                  {item.categories?.length ? ` - ${item.categories.join(', ')}` : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <p>{item.description || 'No description available.'}</p>
+
+          <h3>Files</h3>
+          {item.files?.length ? (
+            <ul>
+              {item.files.map((file) => (
+                <li key={file.url}>
+                  <a href={file.url} rel="noreferrer" target="_blank">
+                    {file.format}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No files recorded.</p>
+          )}
+
+          <div className="admin-row-actions">
+            {item.status !== 'published' && (
+              <button className="primary-button" onClick={() => onChangeStatus(item, 'published')} type="button">
+                Publish
+              </button>
+            )}
+            {item.status !== 'draft' && (
+              <button className="edit-button" onClick={() => onChangeStatus(item, 'draft')} type="button">
+                Move to draft
+              </button>
+            )}
+            {item.status !== 'hidden' && (
+              <button className="danger-button" onClick={() => onChangeStatus(item, 'hidden')} type="button">
+                Hide
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AdminDashboard({ canPushBooks }) {
   const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
@@ -799,7 +1081,114 @@ function AdminDashboard({ canPushBooks }) {
           )}
         </div>
       </div>
+
+      {canPushBooks && <ContentStatsSection />}
     </section>
+  )
+}
+
+// Separate fetch/loading state from the catalog stats above on purpose -
+// Content (Gutendex/LibriVox synced items) is a different collection with
+// its own independent daily sync job, so one endpoint being slow or down
+// shouldn't block the other's numbers from showing.
+function ContentStatsSection() {
+  const [stats, setStats] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+    apiFetch('/api/admin/content/stats')
+      .then((data) => {
+        if (!ignore) setStats(data)
+      })
+      .catch((err) => {
+        if (!ignore) setError(err.message)
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  if (loading) return null
+  if (error || !stats) {
+    return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Could not load synced content stats.'}</p>
+  }
+
+  const byStatus = stats.byStatus || {}
+  const statusEntries = ['published', 'draft', 'hidden'].map((key) => ({ key, count: byStatus[key] || 0 }))
+  const maxStatusCount = Math.max(1, ...statusEntries.map((entry) => entry.count))
+  const byCategory = (stats.byCategory || []).slice(0, 8)
+  const maxCategoryCount = Math.max(1, ...byCategory.map((entry) => entry.count))
+
+  return (
+    <>
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">Auto-synced</p>
+          <h2>Synced content</h2>
+        </div>
+        <span>Gutendex ebooks + LibriVox audiobooks, kept fresh by the daily sync job.</span>
+      </div>
+
+      <div className="admin-dashboard-summary">
+        <div className="admin-summary-card admin-row-fade-in">
+          <i className="bi bi-collection" />
+          <strong>{stats.total}</strong>
+          <span>Total content</span>
+        </div>
+        <div className="admin-summary-card admin-row-fade-in">
+          <i className="bi bi-book" />
+          <strong>{stats.byType?.ebook || 0}</strong>
+          <span>Ebooks</span>
+        </div>
+        <div className="admin-summary-card admin-row-fade-in">
+          <i className="bi bi-headphones" />
+          <strong>{stats.byType?.audiobook || 0}</strong>
+          <span>Audiobooks</span>
+        </div>
+        <div className="admin-summary-card admin-row-fade-in">
+          <i className="bi bi-clock-history" />
+          <strong>{stats.updatedToday}</strong>
+          <span>Updated today</span>
+        </div>
+      </div>
+
+      <div className="admin-dashboard-grid">
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-bar-chart" /> Content by status</h3>
+          {statusEntries.map((entry) => (
+            <div className="admin-bar-row" key={entry.key}>
+              <span className="admin-bar-label">{entry.key}</span>
+              <div className="admin-bar-track">
+                <div className="admin-bar-fill" style={{ width: `${(entry.count / maxStatusCount) * 100}%` }} />
+              </div>
+              <span className="admin-bar-value">{entry.count}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-chart-card">
+          <h3><i className="bi bi-tags" /> Content by category</h3>
+          {byCategory.length ? (
+            byCategory.map((entry) => (
+              <div className="admin-bar-row" key={entry.category}>
+                <span className="admin-bar-label admin-bar-label-title" title={entry.category}>{entry.category}</span>
+                <div className="admin-bar-track">
+                  <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(entry.count / maxCategoryCount) * 100}%` }} />
+                </div>
+                <span className="admin-bar-value">{entry.count}</span>
+              </div>
+            ))
+          ) : (
+            <p className="settings-copy">No categories recorded yet.</p>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 

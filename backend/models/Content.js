@@ -38,16 +38,20 @@ const ContentSchema = new mongoose.Schema(
     // - externalId + the compound index below: the natural de-dup key for
     //   Gutenberg/LibriVox re-syncs (their own catalog id), so re-running
     //   ingestion never creates duplicate documents.
-    // - status: everything from Gutenberg/LibriVox is auto-approved (it's
-    //   already public, curated content); a User upload starts 'pending'
-    //   until an admin approves/rejects it (section 3).
+    // - status: same lowercase draft/published/hidden vocabulary Book.js
+    //   already uses (admin panel filters/pills expect these exact
+    //   values) - Gutendex/LibriVox content defaults to 'published' since
+    //   it's already public, curated content with nothing to review; a
+    //   User upload should be created with 'draft' until an admin
+    //   publishes or hides it (the upload endpoint itself isn't built yet -
+    //   see routes/contentRoutes.js).
     // - uploadedBy: which user submitted it, for the admin panel and for
     //   "ban a user" to make sense of what they uploaded.
     // - downloadCount: Gutendex's own real popularity number, kept so a
     //   "Hot ebooks" sort has something honest to sort by (LibriVox has no
     //   equivalent metric, so this stays 0 for audiobooks).
     externalId: { type: String, default: null },
-    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved', index: true },
+    status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'published', index: true },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     downloadCount: { type: Number, default: 0 },
     lastSyncedAt: { type: Date, default: null },

@@ -12,6 +12,7 @@
     "backfill:descriptions": "node scripts/backfillBookDescriptions.js",
     "clean:category-prefixes": "node scripts/cleanCategoryPrefixes.js",
     "ingest:content": "node scripts/ingestContent.js",
+    "migrate:content-status": "node scripts/migrateContentStatus.js",
     "test": "jest"
   },
   "dependencies": {

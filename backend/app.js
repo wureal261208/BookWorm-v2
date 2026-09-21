@@ -9,6 +9,8 @@ const bookRoutes = require('./routes/bookRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bookMetadataRoutes = require('./routes/bookMetadataRoutes');
 const contentRoutes = require('./routes/contentRoutes');
+const contentAdminRoutes = require('./routes/contentAdminRoutes');
+const librivoxRoutes = require('./routes/librivoxRoutes');
 const cronRoutes = require('./routes/cronRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { success } = require('./utils/response');
@@ -99,6 +101,10 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/book-metadata', bookMetadataRoutes);
 // GET /api/content - unified ebook+audiobook reads, see contentRoutes.js
 app.use('/api/content', contentRoutes);
+// Admin-only: Book Management list/detail/publish-hide/stats, see contentAdminRoutes.js
+app.use('/api/admin/content', contentAdminRoutes);
+// GET /api/librivox/preview - live, uncached LibriVox passthrough, see librivoxRoutes.js
+app.use('/api/librivox', librivoxRoutes);
 // GET /api/cron/ingest-content - daily Vercel Cron target, see cronRoutes.js
 app.use('/api/cron', cronRoutes);
 
