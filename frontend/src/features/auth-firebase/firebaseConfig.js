@@ -4,7 +4,7 @@
 // Requires the real `firebase` package: `npm install firebase`.
 
 import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { browserLocalPersistence, browserSessionPersistence, getAuth, inMemoryPersistence, initializeAuth } from 'firebase/auth'
 
 // NOTE: a Firebase Web API key is not a secret — it just identifies which
 // Firebase project a request belongs to. Access is controlled by Firebase's
@@ -25,4 +25,30 @@ const firebaseConfig = {
 // Guards against re-initializing if this module is somehow evaluated twice
 // (e.g. hot module reload during `vite dev`).
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+
+// getAuth(app)'s default persistence chain tries indexedDBLocalPersistence
+// first. IndexedDB gets blocked or partitioned in several common contexts
+// (Chrome DevTools' "Responsive"/device-toolbar mode, private/incognito
+// windows, browsers blocking third-party storage) - when that happens,
+// Firebase's own internal persistence-probing code throws a cryptic
+// "Cannot read properties of undefined" from deep inside its minified
+// IndexedDB layer, once per fallback it tries. That's a known rough edge in
+// the SDK itself, not a bug in BookWorm's own code.
+// Skipping straight to plain localStorage (browserLocalPersistence) avoids
+// that IndexedDB code path entirely. The only real trade-off is Firebase's
+// automatic cross-tab logout sync (logging out in one tab no longer
+// instantly logs out other open tabs) - login still persists across
+// reloads exactly as before.
+let auth
+try {
+  auth = initializeAuth(app, {
+    persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence],
+  })
+} catch (error) {
+  // initializeAuth throws if an Auth instance for this app already exists
+  // (e.g. Vite HMR re-running this module) - fall back to the existing one
+  // instead of crashing the app.
+  auth = getAuth(app)
+}
+
+export { auth }

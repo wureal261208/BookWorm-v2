@@ -184,21 +184,50 @@ async function ingestLibrivox() {
   const state = await getOrCreateSyncState('LibriVox');
 
   if (state.initialBackfillComplete) {
-    const data = await fetchJson(`${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=0`);
-    const books = data.books || [];
-    const { upserted, updated } = await upsertContent('LibriVox', books.map(librivoxToContent));
-    state.lastRunAt = new Date();
-    await state.save();
-    return { source: 'LibriVox', mode: 'top-up', fetched: books.length, upserted, updated };
+    try {
+      const data = await fetchJson(`${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=0`);
+      const books = data.books || [];
+      const { upserted, updated } = await upsertContent('LibriVox', books.map(librivoxToContent));
+      state.lastRunAt = new Date();
+      await state.save();
+      return { source: 'LibriVox', mode: 'top-up', fetched: books.length, upserted, updated };
+    } catch (error) {
+      // Same known-quirk situation as the backfill loop below - offset 0
+      // itself can occasionally be one of the bad pages. Report it instead
+      // of throwing, so this doesn't take down the whole daily cron run.
+      state.lastRunAt = new Date();
+      await state.save();
+      return { source: 'LibriVox', mode: 'top-up', fetched: 0, error: error.message };
+    }
   }
 
   let batchesThisRun = 0;
   let fetchedThisRun = 0;
+  const skippedOffsets = [];
 
   while (batchesThisRun < LIBRIVOX_BATCHES_PER_RUN && state.totalImported < INITIAL_IMPORT_LIMIT) {
-    const url = `${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=${state.nextCursor}`;
-    // eslint-disable-next-line no-await-in-loop
-    const data = await fetchJson(url);
+    const currentOffset = state.nextCursor;
+    const url = `${LIBRIVOX_BASE_URL}?format=json&limit=${LIBRIVOX_BATCH_SIZE}&offset=${currentOffset}`;
+
+    let data;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      data = await fetchJson(url);
+    } catch (error) {
+      // LibriVox's own feed has known quirks where a specific record in a
+      // batch (e.g. an uncommon language value) makes their server error
+      // out for the whole page - see forum.librivox.org discussions of
+      // this API's "quirks & limitations". There's nothing to fix on our
+      // side, so skip past this one batch (losing at most 50 records) and
+      // keep going, rather than getting permanently stuck retrying the
+      // same offset forever.
+      skippedOffsets.push({ offset: currentOffset, reason: error.message });
+      state.nextCursor += LIBRIVOX_BATCH_SIZE;
+      batchesThisRun += 1;
+      // eslint-disable-next-line no-continue
+      continue;
+    }
+
     const books = data.books || [];
     if (!books.length) {
       state.initialBackfillComplete = true;
@@ -232,6 +261,7 @@ async function ingestLibrivox() {
     fetchedThisRun,
     totalImported: state.totalImported,
     initialBackfillComplete: state.initialBackfillComplete,
+    ...(skippedOffsets.length ? { skippedOffsets } : {}),
   };
 }
 
