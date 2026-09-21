@@ -11,7 +11,7 @@
     "import-metadata-to-books": "node scripts/importMetadataToBooks.js",
     "backfill:descriptions": "node scripts/backfillBookDescriptions.js",
     "clean:category-prefixes": "node scripts/cleanCategoryPrefixes.js",
-    "sync:catalog": "node scripts/syncCatalog.js",
+    "ingest:content": "node scripts/ingestContent.js",
     "test": "jest"
   },
   "dependencies": {

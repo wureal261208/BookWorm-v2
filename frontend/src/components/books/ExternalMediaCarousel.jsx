@@ -1,41 +1,28 @@
 import { useRef } from 'react'
-import { getAuthor, getCover } from '../../utils/bookUtils'
 
-// Pulls an Internet Archive cover thumbnail out of a LibriVox item's own
-// archive.org details-page URL (LibriVox itself doesn't serve cover art on
-// this feed) - e.g. ".../details/count_monte_cristo_0911_librivox" becomes
-// archive.org's own cover-image endpoint for that same identifier.
-function getIarchiveCover(urlIarchive) {
-  const match = (urlIarchive || '').match(/archive\.org\/details\/([^/?#]+)/)
-  return match ? `https://archive.org/services/img/${match[1]}` : ''
+function getFileUrl(files, formats) {
+  const match = (files || []).find((file) => formats.includes(file.format))
+  return match ? match.url : ''
 }
 
-function getAudiobookAuthor(item) {
-  const names = (item.authors || [])
-    .map((author) => `${author.firstName || ''} ${author.lastName || ''}`.trim())
-    .filter(Boolean)
-  return names.join(', ') || 'Unknown author'
-}
-
-// "Hot ebooks"/"Hot audiobooks" on Home show real Gutendex/LibriVox catalog
-// items that haven't been pushed into BookWorm's own Book collection (no
-// chapters, no in-app reader text) - so unlike BookCard, this links straight
-// out to the source instead of wiring up Save/Read against a book id that
-// doesn't exist here. Reuses BookCard's own class names so it matches the
-// rest of Home's rows without a separate stylesheet.
-function ExternalMediaCard({ item, kind }) {
-  const isEbook = kind === 'ebook'
+// "Hot ebooks"/"Hot audiobooks" on Home show Content documents synced from
+// Gutendex/LibriVox (see backend/utils/contentIngestion.js) that haven't
+// been reviewed/added to BookWorm's own in-app reader yet - so unlike
+// BookCard, this links straight out to the source (Gutenberg/LibriVox/
+// archive.org) instead of wiring up Save/Read against a book id that
+// doesn't have chapters or reader text here. Reuses BookCard's own class
+// names so it matches the rest of Home's rows without a separate stylesheet.
+function ExternalMediaCard({ item }) {
+  const isEbook = item.type === 'ebook'
   const title = item.title || 'Untitled'
-  const author = isEbook ? getAuthor(item) : getAudiobookAuthor(item)
-  const cover = isEbook ? getCover(item) : getIarchiveCover(item.urlIarchive)
+  const author = item.author || 'Unknown author'
+  const cover = item.cover_image || ''
   const meta = isEbook
-    ? `${(item.download_count || 0).toLocaleString()} downloads on Gutenberg`
-    : item.totalTime
-      ? `${item.totalTime} runtime`
-      : 'LibriVox audiobook'
+    ? `${(item.downloadCount || 0).toLocaleString()} downloads on Gutenberg`
+    : 'LibriVox audiobook'
   const externalUrl = isEbook
-    ? item.formats?.['text/html'] || `https://www.gutenberg.org/ebooks/${item.id}`
-    : item.urlLibrivox || item.urlIarchive
+    ? getFileUrl(item.files, ['html', 'epub']) || `https://www.gutenberg.org/ebooks/${item.externalId}`
+    : getFileUrl(item.files, ['zip', 'rss']) || `https://librivox.org/`
 
   return (
     <article className="book-card">
@@ -55,7 +42,7 @@ function ExternalMediaCard({ item, kind }) {
         )}
       </a>
       <div className="book-card-body">
-        <span className="category">{isEbook ? 'Gutenberg' : 'LibriVox'}</span>
+        <span className="category">{item.source}</span>
         <h2>{title}</h2>
         <p>{author}</p>
       </div>
@@ -76,8 +63,8 @@ function ExternalMediaCard({ item, kind }) {
 // Same scroll-by-page track/arrows behavior as BookCarousel, just rendering
 // ExternalMediaCard instead - kept separate rather than making BookCarousel
 // take a render prop, since BookCarousel's favorites/onFavorite/onRead
-// plumbing doesn't apply to items that aren't in the Book collection.
-function ExternalMediaCarousel({ items, kind }) {
+// plumbing doesn't apply to items that aren't in BookWorm's own reader yet.
+function ExternalMediaCarousel({ items }) {
   const trackRef = useRef(null)
 
   function scrollByPage(direction) {
@@ -105,8 +92,8 @@ function ExternalMediaCarousel({ items, kind }) {
 
       <div className="book-carousel-track" ref={trackRef}>
         {items.map((item) => (
-          <div className="book-carousel-item" key={item.id}>
-            <ExternalMediaCard item={item} kind={kind} />
+          <div className="book-carousel-item" key={item._id}>
+            <ExternalMediaCard item={item} />
           </div>
         ))}
       </div>

@@ -33,11 +33,9 @@ function useBookRow(query) {
   return [books, loading]
 }
 
-// Same idea as useBookRow, but for the cached-from-Mongo /api/ebooks and
-// /api/audiobooks routes (see backend/controllers/catalogController.js) -
-// those respond with the array directly rather than a { books: [...] }
-// envelope, so this is a separate (simpler) hook rather than reusing
-// useBookRow with a flag.
+// Same idea as useBookRow, but for the unified /api/content route (see
+// backend/controllers/contentController.js), which responds with
+// { items, total, page, limit } rather than a { books: [...] } envelope.
 function useExternalRow(path) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -47,7 +45,7 @@ function useExternalRow(path) {
     setLoading(true)
     publicApiFetch(path)
       .then((data) => {
-        if (!ignore) setItems(Array.isArray(data) ? data : [])
+        if (!ignore) setItems(Array.isArray(data?.items) ? data.items : [])
       })
       .catch(() => {
         if (!ignore) setItems([])
@@ -71,8 +69,8 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
   // not a fabricated pick.
   const [recommended, recommendedLoading] = useBookRow('limit=16&sort=views&page=2')
 
-  const [hotEbooks, hotEbooksLoading] = useExternalRow('/api/ebooks?limit=16')
-  const [hotAudiobooks, hotAudiobooksLoading] = useExternalRow('/api/audiobooks?limit=16')
+  const [hotEbooks, hotEbooksLoading] = useExternalRow('/api/content?type=ebook&limit=16')
+  const [hotAudiobooks, hotAudiobooksLoading] = useExternalRow('/api/content?type=audiobook&limit=16')
 
   const newBooks = books.slice(0, 16)
   const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
@@ -149,20 +147,14 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         viewerCounts={viewerCounts}
       />
 
-      {/* Straight from the Gutendex/LibriVox cache (see
-          backend/utils/externalCatalogSync.js) - these two rows link out to
-          Gutenberg/LibriVox themselves rather than BookWorm's own reader,
-          since these items haven't been pushed into the Book collection
-          (no chapters, no in-app reader text) yet. */}
-      <ExternalRowSection eyebrow="Popular on Gutenberg" items={hotEbooks} kind="ebook" loading={hotEbooksLoading} title="Hot ebooks" />
+      {/* Straight from the unified Content collection (see
+          backend/utils/contentIngestion.js) - these two rows link out to
+          Gutenberg/LibriVox/archive.org themselves rather than BookWorm's
+          own reader, since this content hasn't gone through the (not yet
+          built) admin review + in-app reader/player wiring. */}
+      <ExternalRowSection eyebrow="Popular on Gutenberg" items={hotEbooks} loading={hotEbooksLoading} title="Hot ebooks" />
 
-      <ExternalRowSection
-        eyebrow="Fresh from LibriVox"
-        items={hotAudiobooks}
-        kind="audiobook"
-        loading={hotAudiobooksLoading}
-        title="Hot audiobooks"
-      />
+      <ExternalRowSection eyebrow="Fresh from LibriVox" items={hotAudiobooks} loading={hotAudiobooksLoading} title="Hot audiobooks" />
     </div>
   )
 }
@@ -202,10 +194,10 @@ function BookRowSection({ actionLabel, books, eyebrow, favorites, loading, onAct
   )
 }
 
-// Same header/skeleton shell as BookRowSection, but for the Gutendex/
-// LibriVox cache rows - no favorites/onRead wiring, since those items live
-// outside the Book collection (see ExternalMediaCarousel.jsx).
-function ExternalRowSection({ eyebrow, items, kind, loading, title }) {
+// Same header/skeleton shell as BookRowSection, but for the Content-backed
+// rows - no favorites/onRead wiring, since this content hasn't gone
+// through the in-app reader/player yet (see ExternalMediaCarousel.jsx).
+function ExternalRowSection({ eyebrow, items, loading, title }) {
   return (
     <section className="section-block">
       <div className="section-heading">
@@ -214,7 +206,7 @@ function ExternalRowSection({ eyebrow, items, kind, loading, title }) {
           <h2>{title}</h2>
         </div>
       </div>
-      {loading ? <CarouselSkeleton /> : <ExternalMediaCarousel items={items} kind={kind} />}
+      {loading ? <CarouselSkeleton /> : <ExternalMediaCarousel items={items} />}
     </section>
   )
 }

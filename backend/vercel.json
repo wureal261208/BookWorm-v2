@@ -3,6 +3,6 @@
     { "source": "/(.*)", "destination": "/api/index" }
   ],
   "crons": [
-    { "path": "/api/cron/sync-catalog", "schedule": "0 3 * * *" }
+    { "path": "/api/cron/ingest-content", "schedule": "0 3 * * *" }
   ]
 }

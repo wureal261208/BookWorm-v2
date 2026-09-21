@@ -8,7 +8,7 @@ const userRoutes = require('./routes/userRoutes');
 const bookRoutes = require('./routes/bookRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bookMetadataRoutes = require('./routes/bookMetadataRoutes');
-const catalogRoutes = require('./routes/catalogRoutes');
+const contentRoutes = require('./routes/contentRoutes');
 const cronRoutes = require('./routes/cronRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { success } = require('./utils/response');
@@ -97,9 +97,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/book-metadata', bookMetadataRoutes);
-// GET /api/ebooks and GET /api/audiobooks - cached reads, see catalogRoutes.js
-app.use('/api', catalogRoutes);
-// GET /api/cron/sync-catalog - daily Vercel Cron target, see cronRoutes.js
+// GET /api/content - unified ebook+audiobook reads, see contentRoutes.js
+app.use('/api/content', contentRoutes);
+// GET /api/cron/ingest-content - daily Vercel Cron target, see cronRoutes.js
 app.use('/api/cron', cronRoutes);
 
 app.use(notFound);

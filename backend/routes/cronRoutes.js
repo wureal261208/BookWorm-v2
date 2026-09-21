@@ -1,5 +1,5 @@
 const express = require('express');
-const { runCatalogSync } = require('../controllers/catalogController');
+const { runContentIngestion } = require('../controllers/contentController');
 const { fail } = require('../utils/response');
 
 const router = express.Router();
@@ -22,6 +22,6 @@ function verifyCronRequest(req, res, next) {
   return next();
 }
 
-router.get('/sync-catalog', verifyCronRequest, runCatalogSync);
+router.get('/ingest-content', verifyCronRequest, runContentIngestion);
 
 module.exports = router;
