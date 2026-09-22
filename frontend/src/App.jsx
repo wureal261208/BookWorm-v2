@@ -37,7 +37,9 @@ import logo from './assets/logo.jpg'
 import './App.css'
 
 const AdminPage = lazy(() => import('./components/pages/AdminPage'))
+const AiSuggestionsPage = lazy(() => import('./components/pages/AiSuggestionsPage'))
 const BookDetailPage = lazy(() => import('./components/pages/BookDetailPage'))
+const BooksPage = lazy(() => import('./components/pages/BooksPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
 const DiscoverPage = lazy(() => import('./components/pages/DiscoverPage'))
 const RandomPage = lazy(() => import('./components/pages/RandomPage'))
@@ -72,6 +74,8 @@ const VIEW_DWELL_MS = 90_000
 
 const PAGE_PATHS = {
   home: '/',
+  books: '/books',
+  'ai-suggestions': '/ai-suggestions',
   discover: '/discover',
   community: '/community',
   random: '/random',
@@ -179,19 +183,23 @@ function App() {
   const scrollToTopForPage = useCallback((page) => {
     if (typeof window === 'undefined') return
 
-    if (['home', 'discover', 'community', 'write', 'random', 'profile'].includes(page)) {
+    if (['home', 'books', 'ai-suggestions', 'discover', 'community', 'write', 'random', 'profile'].includes(page)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
     }
   }, [])
 
   const navigateTo = useCallback((page, options = {}) => {
     const nextPage = PAGE_PATHS[page] ? page : 'home'
-    const nextPath = PAGE_PATHS[nextPage]
+    // options.query lets a caller land on e.g. /books?category=Romance
+    // instead of just the bare page path - used by the promo banner and
+    // (later) AI Suggestions, both of which need to say *which* category,
+    // not just "go to the books page".
+    const nextHref = PAGE_PATHS[nextPage] + (options.query ? `?${options.query}` : '')
     window.clearTimeout(routeTimerRef.current)
 
     const openRoute = () => {
-      if (window.location.pathname !== nextPath) {
-        routerNavigate(nextPath, { replace: Boolean(options.replace) })
+      if (window.location.pathname + window.location.search !== nextHref) {
+        routerNavigate(nextHref, { replace: Boolean(options.replace) })
       }
     }
 
@@ -1131,7 +1139,7 @@ function App() {
         onDetail={openDetail}
         onFavorite={toggleFavorite}
         onRead={openBook}
-        onSelectGenre={(genre) => jumpPage('discover', genre)}
+        onSelectGenre={(genre) => navigateTo('books', { query: `category=${encodeURIComponent(genre)}` })}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}
@@ -1139,6 +1147,8 @@ function App() {
         progress={visibleProgress}
       />
     ),
+    books: <BooksPage />,
+    'ai-suggestions': <AiSuggestionsPage />,
     discover: (
       <DiscoverPage
         favorites={favorites}

@@ -1,23 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import biographyMemoir from '../../assets/promo-banners/biography-memoir.jpg'
-import fantasy from '../../assets/promo-banners/fantasy.jpg'
-import history from '../../assets/promo-banners/history.jpg'
-import horror from '../../assets/promo-banners/horror.jpg'
-import literary from '../../assets/promo-banners/literary.jpg'
-import mysteryThriller from '../../assets/promo-banners/mystery-thriller.jpg'
-import romance from '../../assets/promo-banners/romance.jpg'
-import sciFi from '../../assets/promo-banners/sci-fi.jpg'
-
-const SLIDES = [
-  { id: 'romance', image: romance, topic: 'Romance' },
-  { id: 'fantasy', image: fantasy, topic: 'Fantasy' },
-  { id: 'sci-fi', image: sciFi, topic: 'Science Fiction' },
-  { id: 'mystery-thriller', image: mysteryThriller, topic: 'Mystery' },
-  { id: 'horror', image: horror, topic: 'Horror' },
-  { id: 'history', image: history, topic: 'History' },
-  { id: 'literary', image: literary, topic: 'Literary' },
-  { id: 'biography-memoir', image: biographyMemoir, topic: 'Biography' },
-]
+import { GENRE_SLIDES as SLIDES } from '../../utils/genreSlides'
 
 const AUTO_ROTATE_MS = 6000
 

@@ -8788,3 +8788,155 @@ progress {
     transform: none !important;
   }
 }
+
+/* --- BooksPage (unified /books?category= page) --- */
+.books-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.books-page-banner {
+  border-radius: 12px;
+  padding: 64px 32px;
+  background-color: var(--app-surface-soft);
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+  justify-content: flex-end;
+}
+
+.books-page-banner h1 {
+  margin: 0;
+  font-size: 2.25rem;
+}
+
+.books-page-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.books-page-tabs button {
+  border: 1px solid var(--app-surface-soft);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.books-page-tabs button.active {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+.books-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 20px;
+}
+
+.books-page-grid a.book-card {
+  color: inherit;
+  text-decoration: none;
+  background: var(--app-surface);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.books-page-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 32px;
+}
+
+.books-page-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 64px 16px;
+  color: var(--app-muted);
+  text-align: center;
+}
+
+.books-page-empty i {
+  font-size: 2.5rem;
+}
+
+/* --- Write dropdown (navbar, next to avatar) --- */
+.write-menu-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.write-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  min-width: 180px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+
+.write-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--app-text);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.write-menu-dropdown button:hover {
+  background: var(--app-surface-soft);
+}
+
+/* --- AI Suggestions page --- */
+.ai-suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.ai-suggestion-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ai-suggestion-card i {
+  font-size: 1.5rem;
+}
+
+.ai-suggestion-card span {
+  color: var(--app-muted);
+  font-size: 0.85rem;
+}

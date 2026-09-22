@@ -14,7 +14,10 @@ const listContentForAdmin = asyncHandler(async (req, res) => {
 
   const filter = {};
   if (type === 'ebook' || type === 'audiobook') filter.type = type;
-  if (category) filter.categories = category;
+  // Same reasoning as the public listContent - loose/contains match, not
+  // an exact one, since curated category names rarely match raw source
+  // category strings exactly.
+  if (category) filter.categories = { $regex: category, $options: 'i' };
   if (author) filter.author = { $regex: author, $options: 'i' };
   if (status && VALID_STATUSES.includes(status)) filter.status = status;
   if (search) filter.$text = { $search: search };

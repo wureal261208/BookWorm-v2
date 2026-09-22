@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getInitials, getCover, getAuthor } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
 import { hasAccess, normalizeRole } from '../../data/bookData'
 
-// Wattpad-style top nav: logo click already goes home (see handleLogoClick
-// below), so there's no separate "Home" link - just Browse/Community/Write
-// plus whatever staff-only links apply. "Browse" reuses the existing
-// Discover page/route as-is (same subject/category filtering, same
-// pagination) - it's a relabel for the nav, not a second page to maintain.
+// Ebooks/Audiobooks both point at the same /books page (see BooksPage.jsx -
+// one page for every category/type, not a separate route per type) with a
+// different `type` query param, via `target` + `query`. `id` stays unique
+// per item for React keys and for the active-tab check below, which is why
+// it's not just "books" for both. "Write" used to be a top-level item here
+// - it's now a dropdown next to the avatar instead (see writeMenuRef below).
 const navItems = [
-  { id: 'discover', label: 'Browse', icon: 'bi-compass' },
+  { id: 'ebooks', label: 'Ebooks', icon: 'bi-book', target: 'books', query: 'type=ebook' },
+  { id: 'audiobooks', label: 'Audiobooks', icon: 'bi-headphones', target: 'books', query: 'type=audiobook' },
+  { id: 'ai-suggestions', label: 'AI Suggestions', icon: 'bi-stars' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
-  { id: 'write', label: 'Write', icon: 'bi-pencil-square', private: true },
   { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },
 ]
@@ -39,8 +42,11 @@ function AppShell({
   websiteTheme = 'light',
 }) {
   const { activePage, isPageLoading, navigateTo } = useNavigation()
-
-
+  // Only used to tell the Ebooks tab apart from the Audiobooks tab (both
+  // point at activePage === 'books') - not used for navigation itself,
+  // navigateTo's own `query` option handles that.
+  const [searchParams] = useSearchParams()
+  const activeBooksType = searchParams.get('type')
 
   const [rememberedAdminAccess, setRememberedAdminAccess] = useState(false)
   const normalizedRole = normalizeRole(account?.role)
@@ -54,9 +60,11 @@ function AppShell({
   const unreadNotifications = unreadNotificationItems.length
 
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showWriteMenu, setShowWriteMenu] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const notificationRef = useRef(null)
+  const writeMenuRef = useRef(null)
   const visibleNavItems = navItems.filter((item) => {
     if (isManagementNavContext && !managementNavIds.includes(item.id)) return false
     if (item.admin && !canShowAdminNav) return false
@@ -112,6 +120,21 @@ function AppShell({
     }
   }, [showNotifications])
 
+  useEffect(() => {
+    if (!showWriteMenu) return
+
+    function handleOutsideClick(event) {
+      if (writeMenuRef.current && !writeMenuRef.current.contains(event.target)) {
+        setShowWriteMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [showWriteMenu])
+
   function handleLogoClick() {
     navigateTo('home')
   }
@@ -141,13 +164,18 @@ function AppShell({
               if (item.admin && !canShowAdminNav) return null
               if (item.private && isGuest) return null
 
+              const targetPage = item.target || item.id
+              const expectedType = item.query?.startsWith('type=') ? item.query.slice(5) : null
+              const isActive =
+                activePage === targetPage && (expectedType === null || activeBooksType === expectedType)
+
               return (
                 <button
-                  className={activePage === item.id ? 'active' : ''}
+                  className={isActive ? 'active' : ''}
                   key={item.id}
                   onClick={() => {
                     setIsMobileNavOpen(false)
-                    navigateTo(item.id)
+                    navigateTo(targetPage, item.query ? { query: item.query } : undefined)
                   }}
                   type="button"
                 >
@@ -235,6 +263,35 @@ function AppShell({
               >
                 <i className={`bi ${themeIcons[websiteTheme] || 'bi-sun'}`} />
               </button>
+            </div>
+          )}
+          {!isGuest && (
+            <div className="write-menu" ref={writeMenuRef} style={{ position: 'relative' }}>
+              <button
+                aria-expanded={showWriteMenu}
+                aria-haspopup="true"
+                className="ghost-button write-menu-toggle"
+                onClick={() => setShowWriteMenu((value) => !value)}
+                type="button"
+              >
+                <i className="bi bi-pencil-square" />
+                <span>Write</span>
+                <i className="bi bi-chevron-down" />
+              </button>
+              {showWriteMenu && (
+                <div className="write-menu-dropdown">
+                  <button
+                    onClick={() => {
+                      setShowWriteMenu(false)
+                      navigateTo('write')
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-pencil-square" />
+                    Write a story
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <button className="avatar-chip" onClick={() => (isGuest ? onAuth() : navigateTo('profile'))} type="button">
