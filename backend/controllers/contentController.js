@@ -1,7 +1,8 @@
 const Content = require('../models/Content');
 const asyncHandler = require('../utils/asyncHandler');
-const { success } = require('../utils/response');
+const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
+const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 
 // Public reads - only ever approved content, straight from Mongo. User
 // uploads sit as status:'pending' until an admin approves them (see the
@@ -33,6 +34,42 @@ const listContent = asyncHandler(async (req, res) => {
   ]);
 
   return success(res, 200, 'Content fetched.', { items, total, page, limit });
+});
+
+// Public, no auth - powers the in-app reader/player pages. Only ever
+// returns published content, same as listContent above - a draft/hidden
+// item 404s here exactly like it's missing, rather than leaking its
+// existence to a visitor who isn't an admin.
+const getPublicContentDetail = asyncHandler(async (req, res) => {
+  const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  if (!item) return fail(res, 404, 'Content not found.');
+  return success(res, 200, 'Content detail fetched.', item);
+});
+
+// Public, no auth - backs the in-app audiobook player's chapter list.
+// Fetches the item's own RSS file live (LibriVox doesn't hand back
+// per-chapter mp3 URLs anywhere in the cached Content document - the
+// ingestion pipeline only keeps the whole-book zip + the RSS URL itself,
+// see contentIngestion.js) and parses it on the spot rather than caching
+// the chapter list in Mongo, since RSS parsing is cheap and this keeps the
+// Content documents themselves small.
+const getAudiobookChapters = asyncHandler(async (req, res) => {
+  const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  if (!item) return fail(res, 404, 'Content not found.');
+  if (item.type !== 'audiobook') return fail(res, 400, 'Chapters are only available for audiobooks.');
+
+  const rssFile = (item.files || []).find((file) => file.format === 'rss');
+  if (!rssFile) return fail(res, 404, 'No RSS feed recorded for this audiobook.');
+
+  try {
+    const response = await fetch(rssFile.url);
+    if (!response.ok) throw new Error(`RSS request failed with status ${response.status}`);
+    const xml = await response.text();
+    const chapters = parseLibrivoxChapters(xml);
+    return success(res, 200, 'Chapters fetched.', { chapters });
+  } catch (error) {
+    return fail(res, 502, `Could not load chapters: ${error.message}`);
+  }
 });
 
 // Public, no auth - backs the AI Suggestions page. Honest about what this
@@ -67,4 +104,4 @@ const runContentIngestion = asyncHandler(async (req, res) => {
   return success(res, 200, 'Content ingestion finished.', result);
 });
 
-module.exports = { listContent, getTopCategories, runContentIngestion };
+module.exports = { listContent, getPublicContentDetail, getAudiobookChapters, getTopCategories, runContentIngestion };

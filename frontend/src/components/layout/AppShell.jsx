@@ -11,16 +11,19 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 // different `type` query param, via `target` + `query`. `id` stays unique
 // per item for React keys and for the active-tab check below, which is why
 // it's not just "books" for both. "Write" used to be a top-level item here
-// - it's now a dropdown next to the avatar instead (see writeMenuRef below).
+// - it's now a dropdown next to the search box instead (see writeMenuRef
+// below). "Profile" also used to be its own pill here - removed as
+// redundant now that the avatar chip next to Login/Logout already opens it.
 const navItems = [
   { id: 'ebooks', label: 'Ebooks', icon: 'bi-book', target: 'books', query: 'type=ebook' },
   { id: 'audiobooks', label: 'Audiobooks', icon: 'bi-headphones', target: 'books', query: 'type=audiobook' },
   { id: 'ai-suggestions', label: 'AI Suggestions', icon: 'bi-stars' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
-  { id: 'profile', label: 'Profile', icon: 'bi-person-circle', private: true },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },
 ]
-const managementNavIds = ['profile', 'admin']
+// Only 'admin' now - Profile no longer has its own pill, so there's nothing
+// left to swap the main nav out for while just viewing your own profile.
+const managementNavIds = ['admin']
 
 const themeOrder = ['light', 'dark']
 const themeIcons = { light: 'bi-sun', dark: 'bi-moon' }
@@ -187,6 +190,36 @@ function AppShell({
           </nav>
 
           <HeaderSearch onSearch={(term) => { setIsMobileNavOpen(false); onHeaderSearch?.(term) }} />
+
+          {!isGuest && (
+            <div className="write-menu" ref={writeMenuRef} style={{ position: 'relative' }}>
+              <button
+                aria-expanded={showWriteMenu}
+                aria-haspopup="true"
+                className="ghost-button write-menu-toggle"
+                onClick={() => setShowWriteMenu((value) => !value)}
+                type="button"
+              >
+                <i className="bi bi-pencil-square" />
+                <span>Write</span>
+                <i className="bi bi-chevron-down" />
+              </button>
+              {showWriteMenu && (
+                <div className="write-menu-dropdown">
+                  <button
+                    onClick={() => {
+                      setShowWriteMenu(false)
+                      navigateTo('write')
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-pencil-square" />
+                    Write a story
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {isMobileNavOpen && <button aria-label="Close menu" className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} type="button" />}
@@ -263,35 +296,6 @@ function AppShell({
               >
                 <i className={`bi ${themeIcons[websiteTheme] || 'bi-sun'}`} />
               </button>
-            </div>
-          )}
-          {!isGuest && (
-            <div className="write-menu" ref={writeMenuRef} style={{ position: 'relative' }}>
-              <button
-                aria-expanded={showWriteMenu}
-                aria-haspopup="true"
-                className="ghost-button write-menu-toggle"
-                onClick={() => setShowWriteMenu((value) => !value)}
-                type="button"
-              >
-                <i className="bi bi-pencil-square" />
-                <span>Write</span>
-                <i className="bi bi-chevron-down" />
-              </button>
-              {showWriteMenu && (
-                <div className="write-menu-dropdown">
-                  <button
-                    onClick={() => {
-                      setShowWriteMenu(false)
-                      navigateTo('write')
-                    }}
-                    type="button"
-                  >
-                    <i className="bi bi-pencil-square" />
-                    Write a story
-                  </button>
-                </div>
-              )}
             </div>
           )}
           <button className="avatar-chip" onClick={() => (isGuest ? onAuth() : navigateTo('profile'))} type="button">

@@ -7,11 +7,27 @@ const mongoose = require('mongoose');
 // stat counts against.
 const CommentSchema = new mongoose.Schema(
   {
-    book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true, index: true },
+    // Exactly one of book/content is set per comment - `book` for the
+    // existing catalog (Book model), `content` for the newer unified
+    // Gutendex/LibriVox/user-upload collection (Content model). Two
+    // separate ref fields rather than one polymorphic field, so every
+    // existing query against `book` (comment counts, admin's "most
+    // commented" stat, etc.) keeps working exactly as it did before this
+    // changed from required.
+    book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null, index: true },
+    content: { type: mongoose.Schema.Types.ObjectId, ref: 'Content', default: null, index: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     text: { type: String, required: true, trim: true, maxlength: 2000 },
   },
   { timestamps: true, collection: 'comments' }
 );
+
+CommentSchema.pre('validate', function enforceExactlyOneTarget(next) {
+  if (Boolean(this.book) === Boolean(this.content)) {
+    next(new Error('A comment must reference exactly one of book or content.'));
+    return;
+  }
+  next();
+});
 
 module.exports = mongoose.model('Comment', CommentSchema);

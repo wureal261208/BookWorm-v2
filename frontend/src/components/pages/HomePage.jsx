@@ -78,20 +78,12 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
   return (
     <div className="home-page">
       {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
-          filters Browse by that genre's topic pill (also matches by
-          subject, not just category - see the $or in listBooks). */}
-      <section className="home-promo-layout">
-        <PromoBanner onSelectGenre={onSelectGenre} />
-        <aside className="random-feature-panel">
-          <p className="mono-eyebrow">Need inspiration?</p>
-          <h2>What should I read today?</h2>
-          <p>Can&apos;t decide on your next story? Let BookWorm pick a book from the library for you.</p>
-          <button className="random-feature-button" onClick={() => setPage('random')} type="button">
-            <i className="bi bi-shuffle" />
-            Find a random book
-          </button>
-        </aside>
-      </section>
+          goes to /books?category=<genre> (see BooksPage.jsx). Full-width
+          now - the "Find a random book" panel that used to sit next to it
+          pointed at the 'random' page, which isn't reachable from the
+          navbar anymore, so it was a dead end and got removed rather than
+          left orphaned. */}
+      <PromoBanner onSelectGenre={onSelectGenre} />
 
       {continueReading.length > 0 && (
         <section className="section-block">
@@ -117,13 +109,14 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         </section>
       )}
 
+      {/* "View library" buttons used to jump to the Discover page, which -
+          like 'random' above - isn't in the navbar anymore, so they were
+          removed rather than left as another dead end. */}
       <BookRowSection
-        actionLabel="View library"
         books={recommended}
         eyebrow="For your shelf"
         favorites={favorites}
         loading={recommendedLoading}
-        onAction={() => setPage('discover')}
         onDetail={onDetail}
         onFavorite={onFavorite}
         onRead={onRead}
@@ -133,12 +126,10 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
       />
 
       <BookRowSection
-        actionLabel="View library"
         books={booksLoading ? [] : newBooks}
         eyebrow="Just added"
         favorites={favorites}
         loading={booksLoading}
-        onAction={() => setPage('discover')}
         onDetail={onDetail}
         onFavorite={onFavorite}
         onRead={onRead}

@@ -8815,39 +8815,21 @@ progress {
   font-size: 2.25rem;
 }
 
-.books-page-tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.books-page-tabs button {
-  border: 1px solid var(--app-surface-soft);
-  background: var(--app-surface);
-  color: var(--app-text);
-  border-radius: 999px;
-  padding: 6px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.books-page-tabs button.active {
-  background: var(--app-text);
-  color: var(--app-bg);
-}
-
 .books-page-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 20px;
 }
 
-.books-page-grid a.book-card {
+.books-page-card {
   color: inherit;
-  text-decoration: none;
+  text-align: left;
+  border: 0;
+  cursor: pointer;
   background: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
+  padding: 0;
 }
 
 .books-page-load-more {
@@ -8939,4 +8921,66 @@ progress {
 .ai-suggestion-card span {
   color: var(--app-muted);
   font-size: 0.85rem;
+}
+
+.books-page-heading {
+  margin: 0;
+  font-size: 2rem;
+}
+
+/* --- Content reader/player pages --- */
+.content-reader-page,
+.content-player-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.content-reader-frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.content-player-audio {
+  background: var(--app-surface);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.content-player-chapter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.content-player-chapter-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.content-player-chapter-list button:hover {
+  background: var(--app-surface-soft);
+}
+
+.content-player-chapter-list button.active {
+  background: var(--app-surface);
+  font-weight: 700;
 }
