@@ -43,7 +43,6 @@ const BooksPage = lazy(() => import('./components/pages/BooksPage'))
 const ContentReaderPage = lazy(() => import('./components/pages/ContentReaderPage'))
 const ContentPlayerPage = lazy(() => import('./components/pages/ContentPlayerPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
-const DiscoverPage = lazy(() => import('./components/pages/DiscoverPage'))
 const RandomPage = lazy(() => import('./components/pages/RandomPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
@@ -80,7 +79,6 @@ const PAGE_PATHS = {
   'ai-suggestions': '/ai-suggestions',
   read: '/read',
   listen: '/listen',
-  discover: '/discover',
   community: '/community',
   random: '/random',
   write: '/write',
@@ -187,7 +185,7 @@ function App() {
   const scrollToTopForPage = useCallback((page) => {
     if (typeof window === 'undefined') return
 
-    if (['home', 'books', 'ai-suggestions', 'read', 'listen', 'discover', 'community', 'write', 'random', 'profile'].includes(page)) {
+    if (['home', 'books', 'ai-suggestions', 'read', 'listen', 'community', 'write', 'random', 'profile'].includes(page)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
     }
   }, [])
@@ -810,19 +808,14 @@ function App() {
     ].slice(0, SEARCH_HISTORY_LIMIT))
   }
 
-  function handleSearchSubmit(term) {
-    setQuery(term)
-    rememberSearchTerm(term)
-  }
-
-  // Wattpad-style persistent header search box (AppShell) isn't on the
-  // Discover page itself, so it needs to both set the query Discover reads
-  // and actually navigate there - handleSearchSubmit alone only does the
-  // former (Discover already calls that directly since it's already on
-  // the page).
+  // Discover (the old Book-catalog browse page) is gone - search results
+  // now live on /books (see BooksPage.jsx's `q` param), which reads
+  // straight from the URL rather than from this component's own query
+  // state, so this just remembers the term (still-used search-history
+  // sync, see rememberSearchTerm above) and navigates there.
   function handleHeaderSearch(term) {
-    handleSearchSubmit(term)
-    navigateTo('discover')
+    rememberSearchTerm(term)
+    navigateTo('books', { query: `q=${encodeURIComponent(term)}` })
   }
 
   function recordBookView(book) {
@@ -1155,22 +1148,6 @@ function App() {
     'ai-suggestions': <AiSuggestionsPage />,
     read: <ContentReaderPage />,
     listen: <ContentPlayerPage />,
-    discover: (
-      <DiscoverPage
-        favorites={favorites}
-        onDetail={openDetail}
-        onFavorite={toggleFavorite}
-        onRead={openBook}
-        query={query}
-        searchHistory={searchHistory}
-        onSearchSubmit={handleSearchSubmit}
-        setTopic={setTopic}
-        topic={topic}
-        topics={topics}
-        viewCounts={viewCounts}
-        viewerCounts={getViewerCounts(bookReaders)}
-      />
-    ),
     community: <CommunityPage />,
     write: <WritePage />,
     random: (
@@ -1191,7 +1168,7 @@ function App() {
         account={account}
         comments={comments[selectedBook?.id] || []}
         favorites={favorites}
-        onBack={() => navigateTo('discover')}
+        onBack={() => navigateTo('home')}
         onChapter={openChapter}
         onComment={addComment}
         onDetail={openDetail}
@@ -1216,7 +1193,6 @@ function App() {
         favorites={favorites}
         onBack={() => navigateTo('detail')}
         onComment={addComment}
-        onDiscover={() => navigateTo('discover')}
         onFavorite={toggleFavorite}
         onHome={() => navigateTo('home')}
         onLoginRequired={goAuth}

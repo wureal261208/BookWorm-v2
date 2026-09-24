@@ -2,12 +2,18 @@ const express = require('express');
 const { protect } = require('../middleware/auth');
 const { listContent, getPublicContentDetail, getAudiobookChapters, getTopCategories } = require('../controllers/contentController');
 const { listContentComments, createContentComment } = require('../controllers/contentCommentController');
+const { chatWithAiSuggestions } = require('../controllers/contentChatController');
 
 const router = express.Router();
 
 // GET /api/content/top-categories?limit=12 - backs the AI Suggestions page.
 // Must come before GET /:id, so "top-categories" isn't parsed as an id.
 router.get('/top-categories', getTopCategories);
+
+// POST /api/content/ai-chat - the AI Suggestions chatbot (both the full
+// page and the floating widget). Also before GET /:id for the same
+// literal-path-first reason.
+router.post('/ai-chat', chatWithAiSuggestions);
 
 // GET /api/content?type=ebook|audiobook&search=&category=&language=&page=&limit=
 // Public, no auth - reads the Content collection that

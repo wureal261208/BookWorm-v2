@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getInitials, getCover, getAuthor } from '../../utils/bookUtils'
+import { getInitials } from '../../utils/bookUtils'
+import AiChatPanel from '../content/AiChatPanel'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
@@ -361,7 +362,7 @@ function AppShell({
       )}
 
       <main className={isAdminPage ? 'admin-page-shell' : 'page-shell'}>{children}</main>
-      {!isAdminPage && <ChatWidgetPlaceholder />}
+      {!isAdminPage && <ChatWidget />}
       {!isAdminPage && <footer className="site-footer">
         <section className="footer-brand">
           <div className="footer-logo">
@@ -378,7 +379,6 @@ function AppShell({
             {!['admin', 'profile'].includes(activePage) && (
               <>
                 <button className="footer-link" onClick={() => navigateTo('home')} type="button">Home</button>
-                <button className="footer-link" onClick={() => navigateTo('discover')} type="button">Discover</button>
               </>
             )}
             {!isGuest && <button onClick={() => navigateTo('profile')} type="button">Profile</button>}
@@ -403,10 +403,13 @@ function AppShell({
 }
 
 // Wattpad-style persistent header search: type to see live suggestions
-// (from admin-published books only - GET /api/books already filters to
-// status: 'published'), press Enter or click a result to jump to Browse
-// with that search applied. Loading state while a request is in flight,
-// and an explicit "no results" message rather than just an empty box.
+// Searches the Content collection (GET /api/content already filters to
+// status: 'published') - both ebooks and audiobooks, tagged so it's clear
+// which is which. Press Enter or click a result to jump to /books with
+// that search applied (see App.jsx's handleHeaderSearch - Discover, which
+// this used to jump to, is gone). Loading state while a request is in
+// flight, and an explicit "no results" message rather than just an empty
+// box.
 export function HeaderSearch({ onSearch }) {
   const [term, setTerm] = useState('')
   const [isOpen, setIsOpen] = useState(false)
@@ -425,9 +428,9 @@ export function HeaderSearch({ onSearch }) {
     let ignore = false
     setLoading(true)
     const timeout = setTimeout(() => {
-      publicApiFetch(`/api/books?limit=6&q=${encodeURIComponent(trimmed)}`)
+      publicApiFetch(`/api/content?limit=6&search=${encodeURIComponent(trimmed)}`)
         .then((data) => {
-          if (!ignore) setResults(Array.isArray(data.books) ? data.books : [])
+          if (!ignore) setResults(Array.isArray(data?.items) ? data.items : [])
         })
         .catch(() => {
           if (!ignore) setResults([])
@@ -487,12 +490,15 @@ export function HeaderSearch({ onSearch }) {
             {loading ? (
               <p><span className="admin-spin-small" /> Searching...</p>
             ) : results.length ? (
-              results.map((book) => (
-                <button key={book.id || book._id} onClick={() => submit(book.title)} type="button">
-                  <img alt="" src={getCover(book)} />
+              results.map((item) => (
+                <button key={item._id} onClick={() => submit(item.title)} type="button">
+                  <img alt="" src={item.cover_image || ''} />
                   <span className="header-search-result-text">
-                    <strong>{book.title}</strong>
-                    <small>{getAuthor(book)}</small>
+                    <strong>{item.title}</strong>
+                    <small>
+                      <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>{' '}
+                      {item.author}
+                    </small>
                   </span>
                 </button>
               ))
@@ -522,10 +528,11 @@ function formatNotificationTime(isoString) {
   return new Date(isoString).toLocaleDateString()
 }
 
-// Layout/placeholder only, per Wun's request - a real chatbox will be
-// wired into this slot later. Clicking it just shows a small "coming
-// soon" bubble instead of pretending to open a working chat.
-function ChatWidgetPlaceholder() {
+// Real AI chat now (was a "coming soon" placeholder) - same AiChatPanel
+// used by the full AI Suggestions page, just popped open from a floating
+// bubble instead of given a whole page. See AiChatPanel.jsx for the actual
+// chat logic; this is only the bubble/panel chrome around it.
+function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -533,14 +540,13 @@ function ChatWidgetPlaceholder() {
       {isOpen && (
         <div className="chat-widget-panel" role="dialog" aria-label="Chat">
           <div className="chat-widget-panel-header">
-            <strong>BookWorm Support</strong>
+            <strong>BookWorm AI</strong>
             <button aria-label="Close chat" onClick={() => setIsOpen(false)} type="button">
               <i className="bi bi-x-lg" />
             </button>
           </div>
           <div className="chat-widget-panel-body">
-            <i className="bi bi-chat-dots" />
-            <p>Live chat is coming soon.</p>
+            <AiChatPanel />
           </div>
         </div>
       )}

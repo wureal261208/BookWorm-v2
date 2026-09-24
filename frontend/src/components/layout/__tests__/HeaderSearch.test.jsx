@@ -18,11 +18,11 @@ describe('HeaderSearch', () => {
     await user.type(screen.getByRole('textbox', { name: /search books/i }), 'dracula')
     await waitFor(() => expect(screen.getByText(/searching/i)).toBeInTheDocument())
 
-    resolveFetch({ books: [] })
+    resolveFetch({ items: [] })
   })
 
   test('shows "No results found." in English when nothing matches', async () => {
-    publicApiFetch.mockResolvedValue({ books: [] })
+    publicApiFetch.mockResolvedValue({ items: [] })
     const user = userEvent.setup()
     render(<HeaderSearch onSearch={vi.fn()} />)
 
@@ -31,7 +31,7 @@ describe('HeaderSearch', () => {
   })
 
   test('clicking a suggestion calls onSearch with that book\'s title', async () => {
-    publicApiFetch.mockResolvedValue({ books: [{ id: '1', title: 'Dracula' }] })
+    publicApiFetch.mockResolvedValue({ items: [{ _id: '1', title: 'Dracula', author: 'Bram Stoker', type: 'ebook' }] })
     const onSearch = vi.fn()
     const user = userEvent.setup()
     render(<HeaderSearch onSearch={onSearch} />)
@@ -44,7 +44,7 @@ describe('HeaderSearch', () => {
   })
 
   test('pressing Enter submits the typed term as-is', async () => {
-    publicApiFetch.mockResolvedValue({ books: [] })
+    publicApiFetch.mockResolvedValue({ items: [] })
     const onSearch = vi.fn()
     const user = userEvent.setup()
     render(<HeaderSearch onSearch={onSearch} />)

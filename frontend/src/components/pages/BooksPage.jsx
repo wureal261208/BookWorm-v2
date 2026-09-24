@@ -2,52 +2,82 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { publicApiFetch } from '../../utils/apiClient'
 import { findGenreSlide } from '../../utils/genreSlides'
-import { useNavigation } from '../../context/NavigationContext'
+import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 
-const PAGE_SIZE = 24
-
-const TYPE_HEADINGS = {
-  ebook: 'Ebooks',
-  audiobook: 'Audiobooks',
-  '': 'All books',
-}
+const CAROUSEL_LIMIT = 24
 
 // One single page for every category, per spec - no /books/romance,
-// /books/fantasy, etc. Both `category` and `type` live in the URL
-// (?category=&type=) rather than in-page tab state - the Ebooks/Audiobooks
-// navbar links and the promo banner/AI Suggestions clicks all just set the
-// query string differently and land here the same way, so there's no
-// separate tab UI to keep in sync with them.
+// /books/fantasy, etc. `category`, `type` and `q` (search) all live in the
+// URL rather than in-page tab state - the Ebooks/Audiobooks navbar links,
+// the promo banner, AI Suggestions clicks, and the header search box all
+// just set the query string differently and land here the same way.
 function BooksPage() {
-  const { navigateTo } = useNavigation()
   const [searchParams] = useSearchParams()
   const category = searchParams.get('category') || ''
   const type = searchParams.get('type') || ''
+  const query = searchParams.get('q') || ''
+
+  const slide = findGenreSlide(category)
+  // A specific type in the URL (from the Ebooks/Audiobooks navbar links)
+  // means show just that one section as a full-width carousel. With no
+  // type - a category click, a search, or an AI Suggestion - show both
+  // sections side by side, each its own "giống trang main" carousel row
+  // (see ExternalMediaCarousel.jsx, shared with Home's Hot ebooks/
+  // audiobooks rows for a consistent look).
+  const showEbooks = type !== 'audiobook'
+  const showAudiobooks = type !== 'ebook'
+
+  let heading = 'All books'
+  if (query) heading = `Search results for "${query}"`
+  else if (category) heading = category
+  else if (type === 'ebook') heading = 'Ebooks'
+  else if (type === 'audiobook') heading = 'Audiobooks'
+
+  return (
+    <div className="books-page">
+      {/* The big background banner only makes sense when there's an actual
+          genre behind it (a promo-banner/AI-suggestion click) - a plain
+          heading covers search and the Ebooks/Audiobooks navbar links,
+          which don't have a matching piece of artwork. */}
+      {category ? (
+        <section
+          className="books-page-banner"
+          style={slide ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.65)), url(${slide.image})` } : undefined}
+        >
+          <p className="mono-eyebrow">Browsing</p>
+          <h1>{heading}</h1>
+        </section>
+      ) : (
+        <h1 className="books-page-heading">{heading}</h1>
+      )}
+
+      {showEbooks && <BooksPageSection category={category} query={query} type="ebook" />}
+      {showAudiobooks && <BooksPageSection category={category} query={query} type="audiobook" />}
+    </div>
+  )
+}
+
+// One type's worth of results as its own titled carousel row, with its own
+// independent loading/empty state - an empty Audiobooks section (say, a
+// category nothing's been tagged with yet) never blocks the Ebooks section
+// above it from showing, and vice versa.
+function BooksPageSection({ category, query, type }) {
   const [items, setItems] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
 
-  // A new category or type in the URL always starts back at page 1 and
-  // replaces the list rather than appending to it - only the explicit
-  // "Load more" click appends.
   useEffect(() => {
     let ignore = false
     setLoading(true)
     setError('')
-    setPage(1)
 
-    const params = new URLSearchParams({ page: '1', limit: String(PAGE_SIZE) })
+    const params = new URLSearchParams({ type, limit: String(CAROUSEL_LIMIT) })
     if (category) params.set('category', category)
-    if (type) params.set('type', type)
+    if (query) params.set('search', query)
 
     publicApiFetch(`/api/content?${params.toString()}`)
       .then((data) => {
-        if (ignore) return
-        setItems(Array.isArray(data?.items) ? data.items : [])
-        setTotal(data?.total || 0)
+        if (!ignore) setItems(Array.isArray(data?.items) ? data.items : [])
       })
       .catch((err) => {
         if (!ignore) setError(err.message)
@@ -59,93 +89,39 @@ function BooksPage() {
     return () => {
       ignore = true
     }
-  }, [category, type])
-
-  function loadMore() {
-    const nextPage = page + 1
-    setLoadingMore(true)
-
-    const params = new URLSearchParams({ page: String(nextPage), limit: String(PAGE_SIZE) })
-    if (category) params.set('category', category)
-    if (type) params.set('type', type)
-
-    publicApiFetch(`/api/content?${params.toString()}`)
-      .then((data) => {
-        setItems((current) => [...current, ...(Array.isArray(data?.items) ? data.items : [])])
-        setPage(nextPage)
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingMore(false))
-  }
-
-  const slide = findGenreSlide(category)
-  const hasMore = items.length < total
+  }, [category, query, type])
 
   return (
-    <div className="books-page">
-      {/* The big background banner only makes sense when there's an actual
-          genre behind it (a promo-banner/AI-suggestion click) - arriving
-          via the plain Ebooks/Audiobooks navbar links (type only, no
-          category) gets a plain heading instead of a banner for a category
-          that isn't there. */}
-      {category ? (
-        <section
-          className="books-page-banner"
-          style={slide ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.65)), url(${slide.image})` } : undefined}
-        >
-          <p className="mono-eyebrow">Browsing</p>
-          <h1>{category}</h1>
-        </section>
-      ) : (
-        <h1 className="books-page-heading">{TYPE_HEADINGS[type] || 'All books'}</h1>
-      )}
+    <section className="section-block">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">{type === 'ebook' ? 'Reading' : 'Listening'}</p>
+          <h2>{type === 'ebook' ? 'Ebooks' : 'Audiobooks'}</h2>
+        </div>
+      </div>
 
       {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
 
       {loading ? (
-        <div className="books-page-grid">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div className="book-card-skeleton" key={index} />
-          ))}
-        </div>
-      ) : items.length ? (
-        <>
-          <div className="books-page-grid">
-            {items.map((item) => (
-              <button
-                className="book-card books-page-card"
-                key={item._id}
-                onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item._id}` })}
-                type="button"
-              >
-                <div className="book-cover-button">
-                  <img alt={`${item.title} cover`} loading="lazy" src={item.cover_image || ''} />
-                </div>
-                <div className="book-card-body">
-                  <span className="category">{item.source}</span>
-                  <h2>{item.title}</h2>
-                  <p>{item.author}</p>
-                </div>
-              </button>
+        <div className="book-carousel">
+          <div className="book-carousel-track">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div className="book-carousel-item" key={index}>
+                <div className="book-card-skeleton" />
+              </div>
             ))}
           </div>
-
-          {hasMore && (
-            <div className="books-page-load-more">
-              <button className="ghost-button" disabled={loadingMore} onClick={loadMore} type="button">
-                {loadingMore ? 'Loading...' : 'Load more'}
-              </button>
-            </div>
-          )}
-        </>
+        </div>
+      ) : items.length ? (
+        <ExternalMediaCarousel items={items} />
       ) : (
         <div className="books-page-empty">
           <i className="bi bi-hourglass-split" />
           <h2>Coming soon</h2>
-          <p>{category ? `No ${category} books or audiobooks yet - check back soon.` : 'Nothing here yet - check back soon.'}</p>
+          <p>No {type === 'ebook' ? 'ebooks' : 'audiobooks'} here yet{category ? ` for ${category}` : ''} - check back soon.</p>
         </div>
       )}
-    </div>
+    </section>
   )
 }
 

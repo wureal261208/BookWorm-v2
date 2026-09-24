@@ -1,6 +1,6 @@
 import logo from '../../assets/logo.jpg'
 
-function ReaderTopbar({ activeBook, favorites, onBack, onDiscover, onFavorite, onHome }) {
+function ReaderTopbar({ activeBook, favorites, onBack, onFavorite, onHome }) {
   return (
     <header className="reader-topbar reader-navbar">
       <button className="brand-button reader-brand-button" onClick={onHome} type="button">
@@ -15,10 +15,6 @@ function ReaderTopbar({ activeBook, favorites, onBack, onDiscover, onFavorite, o
         <button onClick={onHome} type="button">
           <i className="bi bi-house" />
           Home
-        </button>
-        <button onClick={onDiscover} type="button">
-          <i className="bi bi-compass" />
-          Discover
         </button>
       </nav>
       <div className="reader-title-block">

@@ -24,7 +24,6 @@ function ReaderPage({
   favorites,
   onBack,
   onComment,
-  onDiscover,
   onFavorite,
   onHome,
   onLoginRequired,
@@ -252,11 +251,6 @@ function ReaderPage({
     onHome()
   }
 
-  function handleDiscover() {
-    saveCheckpoint(currentPage)
-    onDiscover()
-  }
-
   function submitReaderComment() {
     const text = commentText.trim()
     if (!text) return
@@ -274,7 +268,6 @@ function ReaderPage({
         activeBook={activeBook}
         favorites={favorites}
         onBack={handleExit}
-        onDiscover={handleDiscover}
         onFavorite={onFavorite}
         onHome={handleHome}
       />

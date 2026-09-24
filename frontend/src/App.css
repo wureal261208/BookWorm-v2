@@ -2399,7 +2399,7 @@ progress {
   align-items: end;
   justify-content: space-between;
   gap: 8px 16px;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
 }
 
 .section-heading > div {
@@ -2642,8 +2642,8 @@ progress {
   bottom: calc(100% + 14px);
   display: grid;
   grid-template-rows: auto 1fr;
-  width: min(320px, calc(100vw - 40px));
-  height: 200px;
+  width: min(360px, calc(100vw - 40px));
+  height: min(520px, calc(100vh - 120px));
   overflow: hidden;
   border: 1px solid var(--app-line, #d8d8d3);
   border-radius: 12px;
@@ -8815,29 +8815,6 @@ progress {
   font-size: 2.25rem;
 }
 
-.books-page-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 20px;
-}
-
-.books-page-card {
-  color: inherit;
-  text-align: left;
-  border: 0;
-  cursor: pointer;
-  background: var(--app-surface);
-  border-radius: 8px;
-  overflow: hidden;
-  padding: 0;
-}
-
-.books-page-load-more {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0 32px;
-}
-
 .books-page-empty {
   display: flex;
   flex-direction: column;
@@ -8983,4 +8960,125 @@ progress {
 .content-player-chapter-list button.active {
   background: var(--app-surface);
   font-weight: 700;
+}
+
+/* --- AI chat (AiChatPanel.jsx) - used by AiSuggestionsPage and the
+   floating chat widget --- */
+.chat-widget-panel-body {
+  display: flex;
+  min-height: 0;
+}
+
+.chat-widget-panel-body .ai-chat-panel {
+  padding: 8px;
+}
+
+.ai-chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.ai-chat-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.ai-chat-bubble {
+  max-width: 85%;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.ai-chat-bubble p {
+  margin: 0;
+}
+
+.ai-chat-bubble-assistant {
+  align-self: flex-start;
+  background: var(--app-surface-soft);
+  color: var(--app-text);
+}
+
+.ai-chat-bubble-user {
+  align-self: flex-end;
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+.ai-chat-suggestions {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-chat-suggestion-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ai-chat-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--app-surface-soft);
+}
+
+.ai-chat-tag-audiobook {
+  background: #ffe8cc;
+  color: #8a4b00;
+}
+
+.ai-chat-tag-ebook {
+  background: #dff5e1;
+  color: #1c6b2d;
+}
+
+.ai-chat-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-chat-starters button {
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ai-chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-chat-input-row input {
+  flex: 1;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
