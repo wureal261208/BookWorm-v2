@@ -540,6 +540,7 @@ function AdminPage({
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
+          <SupportInboxPanel onToast={onToast} />
           <UserSubmissionsPanel />
           <UsersDirectoryPanel onToast={onToast} />
         </>
@@ -1290,6 +1291,145 @@ function UsersDirectoryPanel({ onToast }) {
           <p>No customer accounts found.</p>
         )}
       </section>
+    </section>
+  )
+}
+
+// The Help chat widget's escalation queue (see backend/controllers/
+// adminSupportController.js) - conversations the AI couldn't finish after
+// a few messages land here for a staff member to pick up. Closing one
+// clears it from this list and blanks it for the visitor next time they
+// open the chat bubble (a fresh conversation starts on their next message).
+function SupportInboxPanel({ onToast }) {
+  const [conversations, setConversations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [activeId, setActiveId] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+
+  function loadList() {
+    setLoading(true)
+    apiFetch('/api/admin/support/conversations?status=escalated')
+      .then((data) => setConversations(Array.isArray(data) ? data : []))
+      .catch((error) => onToast?.({ type: 'error', message: error.message }))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(loadList, [])
+
+  function openConversation(id) {
+    setActiveId(id)
+    setDetail(null)
+    apiFetch(`/api/admin/support/conversations/${id}`)
+      .then((data) => setDetail(data))
+      .catch((error) => onToast?.({ type: 'error', message: error.message }))
+  }
+
+  async function sendReply() {
+    const text = reply.trim()
+    if (!text || sending) return
+    setSending(true)
+    try {
+      const data = await apiFetch(`/api/admin/support/conversations/${activeId}/reply`, { method: 'POST', body: { text } })
+      setDetail(data)
+      setReply('')
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function closeConversation() {
+    try {
+      await apiFetch(`/api/admin/support/conversations/${activeId}/close`, { method: 'POST' })
+      setActiveId(null)
+      setDetail(null)
+      loadList()
+      onToast?.({ type: 'success', message: 'Conversation closed.' })
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message })
+    }
+  }
+
+  return (
+    <section className="admin-workspace">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">User Contributions</p>
+          <h2>Help chat inbox</h2>
+        </div>
+        <span>Conversations the AI couldn't finish - the visitor's account is notified as soon as you reply.</span>
+      </div>
+
+      <div className="support-inbox-layout">
+        <section className="admin-table support-inbox-list">
+          {loading ? (
+            <p>Loading...</p>
+          ) : conversations.length ? (
+            conversations.map((conversation) => (
+              <button
+                className={`table-row support-inbox-row ${conversation.id === activeId ? 'active' : ''}`}
+                key={conversation.id}
+                onClick={() => openConversation(conversation.id)}
+                type="button"
+              >
+                <strong>{conversation.user?.name || 'Reader'}</strong>
+                <small>{conversation.lastMessage?.text}</small>
+              </button>
+            ))
+          ) : (
+            <p>No conversations waiting on a reply.</p>
+          )}
+        </section>
+
+        <section className="admin-table support-inbox-detail">
+          {!activeId ? (
+            <p>Select a conversation to view it.</p>
+          ) : !detail ? (
+            <p>Loading...</p>
+          ) : (
+            <>
+              <div className="ai-chat-messages support-inbox-messages">
+                {detail.messages.map((message, index) => (
+                  <div
+                    className={`ai-chat-bubble ${
+                      message.role === 'user'
+                        ? 'ai-chat-bubble-user'
+                        : message.role === 'admin'
+                          ? 'ai-chat-bubble-admin'
+                          : message.role === 'system'
+                            ? 'ai-chat-bubble-system'
+                            : 'ai-chat-bubble-assistant'
+                    }`}
+                    key={index}
+                  >
+                    <p>{message.text}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="admin-row-actions">
+                <input
+                  onChange={(event) => setReply(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') sendReply()
+                  }}
+                  placeholder="Type a reply..."
+                  type="text"
+                  value={reply}
+                />
+                <button className="primary-button" disabled={!reply.trim() || sending} onClick={sendReply} type="button">
+                  Send
+                </button>
+                <button className="danger-button" onClick={closeConversation} type="button">
+                  Close
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </section>
   )
 }

@@ -7,38 +7,36 @@ import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 const CAROUSEL_LIMIT = 24
 
 // One single page for every category, per spec - no /books/romance,
-// /books/fantasy, etc. `category`, `type` and `q` (search) all live in the
-// URL rather than in-page tab state - the Ebooks/Audiobooks navbar links,
-// the promo banner, AI Suggestions clicks, and the header search box all
-// just set the query string differently and land here the same way.
+// /books/fantasy, etc. `category` and `type` live in the URL - the
+// Ebooks/Audiobooks navbar links, the promo banner, and AI Suggestions
+// clicks just set the query string differently and land here the same way.
+// Keyword search has its own dedicated page now (see SearchPage.jsx) -
+// this page is purely for browsing by category/type, not searching.
 function BooksPage() {
   const [searchParams] = useSearchParams()
   const category = searchParams.get('category') || ''
   const type = searchParams.get('type') || ''
-  const query = searchParams.get('q') || ''
 
   const slide = findGenreSlide(category)
   // A specific type in the URL (from the Ebooks/Audiobooks navbar links)
   // means show just that one section as a full-width carousel. With no
-  // type - a category click, a search, or an AI Suggestion - show both
-  // sections side by side, each its own "giống trang main" carousel row
-  // (see ExternalMediaCarousel.jsx, shared with Home's Hot ebooks/
-  // audiobooks rows for a consistent look).
+  // type - a category click or an AI Suggestion - show both sections side
+  // by side, each its own "giống trang main" carousel row (see
+  // ExternalMediaCarousel.jsx, shared with Home's Hot ebooks/audiobooks
+  // rows for a consistent look).
   const showEbooks = type !== 'audiobook'
   const showAudiobooks = type !== 'ebook'
 
   let heading = 'All books'
-  if (query) heading = `Search results for "${query}"`
-  else if (category) heading = category
+  if (category) heading = category
   else if (type === 'ebook') heading = 'Ebooks'
   else if (type === 'audiobook') heading = 'Audiobooks'
 
   return (
     <div className="books-page">
       {/* The big background banner only makes sense when there's an actual
-          genre behind it (a promo-banner/AI-suggestion click) - a plain
-          heading covers search and the Ebooks/Audiobooks navbar links,
-          which don't have a matching piece of artwork. */}
+          genre behind it (a promo-banner/AI-suggestion click) - the plain
+          Ebooks/Audiobooks navbar links get a plain heading instead. */}
       {category ? (
         <section
           className="books-page-banner"
@@ -51,8 +49,8 @@ function BooksPage() {
         <h1 className="books-page-heading">{heading}</h1>
       )}
 
-      {showEbooks && <BooksPageSection category={category} query={query} type="ebook" />}
-      {showAudiobooks && <BooksPageSection category={category} query={query} type="audiobook" />}
+      {showEbooks && <BooksPageSection category={category} type="ebook" />}
+      {showAudiobooks && <BooksPageSection category={category} type="audiobook" />}
     </div>
   )
 }
@@ -61,7 +59,7 @@ function BooksPage() {
 // independent loading/empty state - an empty Audiobooks section (say, a
 // category nothing's been tagged with yet) never blocks the Ebooks section
 // above it from showing, and vice versa.
-function BooksPageSection({ category, query, type }) {
+function BooksPageSection({ category, type }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -73,7 +71,6 @@ function BooksPageSection({ category, query, type }) {
 
     const params = new URLSearchParams({ type, limit: String(CAROUSEL_LIMIT) })
     if (category) params.set('category', category)
-    if (query) params.set('search', query)
 
     publicApiFetch(`/api/content?${params.toString()}`)
       .then((data) => {
@@ -89,7 +86,7 @@ function BooksPageSection({ category, query, type }) {
     return () => {
       ignore = true
     }
-  }, [category, query, type])
+  }, [category, type])
 
   return (
     <section className="section-block">

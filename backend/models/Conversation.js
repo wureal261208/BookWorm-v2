@@ -1,0 +1,53 @@
+const mongoose = require('mongoose');
+
+const MessageSchema = new mongoose.Schema(
+  {
+    role: { type: String, enum: ['user', 'assistant', 'admin', 'system'], required: true },
+    text: { type: String, required: true, trim: true, maxlength: 4000 },
+    // Only ever set on 'assistant' messages in an 'ai-suggestions'
+    // conversation - real Content _ids the model recommended (see
+    // utils/openrouter.js's generateChatSuggestion), stored so the
+    // frontend can re-render the same clickable cards without redoing the
+    // catalog lookup every time the conversation is reopened.
+    suggestions: {
+      type: [
+        {
+          _id: false,
+          id: { type: mongoose.Schema.Types.ObjectId, ref: 'Content' },
+          title: String,
+          author: String,
+          type: String,
+        },
+      ],
+      default: undefined,
+    },
+  },
+  { _id: false, timestamps: { createdAt: true, updatedAt: false } }
+);
+
+const ConversationSchema = new mongoose.Schema(
+  {
+    // Always required, always the sole access-control boundary - see the
+    // ownership checks in both controllers that read this collection.
+    // Nobody (including admins) can list or open another user's
+    // 'ai-suggestions' conversations; admins can only ever reach a
+    // 'support' conversation through the escalation queue below.
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    // 'ai-suggestions': a private book-recommendation chat, never surfaced
+    // to an admin. 'support': a help conversation that starts with the AI
+    // answering and can be escalated to a human (see status).
+    kind: { type: String, enum: ['ai-suggestions', 'support'], required: true, index: true },
+    // ai-suggestions only - a short auto-generated label for the sidebar
+    // list (see controllers/aiSuggestionsController.js).
+    title: { type: String, default: '' },
+    // support only: 'ai' (the bot is still handling it), 'escalated'
+    // (waiting on an admin reply), 'closed' (an admin ended it - the next
+    // message from this user starts a brand new conversation instead of
+    // reopening this one, per Wun's call).
+    status: { type: String, enum: ['ai', 'escalated', 'closed'], default: 'ai', index: true },
+    messages: { type: [MessageSchema], default: [] },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.models.Conversation || mongoose.model('Conversation', ConversationSchema);

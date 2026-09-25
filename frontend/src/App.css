@@ -8962,8 +8962,8 @@ progress {
   font-weight: 700;
 }
 
-/* --- AI chat (AiChatPanel.jsx) - used by AiSuggestionsPage and the
-   floating chat widget --- */
+/* --- AI chat bubble/message styles - shared by AiSuggestionsPage.jsx and
+   HelpChatWidget.jsx --- */
 .chat-widget-panel-body {
   display: flex;
   min-height: 0;
@@ -9081,4 +9081,351 @@ progress {
   padding: 10px 16px;
   background: var(--app-bg);
   color: var(--app-text);
+}
+
+/* --- SearchPage.jsx (Wattpad-style Books/Authors search) --- */
+.search-page {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.search-page-tabs {
+  position: sticky;
+  top: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.search-page-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-muted);
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.search-page-tabs button.active {
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.search-page-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-empty-state section {
+  margin-bottom: 32px;
+}
+
+.search-empty-state h3 {
+  margin: 0 0 12px;
+}
+
+.search-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-recent-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.search-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.search-category-grid button {
+  height: 90px;
+  border: 0;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  font-weight: 800;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-result-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result-row:hover {
+  background: var(--app-surface-soft);
+}
+
+.search-result-row img {
+  width: 48px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--app-surface-soft);
+  flex-shrink: 0;
+}
+
+.search-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-author-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--app-surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .search-page {
+    flex-direction: column;
+  }
+
+  .search-page-tabs {
+    position: sticky;
+    top: 64px;
+    flex-direction: row;
+    width: 100%;
+    background: var(--app-bg);
+    z-index: 5;
+    padding-bottom: 8px;
+  }
+}
+
+/* --- HelpChatWidget.jsx (floating support chat) --- */
+.help-chat-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.ai-chat-bubble-system {
+  align-self: center;
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.ai-chat-bubble-admin {
+  align-self: flex-start;
+  background: #dff5e1;
+  color: #1c3d20;
+}
+
+.ai-chat-role-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  opacity: 0.7;
+}
+
+.help-chat-status {
+  align-self: center;
+  font-size: 0.8rem;
+  color: var(--app-muted);
+  font-style: italic;
+}
+
+/* --- AiSuggestionsPage.jsx - Claude-style layout: sidebar history +
+   fixed input, only the message list itself scrolls --- */
+.ai-suggestions-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  height: calc(100vh - 140px);
+  min-height: 420px;
+}
+
+.ai-suggestions-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.ai-suggestions-history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-suggestions-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-suggestions-history-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-suggestions-history-item:hover,
+.ai-suggestions-history-item.active {
+  background: var(--app-surface);
+}
+
+.ai-suggestions-history-item i {
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.ai-suggestions-history-item:hover i {
+  opacity: 0.6;
+}
+
+.ai-suggestions-history-item i:hover {
+  opacity: 1;
+}
+
+.ai-suggestions-main {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+  background: var(--app-surface);
+  border-radius: 12px;
+  padding: 16px;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .ai-suggestions-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 180px);
+  }
+
+  .ai-suggestions-sidebar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .ai-suggestions-history {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}
+
+/* --- Admin Help chat inbox (SupportInboxPanel in AdminPage.jsx) --- */
+.support-inbox-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+}
+
+.support-inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.support-inbox-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.support-inbox-row small {
+  color: var(--app-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.support-inbox-row:hover,
+.support-inbox-row.active {
+  background: var(--app-surface-soft);
+}
+
+.support-inbox-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 300px;
+}
+
+.support-inbox-messages {
+  flex: 1;
+  max-height: 400px;
+}
+
+@media (max-width: 720px) {
+  .support-inbox-layout {
+    grid-template-columns: 1fr;
+  }
 }

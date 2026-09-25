@@ -1,19 +1,23 @@
 const express = require('express');
 const { protect } = require('../middleware/auth');
-const { listContent, getPublicContentDetail, getAudiobookChapters, getTopCategories } = require('../controllers/contentController');
+const { listContent, getPublicContentDetail, getAudiobookChapters, searchAuthors, getTopCategories } = require('../controllers/contentController');
 const { listContentComments, createContentComment } = require('../controllers/contentCommentController');
-const { chatWithAiSuggestions } = require('../controllers/contentChatController');
 
 const router = express.Router();
 
-// GET /api/content/top-categories?limit=12 - backs the AI Suggestions page.
+// GET /api/content/top-categories?limit=12 - unused by the frontend since
+// AI Suggestions became a chat, kept as a working endpoint regardless.
 // Must come before GET /:id, so "top-categories" isn't parsed as an id.
 router.get('/top-categories', getTopCategories);
 
-// POST /api/content/ai-chat - the AI Suggestions chatbot (both the full
-// page and the floating widget). Also before GET /:id for the same
-// literal-path-first reason.
-router.post('/ai-chat', chatWithAiSuggestions);
+// GET /api/content/authors?q=&limit= - backs the search page's Authors
+// tab. Same before-GET-/:id reasoning.
+router.get('/authors', searchAuthors);
+
+// The AI Suggestions chatbot moved to /api/ai-suggestions/conversations
+// (see routes/aiSuggestionsRoutes.js) - it's now a persisted, per-user
+// chat history and needs login, so it no longer fits as a stateless public
+// route here.
 
 // GET /api/content?type=ebook|audiobook&search=&category=&language=&page=&limit=
 // Public, no auth - reads the Content collection that

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getInitials } from '../../utils/bookUtils'
-import AiChatPanel from '../content/AiChatPanel'
+import HelpChatWidget from '../content/HelpChatWidget'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
@@ -528,10 +528,12 @@ function formatNotificationTime(isoString) {
   return new Date(isoString).toLocaleDateString()
 }
 
-// Real AI chat now (was a "coming soon" placeholder) - same AiChatPanel
-// used by the full AI Suggestions page, just popped open from a floating
-// bubble instead of given a whole page. See AiChatPanel.jsx for the actual
-// chat logic; this is only the bubble/panel chrome around it.
+// A help/support chat now (was a "coming soon" placeholder, then briefly
+// the book-recommendation chat) - see HelpChatWidget.jsx for the actual
+// logic: AI answers first, escalates to a human admin after enough
+// unresolved messages. Book recommendations live on the AI Suggestions
+// page instead (AiSuggestionsPage.jsx) - this bubble is for "how do I..."
+// questions, not "what should I read".
 function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -540,13 +542,13 @@ function ChatWidget() {
       {isOpen && (
         <div className="chat-widget-panel" role="dialog" aria-label="Chat">
           <div className="chat-widget-panel-header">
-            <strong>BookWorm AI</strong>
+            <strong>BookWorm Help</strong>
             <button aria-label="Close chat" onClick={() => setIsOpen(false)} type="button">
               <i className="bi bi-x-lg" />
             </button>
           </div>
           <div className="chat-widget-panel-body">
-            <AiChatPanel />
+            <HelpChatWidget />
           </div>
         </div>
       )}

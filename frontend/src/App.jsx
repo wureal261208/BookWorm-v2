@@ -40,6 +40,7 @@ const AdminPage = lazy(() => import('./components/pages/AdminPage'))
 const AiSuggestionsPage = lazy(() => import('./components/pages/AiSuggestionsPage'))
 const BookDetailPage = lazy(() => import('./components/pages/BookDetailPage'))
 const BooksPage = lazy(() => import('./components/pages/BooksPage'))
+const SearchPage = lazy(() => import('./components/pages/SearchPage'))
 const ContentReaderPage = lazy(() => import('./components/pages/ContentReaderPage'))
 const ContentPlayerPage = lazy(() => import('./components/pages/ContentPlayerPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
@@ -76,6 +77,7 @@ const VIEW_DWELL_MS = 90_000
 const PAGE_PATHS = {
   home: '/',
   books: '/books',
+  search: '/search',
   'ai-suggestions': '/ai-suggestions',
   read: '/read',
   listen: '/listen',
@@ -185,7 +187,7 @@ function App() {
   const scrollToTopForPage = useCallback((page) => {
     if (typeof window === 'undefined') return
 
-    if (['home', 'books', 'ai-suggestions', 'read', 'listen', 'community', 'write', 'random', 'profile'].includes(page)) {
+    if (['home', 'books', 'search', 'ai-suggestions', 'read', 'listen', 'community', 'write', 'random', 'profile'].includes(page)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
     }
   }, [])
@@ -809,13 +811,12 @@ function App() {
   }
 
   // Discover (the old Book-catalog browse page) is gone - search results
-  // now live on /books (see BooksPage.jsx's `q` param), which reads
-  // straight from the URL rather than from this component's own query
-  // state, so this just remembers the term (still-used search-history
-  // sync, see rememberSearchTerm above) and navigates there.
+  // now live on their own dedicated /search page (Wattpad-style Books/
+  // Authors tabs, see SearchPage.jsx), which reads straight from the URL
+  // rather than from this component's own query state.
   function handleHeaderSearch(term) {
     rememberSearchTerm(term)
-    navigateTo('books', { query: `q=${encodeURIComponent(term)}` })
+    navigateTo('search', { query: `q=${encodeURIComponent(term)}` })
   }
 
   function recordBookView(book) {
@@ -1145,6 +1146,7 @@ function App() {
       />
     ),
     books: <BooksPage />,
+    search: <SearchPage />,
     'ai-suggestions': <AiSuggestionsPage />,
     read: <ContentReaderPage />,
     listen: <ContentPlayerPage />,

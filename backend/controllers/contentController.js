@@ -72,6 +72,31 @@ const getAudiobookChapters = asyncHandler(async (req, res) => {
   }
 });
 
+// Public, no auth - backs the search page's "Authors" tab (see
+// SearchPage.jsx). There are no real browsable user profiles on this site,
+// so - per Wun's call - this tab searches Content authors instead of
+// accounts; nothing here is account/user data, so there's no privacy
+// concern with exposing it.
+const searchAuthors = asyncHandler(async (req, res) => {
+  const q = (req.query.q || '').trim();
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  if (!q) return success(res, 200, 'Authors fetched.', []);
+
+  const results = await Content.aggregate([
+    { $match: { status: 'published', author: { $regex: q, $options: 'i' } } },
+    { $group: { _id: '$author', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: limit },
+  ]);
+
+  return success(
+    res,
+    200,
+    'Authors fetched.',
+    results.map((entry) => ({ author: entry._id, count: entry.count })),
+  );
+});
+
 // Public, no auth - backs the AI Suggestions page. Honest about what this
 // actually is: there's no reading/listening-history model yet (Content has
 // no view/play tracking at all, unlike the old Book model's view counts),
@@ -104,4 +129,4 @@ const runContentIngestion = asyncHandler(async (req, res) => {
   return success(res, 200, 'Content ingestion finished.', result);
 });
 
-module.exports = { listContent, getPublicContentDetail, getAudiobookChapters, getTopCategories, runContentIngestion };
+module.exports = { listContent, getPublicContentDetail, getAudiobookChapters, searchAuthors, getTopCategories, runContentIngestion };

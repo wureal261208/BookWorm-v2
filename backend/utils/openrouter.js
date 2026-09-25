@@ -184,4 +184,46 @@ async function generateChatSuggestion({ messages, candidates }) {
   }
 }
 
-module.exports = { generateBookMetadataSuggestion, generateChatSuggestion, OpenRouterConfigError };
+// Powers the "Help" floating chat widget - a first-line support assistant,
+// not the book-recommendation chat (see generateChatSuggestion above,
+// which is what the AI Suggestions page uses). No catalog grounding here -
+// this just answers general "how does BookWorm work" questions and is
+// upfront when it doesn't know something, since the whole point of the
+// escalation flow (see controllers/supportController.js) is that a human
+// admin picks up anything it can't handle.
+async function generateHelpReply({ messages }) {
+  const apiKey = requireApiKey();
+  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+
+  const systemPrompt = [
+    "You are BookWorm's first-line help assistant, answering inside a small support chat widget.",
+    'BookWorm is a free reading site with ebooks (from Project Gutenberg) and audiobooks (from LibriVox), plus a Community area and an AI Suggestions book-recommendation chat elsewhere on the site.',
+    'Answer briefly and plainly. If you are not confident about something specific to this reader\'s account or a bug they are describing, say so honestly rather than guessing - a human admin will follow up when the conversation is escalated, so it is fine to not have every answer.',
+    'Do not recommend specific book titles here - that is a different chat elsewhere on the site.',
+  ].join('\n');
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: buildHeaders(apiKey),
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: 0.4,
+    }),
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new Error(`OpenRouter request failed (${response.status}): ${bodyText.slice(0, 300) || response.statusText}`);
+  }
+
+  const payload = await response.json();
+  const raw = payload.choices?.[0]?.message?.content;
+  if (!raw) {
+    throw new Error('OpenRouter returned no content.');
+  }
+
+  return raw.trim();
+}
+
+module.exports = { generateBookMetadataSuggestion, generateChatSuggestion, generateHelpReply, OpenRouterConfigError };
