@@ -40,10 +40,39 @@ const listContent = asyncHandler(async (req, res) => {
 // returns published content, same as listContent above - a draft/hidden
 // item 404s here exactly like it's missing, rather than leaking its
 // existence to a visitor who isn't an admin.
+// Loose title match for pairing an ebook with its audiobook (or vice
+// versa) - Gutenberg and LibriVox format titles slightly differently (e.g.
+// trailing subtitles, punctuation), so this strips everything down to bare
+// alphanumerics before comparing rather than requiring an exact match.
+function normalizeTitle(title) {
+  return (title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+}
+
 const getPublicContentDetail = asyncHandler(async (req, res) => {
   const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
   if (!item) return fail(res, 404, 'Content not found.');
-  return success(res, 200, 'Content detail fetched.', item);
+
+  // "Also available as..." cross-link (see nhóm 1's simpler, actually
+  // buildable version of the ebook<->audiobook pairing idea - a real
+  // position-synced switch would need the two sources to share some
+  // notion of chapter/paragraph alignment, which neither Gutendex nor
+  // LibriVox provide, so this only ever offers "open the other version",
+  // not "resume at the same spot"). Only bothers checking when there's a
+  // reasonably specific title to match on - a one- or two-character title
+  // would false-positive against unrelated books.
+  let pairedContent = null;
+  const normalizedTitle = normalizeTitle(item.title);
+  if (normalizedTitle.length > 3) {
+    const otherType = item.type === 'ebook' ? 'audiobook' : 'ebook';
+    const candidates = await Content.find({ status: 'published', type: otherType }).select('title type').lean();
+    const match = candidates.find((candidate) => normalizeTitle(candidate.title) === normalizedTitle);
+    if (match) pairedContent = { id: match._id, type: match.type };
+  }
+
+  return success(res, 200, 'Content detail fetched.', { ...item, pairedContent });
 });
 
 // Public, no auth - backs the in-app audiobook player's chapter list.
@@ -97,6 +126,26 @@ const searchAuthors = asyncHandler(async (req, res) => {
   );
 });
 
+// Public, no auth - backs the search page's language facet. Gutendex uses
+// short codes ('en') and LibriVox uses full names ('English') for the same
+// language, so this list is real but not fully normalized across sources -
+// flagged here rather than silently pretending they're unified.
+const getLanguageFacets = asyncHandler(async (req, res) => {
+  const results = await Content.aggregate([
+    { $match: { status: 'published' } },
+    { $group: { _id: '$language', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 30 },
+  ]);
+
+  return success(
+    res,
+    200,
+    'Languages fetched.',
+    results.filter((entry) => entry._id).map((entry) => ({ language: entry._id, count: entry.count })),
+  );
+});
+
 // Public, no auth - backs the AI Suggestions page. Honest about what this
 // actually is: there's no reading/listening-history model yet (Content has
 // no view/play tracking at all, unlike the old Book model's view counts),
@@ -129,4 +178,12 @@ const runContentIngestion = asyncHandler(async (req, res) => {
   return success(res, 200, 'Content ingestion finished.', result);
 });
 
-module.exports = { listContent, getPublicContentDetail, getAudiobookChapters, searchAuthors, getTopCategories, runContentIngestion };
+module.exports = {
+  listContent,
+  getPublicContentDetail,
+  getAudiobookChapters,
+  searchAuthors,
+  getTopCategories,
+  getLanguageFacets,
+  runContentIngestion,
+};

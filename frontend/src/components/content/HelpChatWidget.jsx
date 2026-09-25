@@ -1,48 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
-import { apiFetch } from '../../utils/apiClient'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 // The floating chat bubble's actual content - separate from the AI
-// Suggestions page's book-recommendation chat (AiSuggestionsPage.jsx). This
-// one is a support/help conversation: the AI answers first, and after a
-// few unresolved messages a human admin takes over (see
-// backend/controllers/supportController.js for the exact threshold). Once
-// an admin closes it, it goes blank here and the next message starts a
-// fresh conversation - that's just what GET current naturally returns
-// once the old one is 'closed' server-side, nothing special needed here.
+// Suggestions page's book-recommendation chat (AiSuggestionsPage.jsx).
+// Single-use per open, per Wun's call: this component only ever mounts
+// while the bubble is open (see AppShell.jsx's `{isOpen && <ChatWidget/>}`
+// wrapping it), so a fresh component instance - fresh state, no history
+// fetch - is exactly what "reset every time you open it" means here. No
+// history is loaded even for a logged-in visitor with a real pending
+// conversation; only what accrues during this one open session is shown.
+//
+// Guests get a fully stateless AI-only reply (see backend's
+// POST /api/support/guest-chat - nothing written to Mongo, no escalation,
+// since there's no account to notify later). A logged-in visitor still
+// goes through the persisted, escalatable conversation - AI answers first,
+// and after enough unresolved messages a human admin takes over (see
+// backend/controllers/supportController.js) - it's just that this widget
+// never shows them anything from before this open.
 function HelpChatWidget() {
   const isGuest = !auth.currentUser
-  const [conversation, setConversation] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('ai')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
-    if (isGuest) {
-      setLoading(false)
-      return
-    }
-    let ignore = false
-    apiFetch('/api/support/conversations/current')
-      .then((data) => {
-        if (!ignore) setConversation(data)
-      })
-      .catch((err) => {
-        if (!ignore) setError(err.message)
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false)
-      })
-    return () => {
-      ignore = true
-    }
-  }, [isGuest])
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
-  }, [conversation?.messages?.length])
+  }, [messages.length])
 
   async function send() {
     const text = input.trim()
@@ -51,28 +38,27 @@ function HelpChatWidget() {
     setSending(true)
     setError('')
     setInput('')
+    const nextMessages = [...messages, { role: 'user', text }]
+    setMessages(nextMessages)
+
     try {
-      const data = await apiFetch('/api/support/conversations/current/messages', { method: 'POST', body: { text } })
-      setConversation(data)
+      if (isGuest) {
+        const data = await publicApiFetch('/api/support/guest-chat', {
+          method: 'POST',
+          body: { messages: nextMessages.map((message) => ({ role: message.role === 'user' ? 'user' : 'assistant', content: message.text })) },
+        })
+        setMessages([...nextMessages, { role: 'assistant', text: data.reply }])
+      } else {
+        const data = await apiFetch('/api/support/conversations/current/messages', { method: 'POST', body: { text } })
+        setMessages([...nextMessages, ...data.newMessages])
+        setStatus(data.status)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
       setSending(false)
     }
   }
-
-  if (isGuest) {
-    return (
-      <div className="help-chat-widget">
-        <p className="empty-state">Log in to chat with support.</p>
-      </div>
-    )
-  }
-
-  if (loading) return <div className="help-chat-widget"><p>Loading...</p></div>
-
-  const messages = conversation?.messages || []
-  const isEscalated = conversation?.status === 'escalated'
 
   return (
     <div className="help-chat-widget">
@@ -95,7 +81,7 @@ function HelpChatWidget() {
             <p>{message.text}</p>
           </div>
         ))}
-        {isEscalated && <p className="help-chat-status">Waiting for an admin to reply...</p>}
+        {status === 'escalated' && <p className="help-chat-status">Waiting for an admin to reply...</p>}
         <div ref={messagesEndRef} />
       </div>
 

@@ -2667,26 +2667,6 @@ progress {
   color: #ffffff;
 }
 
-.chat-widget-panel-body {
-  display: grid;
-  place-items: center;
-  gap: 8px;
-  padding: 20px;
-  color: var(--app-muted, #74746f);
-  text-align: center;
-}
-
-.chat-widget-panel-body i {
-  font-size: 26px;
-  color: var(--app-accent, #16a09a);
-}
-
-.chat-widget-panel-body p {
-  margin: 0;
-  color: var(--app-text, #111111);
-  font-weight: 800;
-}
-
 @keyframes chatPanelIn {
   from {
     opacity: 0;
@@ -8967,10 +8947,7 @@ progress {
 .chat-widget-panel-body {
   display: flex;
   min-height: 0;
-}
-
-.chat-widget-panel-body .ai-chat-panel {
-  padding: 8px;
+  padding: 12px;
 }
 
 .ai-chat-panel {
@@ -9428,4 +9405,66 @@ progress {
   .support-inbox-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.search-all-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-all-categories button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.search-all-categories button span {
+  color: var(--app-muted);
+  font-size: 0.75rem;
+}
+
+.search-facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.search-facet-group {
+  display: flex;
+  gap: 6px;
+}
+
+.search-facet-group button {
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.search-facet-group button.active {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+.search-facets select {
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 8px;
+  padding: 6px 10px;
 }

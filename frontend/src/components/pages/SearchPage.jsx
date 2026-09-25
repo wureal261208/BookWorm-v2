@@ -82,6 +82,26 @@ function SearchPage() {
 }
 
 function SearchEmptyState({ navigateTo, recentSearches }) {
+  const [allCategories, setAllCategories] = useState([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+    publicApiFetch('/api/content/top-categories?limit=100')
+      .then((data) => {
+        if (!ignore) setAllCategories(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        if (!ignore) setAllCategories([])
+      })
+      .finally(() => {
+        if (!ignore) setLoadingCategories(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
+
   return (
     <div className="search-empty-state">
       {recentSearches.length > 0 && (
@@ -112,20 +132,71 @@ function SearchEmptyState({ navigateTo, recentSearches }) {
           ))}
         </div>
       </section>
+
+      {/* The 8 tiles above are curated banner artwork; this is every real
+          category actually present in the catalog (see
+          backend/controllers/contentController.js's getTopCategories) -
+          picking one shows that category's ebooks + audiobooks on /books,
+          same destination as the tiles above. */}
+      <section>
+        <h3>All Categories</h3>
+        {loadingCategories ? (
+          <p className="empty-state">Loading...</p>
+        ) : allCategories.length ? (
+          <div className="search-all-categories">
+            {allCategories.map((entry) => (
+              <button
+                key={entry.category}
+                onClick={() => navigateTo('books', { query: `category=${encodeURIComponent(entry.category)}` })}
+                type="button"
+              >
+                {entry.category} <span>{entry.count}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">No categories yet.</p>
+        )}
+      </section>
     </div>
   )
 }
 
+// Faceted search: type/category/language filters layered on top of the
+// text search, all sent together to the same GET /api/content?search=
+// endpoint that already supported them individually (see
+// backend/controllers/contentController.js's listContent) - this is just
+// the first UI to actually combine all three at once.
 function BooksResults({ navigateTo, query }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [type, setType] = useState('')
+  const [category, setCategory] = useState('')
+  const [language, setLanguage] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [languageOptions, setLanguageOptions] = useState([])
+
+  useEffect(() => {
+    publicApiFetch('/api/content/top-categories?limit=100')
+      .then((data) => setCategoryOptions(Array.isArray(data) ? data : []))
+      .catch(() => setCategoryOptions([]))
+    publicApiFetch('/api/content/languages')
+      .then((data) => setLanguageOptions(Array.isArray(data) ? data : []))
+      .catch(() => setLanguageOptions([]))
+  }, [])
 
   useEffect(() => {
     let ignore = false
     setLoading(true)
     setError('')
-    publicApiFetch(`/api/content?search=${encodeURIComponent(query)}&limit=30`)
+
+    const params = new URLSearchParams({ search: query, limit: '30' })
+    if (type) params.set('type', type)
+    if (category) params.set('category', category)
+    if (language) params.set('language', language)
+
+    publicApiFetch(`/api/content?${params.toString()}`)
       .then((data) => {
         if (!ignore) setItems(Array.isArray(data?.items) ? data.items : [])
       })
@@ -138,29 +209,65 @@ function BooksResults({ navigateTo, query }) {
     return () => {
       ignore = true
     }
-  }, [query])
-
-  if (loading) return <p>Searching...</p>
-  if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
-  if (!items.length) return <p className="empty-state">No results found.</p>
+  }, [query, type, category, language])
 
   return (
-    <div className="search-results-list">
-      {items.map((item) => (
-        <button
-          className="search-result-row"
-          key={item._id}
-          onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item._id}` })}
-          type="button"
-        >
-          <img alt="" src={item.cover_image || ''} />
-          <span className="search-result-text">
-            <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
-            <strong>{item.title}</strong>
-            <small>{item.author}</small>
-          </span>
-        </button>
-      ))}
+    <div>
+      <div className="search-facets" aria-label="Filter results">
+        <div className="search-facet-group">
+          {[
+            { id: '', label: 'All types' },
+            { id: 'ebook', label: 'Ebooks' },
+            { id: 'audiobook', label: 'Audiobooks' },
+          ].map((option) => (
+            <button className={type === option.id ? 'active' : ''} key={option.id || 'all'} onClick={() => setType(option.id)} type="button">
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <select onChange={(event) => setCategory(event.target.value)} value={category}>
+          <option value="">All categories</option>
+          {categoryOptions.map((entry) => (
+            <option key={entry.category} value={entry.category}>
+              {entry.category} ({entry.count})
+            </option>
+          ))}
+        </select>
+        <select onChange={(event) => setLanguage(event.target.value)} value={language}>
+          <option value="">All languages</option>
+          {languageOptions.map((entry) => (
+            <option key={entry.language} value={entry.language}>
+              {entry.language} ({entry.count})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <p>Searching...</p>
+      ) : error ? (
+        <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
+      ) : !items.length ? (
+        <p className="empty-state">No results found.</p>
+      ) : (
+        <div className="search-results-list">
+          {items.map((item) => (
+            <button
+              className="search-result-row"
+              key={item._id}
+              onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item._id}` })}
+              type="button"
+            >
+              <img alt="" src={item.cover_image || ''} />
+              <span className="search-result-text">
+                <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
+                <strong>{item.title}</strong>
+                <small>{item.author}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

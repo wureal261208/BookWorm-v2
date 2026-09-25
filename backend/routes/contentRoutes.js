@@ -1,6 +1,13 @@
 const express = require('express');
 const { protect } = require('../middleware/auth');
-const { listContent, getPublicContentDetail, getAudiobookChapters, searchAuthors, getTopCategories } = require('../controllers/contentController');
+const {
+  listContent,
+  getPublicContentDetail,
+  getAudiobookChapters,
+  searchAuthors,
+  getTopCategories,
+  getLanguageFacets,
+} = require('../controllers/contentController');
 const { listContentComments, createContentComment } = require('../controllers/contentCommentController');
 
 const router = express.Router();
@@ -13,6 +20,9 @@ router.get('/top-categories', getTopCategories);
 // GET /api/content/authors?q=&limit= - backs the search page's Authors
 // tab. Same before-GET-/:id reasoning.
 router.get('/authors', searchAuthors);
+
+// GET /api/content/languages - backs the search page's language facet.
+router.get('/languages', getLanguageFacets);
 
 // The AI Suggestions chatbot moved to /api/ai-suggestions/conversations
 // (see routes/aiSuggestionsRoutes.js) - it's now a persisted, per-user
