@@ -9468,3 +9468,100 @@ progress {
   border-radius: 8px;
   padding: 6px 10px;
 }
+
+.ai-chat-clarify-options {
+  margin-top: 10px;
+}
+
+.help-chat-rating {
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 12px;
+}
+
+.help-chat-rating-stars {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.help-chat-rating-stars button {
+  border: 0;
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 1.6rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.help-chat-rating-stars button.active {
+  color: #f5a524;
+}
+
+/* --- Mobile pass: customer-facing pages added this project (Search,
+   AI Suggestions, Books, Reader/Player, chat widgets) --- */
+@media (max-width: 640px) {
+  .books-page-banner {
+    padding: 32px 18px;
+    min-height: 130px;
+  }
+
+  .books-page-banner h1 {
+    font-size: 1.5rem;
+  }
+
+  .content-reader-frame {
+    height: 60vh;
+  }
+
+  .content-player-chapter-list button {
+    padding: 12px 10px;
+    font-size: 0.9rem;
+  }
+
+  .search-page-tabs {
+    top: 60px;
+  }
+
+  .search-result-row img {
+    width: 40px;
+    height: 56px;
+  }
+
+  .search-category-grid,
+  .ai-suggestions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .search-facets {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-facets select {
+    width: 100%;
+  }
+
+  .ai-chat-bubble,
+  .ai-chat-suggestion-card {
+    max-width: 100%;
+  }
+
+  .ai-suggestions-sidebar {
+    width: 100%;
+  }
+
+  .chat-widget-panel {
+    width: calc(100vw - 24px);
+    right: -8px;
+  }
+
+  .support-inbox-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .help-chat-rating-stars button {
+    font-size: 1.4rem;
+  }
+}

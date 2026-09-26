@@ -69,7 +69,13 @@ const replyToConversation = asyncHandler(async (req, res) => {
 
 // @route POST /api/admin/support/conversations/:id/close
 const closeConversation = asyncHandler(async (req, res) => {
-  const conversation = await Conversation.findOneAndUpdate({ _id: req.params.id, kind: 'support' }, { status: 'closed' }, { new: true });
+  // closedBy is what lets the visitor's rating prompt say who they're
+  // rating (see supportController.js's getPendingRating).
+  const conversation = await Conversation.findOneAndUpdate(
+    { _id: req.params.id, kind: 'support' },
+    { status: 'closed', closedBy: req.user._id },
+    { new: true },
+  );
   if (!conversation) return fail(res, 404, 'Conversation not found.');
   return success(res, 200, 'Conversation closed.', conversation);
 });

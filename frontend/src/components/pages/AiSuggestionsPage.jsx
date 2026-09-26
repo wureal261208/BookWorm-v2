@@ -161,6 +161,15 @@ function AiSuggestionsPage() {
             messages.map((message, index) => (
               <div className={`ai-chat-bubble ai-chat-bubble-${message.role}`} key={index}>
                 <p>{message.text}</p>
+                {message.options?.length > 0 && (
+                  <div className="ai-chat-starters ai-chat-clarify-options">
+                    {message.options.map((option) => (
+                      <button key={option} onClick={() => send(option)} type="button">
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {message.suggestions?.length > 0 && (
                   <div className="ai-chat-suggestions">
                     {message.suggestions.map((item) => (

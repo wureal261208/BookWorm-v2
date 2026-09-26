@@ -136,14 +136,18 @@ async function generateChatSuggestion({ messages, candidates }) {
     '',
     'Use progressive clarification rather than guessing from a vague first message:',
     '- If the reader\'s request is broad or ambiguous ("something good to read", "surprise me", a single genre with no other detail), ask ONE short, specific clarifying question before recommending anything - e.g. mood, length, ebook vs audiobook, a book/author they already liked. Do not recommend anything that turn.',
+    '- When you ask a clarifying question, also offer 2-5 short, concrete answer choices for the reader to pick from with one tap instead of typing (e.g. for "what mood?": "Lighthearted", "Dark and tense", "Emotional") - see the "options" field in the JSON block below.',
     '- If they answer or their request is already specific enough (a clear genre plus some detail, a named author/comparison, or they say something like "just pick for me"), go ahead and recommend.',
     '- Never ask more than one clarifying question in a row before giving at least some picks - two unanswered questions in a row would feel like an interrogation, not a chat.',
     '',
     'When you do recommend, suggest at least 3 titles, mixing ebooks and audiobooks when it fits the request, and tag each one inline exactly as [Ebook] or [Audiobook] the way the catalog shows it.',
     'Keep a warm, conversational tone with a short line on why each pick fits what the reader asked for - you are chatting, not writing a catalog entry.',
     '',
-    'After your conversational reply, on its own new line, output exactly one JSON object listing the ids of every title you recommended in THIS reply, in this exact shape and nothing else after it: {"suggestions": ["id1", "id2", "id3"]}',
-    'If you asked a clarifying question instead of recommending, output {"suggestions": []}.',
+    'After your conversational reply, on its own new line, output exactly one JSON object in this exact shape and nothing else after it:',
+    '{"suggestions": ["id1", "id2"], "options": ["Choice A", "Choice B"]}',
+    '"suggestions" is the ids of every title you recommended THIS reply - empty array if you asked a clarifying question instead.',
+    '"options" is the clickable answer choices you offered THIS reply if you asked a clarifying question - empty array if you recommended instead.',
+    'Exactly one of the two arrays should be non-empty in a given reply, never both.',
     '',
     'CATALOG:',
     catalogBlock,
@@ -176,7 +180,7 @@ async function generateChatSuggestion({ messages, candidates }) {
   // than dropping the reply entirely.
   const jsonMatch = raw.match(/\{[\s\S]*\}\s*$/);
   if (!jsonMatch) {
-    return { reply: raw.trim(), suggestionIds: [] };
+    return { reply: raw.trim(), suggestionIds: [], options: [] };
   }
 
   try {
@@ -184,9 +188,10 @@ async function generateChatSuggestion({ messages, candidates }) {
     return {
       reply: raw.slice(0, jsonMatch.index).trim(),
       suggestionIds: Array.isArray(parsed.suggestions) ? parsed.suggestions.filter((id) => typeof id === 'string') : [],
+      options: Array.isArray(parsed.options) ? parsed.options.filter((option) => typeof option === 'string' && option.trim()).slice(0, 5) : [],
     };
   } catch (error) {
-    return { reply: raw.trim(), suggestionIds: [] };
+    return { reply: raw.trim(), suggestionIds: [], options: [] };
   }
 }
 

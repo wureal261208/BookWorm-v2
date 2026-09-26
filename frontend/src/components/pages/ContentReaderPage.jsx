@@ -63,6 +63,20 @@ function ContentReaderPage() {
       <p>{item.author}</p>
       {item.description && <p>{item.description}</p>}
 
+      {/* Not a seamless resume-where-you-left-off switch (see backend's
+          getPublicContentDetail - neither Gutendex nor LibriVox expose
+          any shared chapter/position data to sync against), just an
+          honest "this same title exists in the other format too" link. */}
+      {item.pairedContent && (
+        <button
+          className="ghost-button"
+          onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
+          type="button"
+        >
+          <i className="bi bi-headphones" /> Also available as an audiobook - Listen
+        </button>
+      )}
+
       {downloadFiles.length > 0 && (
         <div className="admin-row-actions">
           {downloadFiles.map((file) => (

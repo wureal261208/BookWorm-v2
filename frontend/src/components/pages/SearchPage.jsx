@@ -74,7 +74,18 @@ function SearchPage() {
         ) : tab === 'books' ? (
           <BooksResults navigateTo={navigateTo} query={query} />
         ) : (
-          <AuthorsResults navigateTo={navigateTo} query={query} />
+          <AuthorsResults
+            onSelectAuthor={(author) => {
+              // Fixes a real bug: navigating with a new ?q= alone doesn't
+              // change local `tab` state (this page doesn't remount), so
+              // clicking an author while on the Authors tab used to
+              // re-search AUTHORS matching that name instead of showing
+              // their actual books - switch tabs explicitly here too.
+              setTab('books')
+              navigateTo('search', { query: `q=${encodeURIComponent(author)}` })
+            }}
+            query={query}
+          />
         )}
       </div>
     </div>
@@ -272,7 +283,7 @@ function BooksResults({ navigateTo, query }) {
   )
 }
 
-function AuthorsResults({ navigateTo, query }) {
+function AuthorsResults({ onSelectAuthor, query }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -305,12 +316,7 @@ function AuthorsResults({ navigateTo, query }) {
   return (
     <div className="search-results-list">
       {items.map((entry) => (
-        <button
-          className="search-result-row search-author-row"
-          key={entry.author}
-          onClick={() => navigateTo('search', { query: `q=${encodeURIComponent(entry.author)}` })}
-          type="button"
-        >
+        <button className="search-result-row search-author-row" key={entry.author} onClick={() => onSelectAuthor(entry.author)} type="button">
           <span className="search-author-avatar">
             <i className="bi bi-person-fill" />
           </span>

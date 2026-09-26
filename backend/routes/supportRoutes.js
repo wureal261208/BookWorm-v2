@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/auth');
-const { getCurrentConversation, sendMessage, guestChat } = require('../controllers/supportController');
+const { getCurrentConversation, getConversationById, getPendingRating, rateConversation, sendMessage, guestChat } = require('../controllers/supportController');
 
 const router = express.Router();
 
@@ -13,6 +13,9 @@ router.post('/guest-chat', guestChat);
 router.use(protect);
 
 router.get('/conversations/current', getCurrentConversation);
+router.get('/conversations/pending-rating', getPendingRating);
 router.post('/conversations/current/messages', sendMessage);
+router.get('/conversations/:id', getConversationById);
+router.post('/conversations/:id/rate', rateConversation);
 
 module.exports = router;

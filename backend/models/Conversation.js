@@ -21,6 +21,12 @@ const MessageSchema = new mongoose.Schema(
       ],
       default: undefined,
     },
+    // ai-suggestions only - short clickable choices the model offers when
+    // it's asking a clarifying question instead of recommending yet (see
+    // utils/openrouter.js's generateChatSuggestion "progressive
+    // clarification" instructions). Only set on that kind of message -
+    // empty/omitted once the model actually recommends something.
+    options: { type: [String], default: undefined },
   },
   { _id: false, timestamps: { createdAt: true, updatedAt: false } }
 );
@@ -45,6 +51,12 @@ const ConversationSchema = new mongoose.Schema(
     // message from this user starts a brand new conversation instead of
     // reopening this one, per Wun's call).
     status: { type: String, enum: ['ai', 'escalated', 'closed'], default: 'ai', index: true },
+    // support only - which admin closed it (so the visitor can see who
+    // they were talking to when rating the interaction) and their
+    // satisfaction rating of that admin, if they've given one yet.
+    closedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    satisfactionRating: { type: Number, min: 1, max: 5, default: null },
+    ratedAt: { type: Date, default: null },
     messages: { type: [MessageSchema], default: [] },
   },
   { timestamps: true }

@@ -66,6 +66,12 @@ function ContentPlayerPage() {
       <p>{item.author}</p>
       {item.description && <p>{item.description}</p>}
 
+      {item.pairedContent && (
+        <button className="ghost-button" onClick={() => navigateTo('read', { query: `id=${item.pairedContent.id}` })} type="button">
+          <i className="bi bi-book" /> Also available as an ebook - Read
+        </button>
+      )}
+
       {current ? (
         <div className="content-player-audio">
           <p className="mono-eyebrow">{current.title}</p>

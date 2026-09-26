@@ -85,7 +85,7 @@ async function askAndAppend(conversation, userText) {
     .filter((message) => message.role === 'user' || message.role === 'assistant')
     .map((message) => ({ role: message.role, content: message.text }));
 
-  const { reply, suggestionIds } = await generateChatSuggestion({
+  const { reply, suggestionIds, options } = await generateChatSuggestion({
     messages: history,
     candidates: candidates.map((item) => ({
       id: String(item._id),
@@ -101,7 +101,7 @@ async function askAndAppend(conversation, userText) {
     .filter(Boolean)
     .map((item) => ({ id: item._id, title: item.title, author: item.author, type: item.type }));
 
-  conversation.messages.push({ role: 'assistant', text: reply, suggestions });
+  conversation.messages.push({ role: 'assistant', text: reply, suggestions, options });
 }
 
 // @route POST /api/ai-suggestions/conversations

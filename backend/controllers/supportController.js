@@ -10,17 +10,62 @@ const ESCALATION_THRESHOLD = 4;
 const MAX_HISTORY_MESSAGES = 12;
 
 // @route GET /api/support/conversations/current
-// @desc  The visitor's own open (not yet closed) support conversation, if
-//        any. A closed one is never returned here - per Wun's call, once
-//        an admin closes a conversation it goes blank for the visitor, and
-//        their next message starts a brand new one rather than reopening
-//        the old thread.
+// @desc  Only ever returns a conversation that's actually 'escalated' - a
+//        human is (or was) involved, so the visitor needs to be able to
+//        see those messages if they reopen the widget mid-conversation.
+//        A plain 'ai' conversation with no escalation is never returned
+//        here (that's the "reset every time you open it" part - see
+//        HelpChatWidget.jsx), and neither is a 'closed' one (see
+//        getPendingRating below for that case instead).
 const getCurrentConversation = asyncHandler(async (req, res) => {
-  const conversation = await Conversation.findOne({ user: req.user._id, kind: 'support', status: { $ne: 'closed' } })
+  const conversation = await Conversation.findOne({ user: req.user._id, kind: 'support', status: 'escalated' })
     .sort({ updatedAt: -1 })
     .lean();
 
   return success(res, 200, 'Conversation fetched.', conversation || null);
+});
+
+// @route GET /api/support/conversations/:id
+// @desc  Polled by the widget every few seconds while a conversation is
+//        escalated and open, so an admin's reply shows up without the
+//        visitor having to send another message first (see
+//        HelpChatWidget.jsx's polling effect). Ownership-checked like
+//        every other route here.
+const getConversationById = asyncHandler(async (req, res) => {
+  const conversation = await Conversation.findOne({ _id: req.params.id, user: req.user._id, kind: 'support' }).lean();
+  if (!conversation) return fail(res, 404, 'Conversation not found.');
+  return success(res, 200, 'Conversation fetched.', conversation);
+});
+
+// @route GET /api/support/conversations/pending-rating
+// @desc  The visitor's most recently closed conversation that they haven't
+//        rated yet, with the closing admin's name attached so the rating
+//        prompt can say who they're rating (see HelpChatWidget.jsx).
+const getPendingRating = asyncHandler(async (req, res) => {
+  const conversation = await Conversation.findOne({ user: req.user._id, kind: 'support', status: 'closed', satisfactionRating: null })
+    .sort({ updatedAt: -1 })
+    .populate('closedBy', 'name')
+    .select('closedBy updatedAt')
+    .lean();
+
+  return success(res, 200, 'Pending rating fetched.', conversation || null);
+});
+
+// @route POST /api/support/conversations/:id/rate
+const rateConversation = asyncHandler(async (req, res) => {
+  const rating = Number(req.body.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return fail(res, 400, 'rating must be an integer from 1 to 5.');
+  }
+
+  const conversation = await Conversation.findOneAndUpdate(
+    { _id: req.params.id, user: req.user._id, kind: 'support', status: 'closed' },
+    { satisfactionRating: rating, ratedAt: new Date() },
+    { new: true },
+  );
+  if (!conversation) return fail(res, 404, 'Conversation not found.');
+
+  return success(res, 200, 'Thanks for the feedback.', null);
 });
 
 // @route POST /api/support/conversations/current/messages
@@ -46,7 +91,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     // A human has this one now - the bot stays quiet so it doesn't talk
     // over the admin. Just save the visitor's message for the admin to see.
     await conversation.save();
-    return success(res, 200, 'Message sent.', { status: conversation.status, newMessages: [] });
+    return success(res, 200, 'Message sent.', { status: conversation.status, conversationId: conversation._id, newMessages: [] });
   }
 
   const userMessageCount = conversation.messages.filter((message) => message.role === 'user').length;
@@ -56,7 +101,11 @@ const sendMessage = asyncHandler(async (req, res) => {
     conversation.status = 'escalated';
     conversation.messages.push(systemMessage);
     await conversation.save();
-    return success(res, 200, 'Escalated to an admin.', { status: conversation.status, newMessages: [systemMessage] });
+    return success(res, 200, 'Escalated to an admin.', {
+      status: conversation.status,
+      conversationId: conversation._id,
+      newMessages: [systemMessage],
+    });
   }
 
   let assistantMessage;
@@ -78,7 +127,11 @@ const sendMessage = asyncHandler(async (req, res) => {
   }
 
   await conversation.save();
-  return success(res, 200, 'Message sent.', { status: conversation.status, newMessages: [assistantMessage] });
+  return success(res, 200, 'Message sent.', {
+    status: conversation.status,
+    conversationId: conversation._id,
+    newMessages: [assistantMessage],
+  });
 });
 
 // @route POST /api/support/guest-chat
@@ -108,4 +161,4 @@ const guestChat = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { getCurrentConversation, sendMessage, guestChat };
+module.exports = { getCurrentConversation, getConversationById, getPendingRating, rateConversation, sendMessage, guestChat };
