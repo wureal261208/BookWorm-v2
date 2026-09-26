@@ -94,7 +94,7 @@ function HelpChatWidget() {
   }, [messages.length])
 
   async function submitRating() {
-    if (!ratingValue) return
+    if (!ratingValue || !pendingRating?._id) return
     setSubmittingRating(true)
     try {
       await apiFetch(`/api/support/conversations/${pendingRating._id}/rate`, { method: 'POST', body: { rating: ratingValue } })

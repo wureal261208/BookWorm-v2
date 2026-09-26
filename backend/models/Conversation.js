@@ -1,5 +1,23 @@
 const mongoose = require('mongoose');
 
+// A field literally named `type` inside an inline array-item schema
+// confuses Mongoose's shorthand detection - it sees a `type` key and
+// treats the WHOLE array as that type (here, effectively `[String]`),
+// silently dropping id/title/author as unrecognized options instead of
+// building a real subdocument schema. That's exactly what caused every
+// assistant message with suggestions to fail to save with a
+// "Cast to [string] failed" error, wiping out the reply along with it.
+// A real, separate Schema() instance sidesteps the ambiguity entirely.
+const SuggestionSchema = new mongoose.Schema(
+  {
+    id: { type: mongoose.Schema.Types.ObjectId, ref: 'Content' },
+    title: String,
+    author: String,
+    type: String,
+  },
+  { _id: false }
+);
+
 const MessageSchema = new mongoose.Schema(
   {
     role: { type: String, enum: ['user', 'assistant', 'admin', 'system'], required: true },
@@ -9,18 +27,7 @@ const MessageSchema = new mongoose.Schema(
     // utils/openrouter.js's generateChatSuggestion), stored so the
     // frontend can re-render the same clickable cards without redoing the
     // catalog lookup every time the conversation is reopened.
-    suggestions: {
-      type: [
-        {
-          _id: false,
-          id: { type: mongoose.Schema.Types.ObjectId, ref: 'Content' },
-          title: String,
-          author: String,
-          type: String,
-        },
-      ],
-      default: undefined,
-    },
+    suggestions: { type: [SuggestionSchema], default: undefined },
     // ai-suggestions only - short clickable choices the model offers when
     // it's asking a clarifying question instead of recommending yet (see
     // utils/openrouter.js's generateChatSuggestion "progressive

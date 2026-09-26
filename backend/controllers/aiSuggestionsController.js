@@ -119,12 +119,12 @@ const createConversation = asyncHandler(async (req, res) => {
 
   try {
     await askAndAppend(conversation, text);
+    await conversation.save();
   } catch (error) {
     if (error instanceof OpenRouterConfigError) return fail(res, 503, error.message);
-    return fail(res, 502, `AI request failed: ${error.message}`);
+    return fail(res, 502, `Could not save the conversation: ${error.message}`);
   }
 
-  await conversation.save();
   return success(res, 201, 'Conversation started.', conversation);
 });
 
@@ -140,12 +140,12 @@ const addMessage = asyncHandler(async (req, res) => {
 
   try {
     await askAndAppend(conversation, text);
+    await conversation.save();
   } catch (error) {
     if (error instanceof OpenRouterConfigError) return fail(res, 503, error.message);
-    return fail(res, 502, `AI request failed: ${error.message}`);
+    return fail(res, 502, `Could not save the conversation: ${error.message}`);
   }
 
-  await conversation.save();
   return success(res, 200, 'Message sent.', conversation);
 });
 

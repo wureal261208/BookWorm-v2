@@ -4,10 +4,10 @@ const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
 const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 
-// Public reads - only ever approved content, straight from Mongo. User
-// uploads sit as status:'pending' until an admin approves them (see the
-// "not built yet" note in contentRoutes.js) and never show up here until
-// then.
+// Public reads - only ever published content, straight from Mongo. User
+// uploads sit as status:'draft' until an admin publishes or hides them
+// (see createUserContent below and contentAdminController.js's existing
+// Publish/Hide actions) and never show up here until then.
 const listContent = asyncHandler(async (req, res) => {
   const { type, search, category, language } = req.query;
   const limit = Math.min(Number(req.query.limit) || 24, 100);
@@ -40,6 +40,55 @@ const listContent = asyncHandler(async (req, res) => {
 // returns published content, same as listContent above - a draft/hidden
 // item 404s here exactly like it's missing, rather than leaking its
 // existence to a visitor who isn't an admin.
+const VALID_TYPES = ['ebook', 'audiobook'];
+
+// @route POST /api/content
+// @desc  Community crowd-narration/upload (see CommunityPage.jsx) - a
+//        logged-in reader submits a title with at least one file link
+//        (their own hosted audio for a book LibriVox doesn't have narrated
+//        yet, most often). Lands as status:'draft', invisible to the
+//        public until an admin publishes it from the existing Book
+//        Management > Synced content panel (contentAdminController.js) -
+//        no new admin UI needed, drafts already show up there.
+// @access Any logged-in user (protect only, no role check)
+const createUserContent = asyncHandler(async (req, res) => {
+  const title = (req.body.title || '').trim();
+  const type = req.body.type;
+  const files = Array.isArray(req.body.files) ? req.body.files.filter((file) => file && file.format && file.url) : [];
+
+  if (!title) return fail(res, 400, 'title is required.');
+  if (!VALID_TYPES.includes(type)) return fail(res, 400, `type must be one of: ${VALID_TYPES.join(', ')}`);
+  if (!files.length) return fail(res, 400, 'At least one file (format + url) is required.');
+
+  const content = await Content.create({
+    type,
+    title,
+    author: (req.body.author || '').trim() || 'Unknown author',
+    description: (req.body.description || '').trim(),
+    categories: Array.isArray(req.body.categories) ? req.body.categories.filter((category) => typeof category === 'string' && category.trim()) : [],
+    language: (req.body.language || '').trim() || 'en',
+    source: 'User',
+    files,
+    status: 'draft',
+    uploadedBy: req.user._id,
+    // externalId is deliberately left unset (not null) - the sparse
+    // unique index on {source, externalId} only excludes documents where
+    // the field is genuinely absent, and User uploads have no external
+    // catalog id to dedupe against.
+  });
+
+  return success(res, 201, 'Submitted for review.', content);
+});
+
+// @route GET /api/content/mine
+// @desc  A reader's own submissions, whatever their current status, so
+//        they can see what happened after submitting (see
+//        CommunityPage.jsx's "Your submissions" list).
+const listMyContent = asyncHandler(async (req, res) => {
+  const items = await Content.find({ uploadedBy: req.user._id }).sort({ createdAt: -1 }).lean();
+  return success(res, 200, 'Your submissions fetched.', items);
+});
+
 // Loose title match for pairing an ebook with its audiobook (or vice
 // versa) - Gutenberg and LibriVox format titles slightly differently (e.g.
 // trailing subtitles, punctuation), so this strips everything down to bare
