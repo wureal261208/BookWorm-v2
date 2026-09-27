@@ -9565,3 +9565,90 @@ progress {
     font-size: 1.4rem;
   }
 }
+
+/* --- CommunityPage.jsx (crowd-narration submission) --- */
+.community-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.community-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--app-surface);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.community-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.community-form input,
+.community-form textarea {
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-weight: 400;
+}
+
+.community-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.community-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.community-form-row button {
+  border: 1px solid var(--app-line);
+  background: var(--app-bg);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.community-form-row button.active {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+.community-success {
+  color: #1c6b2d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.community-submissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.community-submission-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+@media (max-width: 640px) {
+  .community-form-row {
+    flex-direction: column;
+  }
+}

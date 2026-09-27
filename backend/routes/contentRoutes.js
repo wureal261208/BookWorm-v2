@@ -2,6 +2,8 @@ const express = require('express');
 const { protect } = require('../middleware/auth');
 const {
   listContent,
+  createUserContent,
+  listMyContent,
   getPublicContentDetail,
   getAudiobookChapters,
   searchAuthors,
@@ -24,6 +26,12 @@ router.get('/authors', searchAuthors);
 // GET /api/content/languages - backs the search page's language facet.
 router.get('/languages', getLanguageFacets);
 
+// GET /api/content/mine - a reader's own submissions (any status), for
+// CommunityPage.jsx's "Your submissions" list. Before GET /:id for the
+// same before-GET-/:id reasoning, and requires login (a submission has to
+// belong to someone).
+router.get('/mine', protect, listMyContent);
+
 // The AI Suggestions chatbot moved to /api/ai-suggestions/conversations
 // (see routes/aiSuggestionsRoutes.js) - it's now a persisted, per-user
 // chat history and needs login, so it no longer fits as a stateless public
@@ -33,6 +41,12 @@ router.get('/languages', getLanguageFacets);
 // Public, no auth - reads the Content collection that
 // utils/contentIngestion.js keeps filled. Always status:'published' only.
 router.get('/', listContent);
+
+// POST /api/content - community crowd-narration/upload (see
+// CommunityPage.jsx and createUserContent's own comments). Any logged-in
+// user, no special role - lands as status:'draft', reviewed the same way
+// as any synced content in the existing Book Management admin panel.
+router.post('/', protect, createUserContent);
 
 // Comments - same public-read/logged-in-write split as book comments (see
 // commentController.js).
@@ -46,11 +60,5 @@ router.get('/:id/chapters', getAudiobookChapters);
 
 // GET /api/content/:id - single item, for the in-app reader/player pages.
 router.get('/:id', getPublicContentDetail);
-
-// Not built yet, on purpose (Wun's call: schema + ingestion first):
-//   POST   /api/content            - user uploads (status starts 'pending')
-//   PATCH  /api/content/:id/status - admin approve/reject
-// Both need the auth/role middleware from middleware/auth.js and belong
-// with the Community + Admin Panel upload-review phases, not this one.
 
 module.exports = router;

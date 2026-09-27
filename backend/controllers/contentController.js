@@ -229,6 +229,8 @@ const runContentIngestion = asyncHandler(async (req, res) => {
 
 module.exports = {
   listContent,
+  createUserContent,
+  listMyContent,
   getPublicContentDetail,
   getAudiobookChapters,
   searchAuthors,

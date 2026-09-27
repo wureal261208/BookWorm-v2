@@ -35,7 +35,10 @@ const listContentForAdmin = asyncHandler(async (req, res) => {
 });
 
 const getContentDetail = asyncHandler(async (req, res) => {
-  const item = await Content.findById(req.params.id).lean();
+  // Populated so the admin panel can show who submitted a community
+  // upload (source: 'User') - null/absent for synced Gutendex/LibriVox
+  // content, which has no uploader.
+  const item = await Content.findById(req.params.id).populate('uploadedBy', 'name email').lean();
   if (!item) return fail(res, 404, 'Content not found.');
   return success(res, 200, 'Content detail fetched.', item);
 });

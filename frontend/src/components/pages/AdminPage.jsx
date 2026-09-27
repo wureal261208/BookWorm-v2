@@ -911,6 +911,12 @@ function ContentDetailModal({ item, onChangeStatus, onClose }) {
 
           <p>{item.description || 'No description available.'}</p>
 
+          {item.source === 'User' && (
+            <p className="community-submission-meta">
+              <i className="bi bi-person-circle" /> Submitted by {item.uploadedBy?.name || 'a community member'}
+            </p>
+          )}
+
           <h3>Files</h3>
           {item.files?.length ? (
             <ul>
