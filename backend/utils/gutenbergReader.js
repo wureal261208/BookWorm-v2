@@ -100,4 +100,53 @@ async function fetchGutenbergReaderText({ readOnlineUrl, plainTextUtf8Url }) {
   throw new Error('Could not extract readable text from any available Gutenberg source.');
 }
 
-module.exports = { fetchGutenbergReaderText, extractReadableTextFromHtml, extractReadableTextFromPlainText };
+// Same cropped text as above, but as an array of paragraphs instead of one
+// joined string - what the margin-notes reader needs, since a note anchors
+// to a paragraph INDEX (see models/MarginNote.js), not a position in a
+// giant blob of text. Reuses the exact same extraction/cropping logic (the
+// paragraphs were joined with "\n\n" to build that string in the first
+// place) rather than re-deriving crop points a second way.
+function extractParagraphsFromHtml(html) {
+  const text = extractReadableTextFromHtml(html);
+  return text
+    .split(/\n\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function extractParagraphsFromPlainText(raw) {
+  const text = extractReadableTextFromPlainText(raw);
+  return text
+    .split(/\n\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+async function fetchGutenbergParagraphs({ readOnlineUrl, plainTextUtf8Url }) {
+  if (readOnlineUrl) {
+    try {
+      const html = await fetchWithTimeout(readOnlineUrl);
+      const paragraphs = extractParagraphsFromHtml(html);
+      if (paragraphs.length > 3) return paragraphs;
+    } catch (error) {
+      // fall through to the plain-text mirror below
+    }
+  }
+
+  if (plainTextUtf8Url) {
+    const raw = await fetchWithTimeout(plainTextUtf8Url);
+    const paragraphs = extractParagraphsFromPlainText(raw);
+    if (paragraphs.length > 3) return paragraphs;
+  }
+
+  throw new Error('Could not extract readable paragraphs from any available Gutenberg source.');
+}
+
+module.exports = {
+  fetchGutenbergReaderText,
+  fetchGutenbergParagraphs,
+  extractReadableTextFromHtml,
+  extractReadableTextFromPlainText,
+  extractParagraphsFromHtml,
+  extractParagraphsFromPlainText,
+};

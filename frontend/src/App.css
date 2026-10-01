@@ -9652,3 +9652,196 @@ progress {
     flex-direction: column;
   }
 }
+
+/* --- PreferencesModal.jsx (signup onboarding / Profile preferences) --- */
+.preferences-modal {
+  background: var(--app-surface);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  width: min(480px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preferences-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.preferences-modal-grid button {
+  border: 1px solid var(--app-line);
+  background: var(--app-bg);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.preferences-modal-grid button.active {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+/* --- PreferencesModal.jsx (onboarding + Profile "update preferences") --- */
+.preferences-modal {
+  width: min(480px, calc(100vw - 32px));
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+
+.preferences-modal h2 {
+  margin: 0 0 8px;
+}
+
+.preferences-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.preferences-modal-grid button {
+  border: 1px solid var(--app-line);
+  background: var(--app-bg);
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.preferences-modal-grid button.active {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+@media (max-width: 480px) {
+  .preferences-modal {
+    padding: 20px;
+  }
+
+  .preferences-modal-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.inline-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--app-muted);
+}
+
+/* --- MarginNotesReader.jsx (paragraph-anchored public notes) --- */
+.margin-notes-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 720px;
+}
+
+.margin-notes-paragraph {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.margin-notes-paragraph p {
+  flex: 1;
+  margin: 0;
+  line-height: 1.7;
+  color: var(--app-text);
+}
+
+.margin-notes-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--app-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.margin-notes-paragraph:hover .margin-notes-toggle {
+  opacity: 1;
+}
+
+.margin-notes-toggle.has-notes {
+  opacity: 1;
+  color: var(--app-accent, #16a09a);
+  font-weight: 700;
+}
+
+.margin-notes-panel {
+  width: 100%;
+  margin: 6px 0 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.margin-notes-item strong {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+
+.margin-notes-item p {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.margin-notes-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.margin-notes-form textarea {
+  min-height: 60px;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--app-bg);
+  color: var(--app-text);
+  resize: vertical;
+}
+
+.community-submission-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .margin-notes-paragraph {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .margin-notes-toggle {
+    align-self: flex-end;
+    opacity: 1;
+  }
+}

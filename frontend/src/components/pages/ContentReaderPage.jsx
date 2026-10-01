@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { publicApiFetch } from '../../utils/apiClient'
+import { auth } from '../../features/auth-firebase/firebaseConfig'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import ContentComments from '../content/ContentComments'
+import MarginNotesReader from '../content/MarginNotesReader'
 
 // Reads ?id= rather than a path param (/read/:id) - the app's own
 // lightweight router (see App.jsx's PAGE_PATHS/navigateTo) only maps a
@@ -24,7 +26,15 @@ function ContentReaderPage() {
     setError('')
     publicApiFetch(`/api/content/${id}`)
       .then((data) => {
-        if (!ignore) setItem(data)
+        if (ignore) return
+        setItem(data)
+        // Best-effort, real-behavior signal for Home's "For You" row (see
+        // backend/controllers/contentController.js's getForYou) - fails
+        // silently for a guest (no account to attach it to) or a network
+        // hiccup, neither of which should affect reading the book itself.
+        if (auth.currentUser && data.categories?.length) {
+          apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: data.categories } }).catch(() => {})
+        }
       })
       .catch((err) => {
         if (!ignore) setError(err.message)
@@ -43,10 +53,11 @@ function ContentReaderPage() {
     return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Book not found.'}</p>
   }
 
-  // Prefer the actual HTML edition for the iframe - epub/mobi/txt files
-  // aren't renderable inline in a browser tab the way an HTML page is.
-  const htmlFile = item.files?.find((file) => file.format === 'html')
-  const downloadFiles = (item.files || []).filter((file) => file.format !== 'html')
+  // Downloads still link straight to the source files (epub/mobi/txt) -
+  // only the "html" edition is fetched and rendered as real paragraphs (see
+  // MarginNotesReader.jsx), since that's what margin notes anchor to.
+  const hasHtmlEdition = item.files?.some((file) => file.format === 'html')
+  const downloadFiles = item.files || []
 
   return (
     <div className="content-reader-page">
@@ -87,8 +98,8 @@ function ContentReaderPage() {
         </div>
       )}
 
-      {htmlFile ? (
-        <iframe className="content-reader-frame" src={htmlFile.url} title={item.title} />
+      {hasHtmlEdition ? (
+        <MarginNotesReader contentId={item._id} />
       ) : (
         <p className="empty-state">No readable HTML edition on file for this book - try one of the download links above.</p>
       )}

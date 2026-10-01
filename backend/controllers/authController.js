@@ -14,6 +14,8 @@ function sanitizeUser(user) {
     banExpiresAt: user.banExpiresAt,
     createdAt: user.createdAt,
     themePreference: user.themePreference || null,
+    preferredCategories: user.preferredCategories || [],
+    hasSetPreferences: Boolean(user.hasSetPreferences),
   };
 }
 
@@ -41,4 +43,43 @@ const updateMyTheme = asyncHandler(async (req, res) => {
   return success(res, 200, 'Theme preference saved.', { themePreference: theme });
 });
 
-module.exports = { getMe, sanitizeUser, updateMyTheme };
+// @route PATCH /api/users/me/preferences
+// @desc  The signup onboarding step ("what do you like to read?") and
+//        Profile's own "update your reading preferences" both call this -
+//        same endpoint either way, just a different moment. An empty array
+//        is a valid, deliberate choice ("none of these, skip"), which is
+//        why hasSetPreferences is its own flag rather than just checking
+//        preferredCategories.length.
+const updateMyPreferences = asyncHandler(async (req, res) => {
+  const categories = Array.isArray(req.body.categories)
+    ? req.body.categories.filter((category) => typeof category === 'string' && category.trim()).slice(0, 20)
+    : [];
+
+  req.user.preferredCategories = categories;
+  req.user.hasSetPreferences = true;
+  await req.user.save();
+
+  return success(res, 200, 'Preferences saved.', { preferredCategories: categories });
+});
+
+// @route POST /api/users/me/engagement
+// @desc  Fired (best-effort, see ContentReaderPage.jsx/ContentPlayerPage.jsx)
+//        whenever this reader opens a Content item, with that item's own
+//        categories - a lightweight signal of what they actually read/
+//        listen to, not just what they said they liked at signup. Feeds
+//        GET /api/content/for-you alongside preferredCategories.
+const recordCategoryEngagement = asyncHandler(async (req, res) => {
+  const categories = Array.isArray(req.body.categories)
+    ? req.body.categories.filter((category) => typeof category === 'string' && category.trim())
+    : [];
+
+  for (const category of categories) {
+    const current = req.user.categoryEngagement.get(category) || 0;
+    req.user.categoryEngagement.set(category, current + 1);
+  }
+  if (categories.length) await req.user.save();
+
+  return success(res, 200, 'Recorded.', null);
+});
+
+module.exports = { getMe, sanitizeUser, updateMyTheme, updateMyPreferences, recordCategoryEngagement };

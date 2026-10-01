@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { publicApiFetch } from '../../utils/apiClient'
+import { auth } from '../../features/auth-firebase/firebaseConfig'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import ContentComments from '../content/ContentComments'
 
@@ -30,6 +31,9 @@ function ContentPlayerPage() {
         if (ignore) return
         setItem(itemData)
         setChapters(Array.isArray(chaptersData?.chapters) ? chaptersData.chapters : [])
+        if (auth.currentUser && itemData.categories?.length) {
+          apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: itemData.categories } }).catch(() => {})
+        }
       })
       .catch((err) => {
         if (!ignore) setError(err.message)

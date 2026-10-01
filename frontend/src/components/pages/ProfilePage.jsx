@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getAuthor, getCover, getInitials } from '../../utils/bookUtils'
 import { maskEmail } from '../../utils/maskEmail'
+import PreferencesModal from '../content/PreferencesModal'
+import { normalizeRole } from '../../data/bookData'
 
 const AVATAR_MAX_SIZE = 2 * 1024 * 1024
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -26,8 +28,26 @@ function ProfilePage({
   setWebsiteTheme,
   websiteTheme,
 }) {
+  const [showPreferences, setShowPreferences] = useState(false)
+  const isGuest = normalizeRole(account?.role) === 'guest'
+
   return (
     <div className="profile-page settings-only-page">
+      {!isGuest && (
+        <section className="section-block">
+          <div className="section-heading">
+            <div>
+              <p className="mono-eyebrow">For You</p>
+              <h2>Reading preferences</h2>
+            </div>
+            <button className="ghost-button" onClick={() => setShowPreferences(true)} type="button">
+              Update preferences
+            </button>
+          </div>
+        </section>
+      )}
+      {showPreferences && <PreferencesModal onClose={() => setShowPreferences(false)} />}
+
       <ProfileSettings
         key={account?.id || account?.email || 'guest'}
         account={account}

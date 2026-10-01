@@ -26,10 +26,23 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
   }
 
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.message || `Request failed with status ${response.status}`)
+    const error = new Error(payload?.message || `Request failed with status ${response.status}`)
+    // Lets a caller tell "the server rejected me" (401/403 - a real auth
+    // failure) apart from "something went wrong reaching the server"
+    // (network error, 500, cold start) - see App.jsx's resolveTrustedProfile,
+    // which used to sign a person back out on ANY failure here, including
+    // ones that had nothing to do with their account being invalid.
+    error.status = response.status
+    throw error
   }
 
-  return payload?.data ?? {}
+  // A bare `?? {}` here would silently turn a legitimate `null` (several
+  // endpoints - getCurrentConversation, getPendingRating - return null on
+  // purpose to mean "nothing here") into a truthy `{}`, which every caller
+  // checking `if (result)` would then wrongly treat as "something's there".
+  // Only missing the `data` key entirely (a response with no data field at
+  // all) falls back to `{}` - an explicit null is passed through as null.
+  return 'data' in (payload || {}) ? payload.data : {}
 }
 
 // For routes that work for anonymous visitors too (still attaches a token

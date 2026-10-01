@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { publicApiFetch } from '../../utils/apiClient'
 import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
@@ -38,9 +39,17 @@ function useBookRow(query) {
 // { items, total, page, limit } rather than a { books: [...] } envelope.
 function useExternalRow(path) {
   const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!path)
 
   useEffect(() => {
+    // A falsy path (see the For You row's isGuest check above) means
+    // "don't fetch this at all" - not "fetch a broken URL".
+    if (!path) {
+      setItems([])
+      setLoading(false)
+      return undefined
+    }
+
     let ignore = false
     setLoading(true)
     publicApiFetch(path)
@@ -71,6 +80,12 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
 
   const [hotEbooks, hotEbooksLoading] = useExternalRow('/api/content?type=ebook&limit=16')
   const [hotAudiobooks, hotAudiobooksLoading] = useExternalRow('/api/content?type=audiobook&limit=16')
+  // Only fetched for a logged-in reader - GET /api/content/for-you needs an
+  // account to score against (preferredCategories + real categoryEngagement,
+  // see backend/controllers/contentController.js), and there's nothing
+  // honest to show a guest here.
+  const isGuest = !auth.currentUser
+  const [forYou, forYouLoading] = useExternalRow(isGuest ? null : '/api/content/for-you?limit=16')
 
   const newBooks = books.slice(0, 16)
   const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
@@ -109,6 +124,16 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         </section>
       )}
 
+      {/* Real personalization, unlike "Recommended for you" below - blends
+          explicit genre picks (PreferencesModal.jsx, onboarding/Profile)
+          with what this reader actually opens (see
+          backend/controllers/contentController.js's getForYou). Guests
+          don't get this row at all (isGuest above) rather than a fake
+          version of it. */}
+      {!isGuest && (forYouLoading || forYou.length > 0) && (
+        <ExternalRowSection eyebrow="Picked for you" items={forYou} loading={forYouLoading} title="For You" />
+      )}
+
       {/* "View library" buttons used to jump to the Discover page, which -
           like 'random' above - isn't in the navbar anymore, so they were
           removed rather than left as another dead end. */}
@@ -139,10 +164,9 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
       />
 
       {/* Straight from the unified Content collection (see
-          backend/utils/contentIngestion.js) - these two rows link out to
-          Gutenberg/LibriVox/archive.org themselves rather than BookWorm's
-          own reader, since this content hasn't gone through the (not yet
-          built) admin review + in-app reader/player wiring. */}
+          backend/utils/contentIngestion.js) - open in BookWorm's own
+          in-app reader/player (ContentReaderPage.jsx/ContentPlayerPage.jsx),
+          not an external Gutenberg/LibriVox tab. */}
       <ExternalRowSection eyebrow="Popular on Gutenberg" items={hotEbooks} loading={hotEbooksLoading} title="Hot ebooks" />
 
       <ExternalRowSection eyebrow="Fresh from LibriVox" items={hotAudiobooks} loading={hotAudiobooksLoading} title="Hot audiobooks" />

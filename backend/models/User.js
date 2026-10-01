@@ -44,6 +44,21 @@ const UserSchema = new mongoose.Schema(
     // /:id/view) - purely a simple activity counter for the Admin
     // "Top readers" stat, not a full reading-history log.
     booksReadCount: { type: Number, default: 0 },
+    // Explicit genre picks from the signup onboarding step (or set/changed
+    // later from Profile) - see PATCH /api/users/me/preferences. Empty
+    // until they've actually chosen something; hasSetPreferences is what
+    // tells the frontend "show the onboarding prompt" apart from "they
+    // deliberately picked nothing".
+    preferredCategories: { type: [String], default: [] },
+    hasSetPreferences: { type: Boolean, default: false },
+    // Real behavior, not just stated preference - bumped a little each time
+    // this reader opens a Content item's reader/player page (see POST
+    // /api/users/me/engagement), keyed by category name. Used together
+    // with preferredCategories to build Home's "For You" row (see
+    // GET /api/content/for-you) - a category they keep actually opening
+    // counts for something even if they never filled in the onboarding
+    // step, and vice versa.
+    categoryEngagement: { type: Map, of: Number, default: {} },
   },
   { timestamps: true, collection: 'user_profiles' }
 );

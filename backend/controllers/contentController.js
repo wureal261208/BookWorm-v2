@@ -3,6 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
 const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
+const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
 
 // Public reads - only ever published content, straight from Mongo. User
 // uploads sit as status:'draft' until an admin publishes or hides them
@@ -124,6 +125,30 @@ const getPublicContentDetail = asyncHandler(async (req, res) => {
   return success(res, 200, 'Content detail fetched.', { ...item, pairedContent });
 });
 
+// @route GET /api/content/:id/text
+// @desc  Public - powers the in-app margin-notes reader (see
+//        ContentReaderPage.jsx). Fetched server-side (the browser can't
+//        reach gutenberg.org directly from this app due to CORS) and split
+//        into paragraphs, the same unit a margin note anchors to (see
+//        models/MarginNote.js). Not cached in Mongo - same reasoning as
+//        the audiobook chapter list below: parsing is cheap, and it keeps
+//        the Content documents themselves small.
+const getContentText = asyncHandler(async (req, res) => {
+  const item = await Content.findOne({ _id: req.params.id, status: 'published', type: 'ebook' }).lean();
+  if (!item) return fail(res, 404, 'Content not found.');
+
+  const htmlFile = (item.files || []).find((file) => file.format === 'html');
+  const txtFile = (item.files || []).find((file) => file.format === 'txt');
+  if (!htmlFile && !txtFile) return fail(res, 404, 'No readable text file recorded for this book.');
+
+  try {
+    const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl: htmlFile?.url, plainTextUtf8Url: txtFile?.url });
+    return success(res, 200, 'Text fetched.', { paragraphs });
+  } catch (error) {
+    return fail(res, 502, `Could not load book text: ${error.message}`);
+  }
+});
+
 // Public, no auth - backs the in-app audiobook player's chapter list.
 // Fetches the item's own RSS file live (LibriVox doesn't hand back
 // per-chapter mp3 URLs anywhere in the cached Content document - the
@@ -195,6 +220,51 @@ const getLanguageFacets = asyncHandler(async (req, res) => {
   );
 });
 
+// @route GET /api/content/for-you
+// @desc  Requires login - blends a reader's explicit preferredCategories
+//        (from onboarding/Profile) with their real categoryEngagement
+//        (what they've actually opened - see recordCategoryEngagement in
+//        authController.js), weighting real behavior a bit higher since
+//        it's a stronger signal than a one-time signup pick. Falls back to
+//        overall top categories for a reader with neither yet, rather than
+//        an empty row.
+const getForYou = asyncHandler(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 16, 40);
+
+  const engagementEntries = req.user.categoryEngagement ? [...req.user.categoryEngagement.entries()] : [];
+  const scored = new Map();
+  for (const category of req.user.preferredCategories || []) {
+    scored.set(category, (scored.get(category) || 0) + 2);
+  }
+  for (const [category, count] of engagementEntries) {
+    scored.set(category, (scored.get(category) || 0) + count * 3);
+  }
+
+  let topCategories = [...scored.entries()].sort((a, b) => b[1] - a[1]).map(([category]) => category);
+
+  if (!topCategories.length) {
+    const fallback = await Content.aggregate([
+      { $match: { status: 'published' } },
+      { $unwind: '$categories' },
+      { $group: { _id: '$categories', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 },
+    ]);
+    topCategories = fallback.map((entry) => entry._id);
+  }
+
+  if (!topCategories.length) {
+    return success(res, 200, 'For You fetched.', []);
+  }
+
+  const items = await Content.find({ status: 'published', categories: { $regex: topCategories.slice(0, 8).join('|'), $options: 'i' } })
+    .sort({ downloadCount: -1 })
+    .limit(limit)
+    .lean();
+
+  return success(res, 200, 'For You fetched.', items);
+});
+
 // Public, no auth - backs the AI Suggestions page. Honest about what this
 // actually is: there's no reading/listening-history model yet (Content has
 // no view/play tracking at all, unlike the old Book model's view counts),
@@ -232,9 +302,11 @@ module.exports = {
   createUserContent,
   listMyContent,
   getPublicContentDetail,
+  getContentText,
   getAudiobookChapters,
   searchAuthors,
   getTopCategories,
   getLanguageFacets,
+  getForYou,
   runContentIngestion,
 };

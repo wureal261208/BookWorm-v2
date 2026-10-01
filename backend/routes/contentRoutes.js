@@ -5,12 +5,15 @@ const {
   createUserContent,
   listMyContent,
   getPublicContentDetail,
+  getContentText,
   getAudiobookChapters,
   searchAuthors,
   getTopCategories,
   getLanguageFacets,
+  getForYou,
 } = require('../controllers/contentController');
 const { listContentComments, createContentComment } = require('../controllers/contentCommentController');
+const { listNotes, createNote, deleteNote } = require('../controllers/marginNoteController');
 
 const router = express.Router();
 
@@ -31,6 +34,10 @@ router.get('/languages', getLanguageFacets);
 // same before-GET-/:id reasoning, and requires login (a submission has to
 // belong to someone).
 router.get('/mine', protect, listMyContent);
+
+// GET /api/content/for-you - personalized Home row, requires login (see
+// getForYou's own comments on how it's scored).
+router.get('/for-you', protect, getForYou);
 
 // The AI Suggestions chatbot moved to /api/ai-suggestions/conversations
 // (see routes/aiSuggestionsRoutes.js) - it's now a persisted, per-user
@@ -57,6 +64,16 @@ router.post('/:id/comments', protect, createContentComment);
 // mp3 URL per chapter), parsed live from the item's LibriVox RSS feed. See
 // ContentPlayerPage.jsx on the frontend.
 router.get('/:id/chapters', getAudiobookChapters);
+
+// GET /api/content/:id/text - the book's paragraphs, for the margin-notes
+// reader (see ContentReaderPage.jsx and models/MarginNote.js).
+router.get('/:id/text', getContentText);
+
+// Margin notes - public read (every note is visible to every reader),
+// logged-in write, own-note delete.
+router.get('/:id/notes', listNotes);
+router.post('/:id/notes', protect, createNote);
+router.delete('/:id/notes/:noteId', protect, deleteNote);
 
 // GET /api/content/:id - single item, for the in-app reader/player pages.
 router.get('/:id', getPublicContentDetail);

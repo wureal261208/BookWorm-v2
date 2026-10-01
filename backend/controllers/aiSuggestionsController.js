@@ -22,7 +22,18 @@ const listConversations = asyncHandler(async (req, res) => {
     .select('title updatedAt createdAt')
     .lean();
 
-  return success(res, 200, 'Conversations fetched.', conversations);
+  // Mapped to `id` (not the raw `_id`) - AiSuggestionsPage.jsx keys and
+  // opens conversations by `.id` everywhere, including the ones it appends
+  // to this same list locally right after creating one. Leaving this as
+  // `_id` meant every conversation loaded from this endpoint (i.e. every
+  // one from a past session) silently had no usable id to open by - clicks
+  // did nothing, which is exactly the "history doesn't show anything" bug.
+  return success(
+    res,
+    200,
+    'Conversations fetched.',
+    conversations.map((conversation) => ({ id: conversation._id, title: conversation.title, updatedAt: conversation.updatedAt })),
+  );
 });
 
 // @route GET /api/ai-suggestions/conversations/:id

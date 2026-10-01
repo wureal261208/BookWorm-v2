@@ -13,6 +13,7 @@ import {
 } from 'firebase/auth'
 import AuthPage from './components/auth/AuthPage'
 import AppShell from './components/layout/AppShell'
+import PreferencesModal from './components/content/PreferencesModal'
 import { apiFetch, publicApiFetch } from './utils/apiClient'
 import {
   hasAccess,
@@ -115,6 +116,12 @@ function App() {
   const [authReady, setAuthReady] = useState(false)
   const [toast, setToast] = useState(null)
   const [banNotice, setBanNotice] = useState(null)
+  // Shown once per account until they've actually made a choice (even an
+  // empty one, via "Skip") - not just for a brand-new signup. Any existing
+  // account that never went through this (everyone who signed up before
+  // this feature existed) gets it too the next time they log in - see the
+  // hasSetPreferences check right after setAccount below.
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false)
   const [pageState, dispatchPage] = useReducer(pageReducer, pageInitialState)
   const routeTimerRef = useRef(null)
   const [books, setBooks] = useState([])
@@ -166,22 +173,50 @@ function App() {
   // list has to use this Mongo id, not the Firebase uid, and not email
   // (masked in list responses).
   const resolveTrustedProfile = useCallback(async () => {
-    try {
-      const data = await apiFetch('/api/users/me')
-      return {
-        role: normalizeRole(data.user?.role) || 'customer',
-        id: data.user?.id || '',
-        displayId: data.user?.displayId || '',
-        themePreference: data.user?.themePreference || '',
+    // Retries a transient failure (network blip, a cold-start backend
+    // timing out) a couple of times before giving up - this used to sign
+    // a brand-new account straight back out the moment its very first
+    // backend call (which also has to create their Mongo profile - see
+    // middleware/auth.js `resolveUserFromToken`) hit any hiccup at all,
+    // which reads to a person as "I made an account and it doesn't work".
+    // A real rejection (401/403 - actually banned, actually invalid) never
+    // retries and is trusted immediately; only the "couldn't even reach a
+    // verdict" case gets a second try.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const data = await apiFetch('/api/users/me')
+        return {
+          role: normalizeRole(data.user?.role) || 'customer',
+          id: data.user?.id || '',
+          displayId: data.user?.displayId || '',
+          themePreference: data.user?.themePreference || '',
+          hasSetPreferences: Boolean(data.user?.hasSetPreferences),
+        }
+      } catch (error) {
+        const isRealRejection = error.status === 401 || error.status === 403
+        if (!isRealRejection && attempt < 2) {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)))
+          continue
+        }
+
+        console.warn('Could not verify account role from server:', error.message)
+        if (isRealRejection) {
+          // The backend's ban check (middleware/auth.js `protect`) returns
+          // a specific "Your account has been banned... Reason: ..."
+          // message - surface that verbatim in the ban popup instead of a
+          // generic toast.
+          const banMessage = /banned/i.test(error.message || '') ? error.message : ''
+          return { role: 'customer', id: '', displayId: '', themePreference: '', rejected: true, banMessage }
+        }
+        // Every retry failed but the server never actually said "no" (no
+        // 401/403) - a connection issue on our end, not a reason to sign
+        // anyone out. The Firebase session stays valid so a page refresh
+        // can just try again cleanly.
+        return { role: 'customer', id: '', displayId: '', themePreference: '', unverified: true }
       }
-    } catch (error) {
-      console.warn('Could not verify account role from server, defaulting to customer:', error.message)
-      // The backend's ban check (middleware/auth.js `protect`) returns a
-      // specific "Your account has been banned... Reason: ..." message -
-      // surface that verbatim in the ban popup instead of a generic toast.
-      const banMessage = /banned/i.test(error.message || '') ? error.message : ''
-      return { role: 'customer', id: '', displayId: '', themePreference: '', banMessage }
     }
+    return { role: 'customer', id: '', displayId: '', themePreference: '', unverified: true }
   }, [])
 
   const scrollToTopForPage = useCallback((page) => {
@@ -468,17 +503,28 @@ function App() {
       const trustedProfile = await resolveTrustedProfile()
 
       // A banned/restricted account still holds a valid Firebase session
-      // token for up to an hour, but the backend rejects every API call for
-      // it (see middleware/auth.js `protect`) - resolveTrustedProfile falls
-      // back to 'customer' + no id on any such failure, so this is also the
-      // fail-closed path for "couldn't verify, don't trust this session".
-      if (!trustedProfile.id) {
+      // token for up to an hour, but the backend explicitly rejects it
+      // (401/403 - see middleware/auth.js `protect`) - that's the only
+      // case that actually signs someone out here.
+      if (trustedProfile.rejected) {
         await signOut(auth)
         if (trustedProfile.banMessage) {
           setBanNotice(trustedProfile.banMessage)
         } else {
           setToast({ type: 'error', message: "We couldn't verify this account. If it was banned or restricted, contact a manager or admin." })
         }
+        setAuthReady(true)
+        return
+      }
+
+      // Every retry failed without the server ever actually rejecting the
+      // account (a network blip, a cold-start timeout) - this is exactly
+      // what used to sign a brand-new signup straight back out the moment
+      // their very first backend call (which also creates their Mongo
+      // profile) hit any hiccup. Keep the Firebase session intact and let
+      // them try again rather than forcing a fresh login.
+      if (trustedProfile.unverified) {
+        setToast({ type: 'error', message: 'Having trouble connecting to BookWorm - please refresh the page.' })
         setAuthReady(true)
         return
       }
@@ -494,6 +540,7 @@ function App() {
       }
 
       setAccount(nextAccount)
+      if (!trustedProfile.hasSetPreferences) setShowPreferencesModal(true)
       // The account's saved theme preference (MongoDB) wins over whatever
       // was showing before login - only applied when the account actually
       // has one saved, so a fresh account without a preference yet doesn't
@@ -1122,6 +1169,7 @@ function App() {
         />
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
+        {showPreferencesModal && <PreferencesModal onClose={() => setShowPreferencesModal(false)} />}
       </>
     )
   }
@@ -1280,6 +1328,7 @@ function App() {
         <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
+        {showPreferencesModal && <PreferencesModal onClose={() => setShowPreferencesModal(false)} />}
       </AppShell>
     </NavigationProvider>
   )

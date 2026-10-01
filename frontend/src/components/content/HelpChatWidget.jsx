@@ -136,7 +136,13 @@ function HelpChatWidget() {
     }
   }
 
-  if (phase === 'loading') return <div className="help-chat-widget"><p>Loading...</p></div>
+  if (phase === 'loading') {
+    return (
+      <div className="help-chat-widget">
+        <p className="inline-loading"><span className="admin-spin-small" /> Loading...</p>
+      </div>
+    )
+  }
 
   if (phase === 'rating') {
     return (
