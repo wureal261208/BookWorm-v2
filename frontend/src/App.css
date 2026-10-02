@@ -9845,3 +9845,79 @@ progress {
     opacity: 1;
   }
 }
+
+/* --- WritePage.jsx (Phase 1: submit a book with chapters) --- */
+.write-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.write-page-tabs {
+  margin-bottom: 4px;
+}
+
+.write-page-chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.write-page-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-bg);
+}
+
+.write-page-chapter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.write-page-chapter-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.write-page-chapter-actions button {
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.write-page-chapter-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.write-page-chapter-content {
+  min-height: 160px;
+}
+
+.write-page-mine-row {
+  border: 0;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.write-page-mine-row:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+@media (max-width: 640px) {
+  .write-page-chapter-content {
+    min-height: 120px;
+  }
+}
