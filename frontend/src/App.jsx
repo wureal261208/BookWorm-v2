@@ -20,6 +20,7 @@ import {
   normalizeRole,
 } from './data/bookData'
 import { NavigationProvider } from './context/NavigationContext'
+import { AudioPlayerProvider } from './context/AudioPlayerContext'
 import { auth } from './features/auth-firebase/firebaseConfig'
 import { getAuthor, getCategory, getReaderUrl } from './utils/bookUtils'
 import {
@@ -122,6 +123,7 @@ function App() {
   // this feature existed) gets it too the next time they log in - see the
   // hasSetPreferences check right after setAccount below.
   const [showPreferencesModal, setShowPreferencesModal] = useState(false)
+  const [preferenceVersion, setPreferenceVersion] = useState(0)
   const [pageState, dispatchPage] = useReducer(pageReducer, pageInitialState)
   const routeTimerRef = useRef(null)
   const [books, setBooks] = useState([])
@@ -537,6 +539,8 @@ function App() {
         email,
         avatar: savedSettings.avatar || user.photoURL || '',
         role: trustedProfile.role,
+        preferredCategories: trustedProfile.preferredCategories || [],
+        hasSetPreferences: Boolean(trustedProfile.hasSetPreferences),
       }
 
       setAccount(nextAccount)
@@ -1169,7 +1173,20 @@ function App() {
         />
         {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
         {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
-        {showPreferencesModal && <PreferencesModal onClose={() => setShowPreferencesModal(false)} />}
+        {showPreferencesModal && (
+          <PreferencesModal
+            initialSelected={account.preferredCategories || []}
+            onClose={() => setShowPreferencesModal(false)}
+            onSave={(savedCategories) => {
+              setAccount((prev) => ({
+                ...prev,
+                preferredCategories: savedCategories,
+                hasSetPreferences: true,
+              }))
+              setPreferenceVersion((v) => v + 1)
+            }}
+          />
+        )}
       </>
     )
   }
@@ -1186,6 +1203,7 @@ function App() {
         onFavorite={toggleFavorite}
         onRead={openBook}
         onSelectGenre={(genre) => navigateTo('books', { query: `category=${encodeURIComponent(genre)}` })}
+        preferenceVersion={preferenceVersion}
         setPage={jumpPage}
         topics={topics}
         viewCounts={viewCounts}
@@ -1324,12 +1342,27 @@ function App() {
 
   return (
     <NavigationProvider value={navigation}>
-      <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onHeaderSearch={handleHeaderSearch} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onNotificationClick={handleNotificationClick} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
-        <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
-        {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
-        {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
-        {showPreferencesModal && <PreferencesModal onClose={() => setShowPreferencesModal(false)} />}
-      </AppShell>
+      <AudioPlayerProvider>
+        <AppShell account={account} managedBooks={managedBooks} notifications={notifications} onAuth={goAuth} onGuest={goGuest} onHeaderSearch={handleHeaderSearch} onLogout={handleLogout} onMarkAllNotificationsRead={markAllNotificationsRead} onNotificationClick={handleNotificationClick} setWebsiteTheme={setWebsiteTheme} staff={staff} websiteTheme={websiteTheme}>
+          <Suspense fallback={<PageFallback />}>{pages[activePage] || pages.home}</Suspense>
+          {toast && <AppToast message={toast.message} onClose={() => setToast(null)} type={toast.type} />}
+          {banNotice && <BanNoticeModal message={banNotice} onClose={() => setBanNotice(null)} />}
+          {showPreferencesModal && (
+            <PreferencesModal
+              initialSelected={account.preferredCategories || []}
+              onClose={() => setShowPreferencesModal(false)}
+              onSave={(savedCategories) => {
+                setAccount((prev) => ({
+                  ...prev,
+                  preferredCategories: savedCategories,
+                  hasSetPreferences: true,
+                }))
+                setPreferenceVersion((v) => v + 1)
+              }}
+            />
+          )}
+        </AppShell>
+      </AudioPlayerProvider>
     </NavigationProvider>
   )
 }
@@ -1544,7 +1577,7 @@ function AppToast({ message, onClose, type }) {
     return () => window.clearTimeout(timer)
   }, [onClose, type])
 
-  const icon = type === 'success' ? 'bi-check-circle' : type === 'loading' ? 'bi-arrow-repeat admin-spin' : 'bi-exclamation-circle'
+  const icon = type === 'success' ? 'bi-check-circle' : type === 'loading' ? 'bi-arrow-repeat admin-spin' : type === 'info' ? 'bi-chat-dots' : 'bi-exclamation-circle'
 
   return (
     <div className={`app-toast ${type}`} role="status">

@@ -5,6 +5,8 @@ import HelpChatWidget from '../content/HelpChatWidget'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
 import { useNavigation } from '../../context/NavigationContext'
+import { useAudioPlayer } from '../../context/AudioPlayerContext'
+import GlobalMiniPlayer from '../player/GlobalMiniPlayer'
 import { hasAccess, normalizeRole } from '../../data/bookData'
 
 // Ebooks/Audiobooks both point at the same /books page (see BooksPage.jsx -
@@ -46,6 +48,7 @@ function AppShell({
   websiteTheme = 'light',
 }) {
   const { activePage, isPageLoading, navigateTo } = useNavigation()
+  const { isPlayerVisible } = useAudioPlayer()
   // Only used to tell the Ebooks tab apart from the Audiobooks tab (both
   // point at activePage === 'books') - not used for navigation itself,
   // navigateTo's own `query` option handles that.
@@ -361,8 +364,9 @@ function AppShell({
         </div>
       )}
 
-      <main className={isAdminPage ? 'admin-page-shell' : 'page-shell'}>{children}</main>
-      {!isAdminPage && <ChatWidget />}
+      <main className={`${isAdminPage ? 'admin-page-shell' : 'page-shell'}${isPlayerVisible && !isAdminPage ? ' has-mini-player' : ''}`}>{children}</main>
+      {!isAdminPage && <GlobalMiniPlayer />}
+      {!isAdminPage && <ChatWidget isPlayerVisible={isPlayerVisible} />}
       {!isAdminPage && <footer className="site-footer">
         <section className="footer-brand">
           <div className="footer-logo">
@@ -534,11 +538,11 @@ function formatNotificationTime(isoString) {
 // unresolved messages. Book recommendations live on the AI Suggestions
 // page instead (AiSuggestionsPage.jsx) - this bubble is for "how do I..."
 // questions, not "what should I read".
-function ChatWidget() {
+function ChatWidget({ isPlayerVisible = false }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="chat-widget">
+    <div className={`chat-widget ${isPlayerVisible ? 'docked-above-player' : ''}`}>
       {isOpen && (
         <div className="chat-widget-panel" role="dialog" aria-label="Chat">
           <div className="chat-widget-panel-header">

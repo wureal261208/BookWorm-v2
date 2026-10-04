@@ -12,6 +12,8 @@ const {
   incrementBookViews,
   getBookStats,
   listCategories,
+  listHotBooks,
+  listRecommendedBooks,
 } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
 const { identify, protect, authorize } = require('../middleware/auth');
@@ -20,6 +22,12 @@ const router = express.Router();
 
 // Anyone (including anonymous) can browse and read, with chapter limits enforced in the controller.
 router.get('/', identify, listBooks);
+
+// Dedicated Hot Books route: highest views first, Gutenberg/LibriVox books, user books >= 1,000 views.
+router.get('/hot', identify, listHotBooks);
+
+// Personalized recommendations based on reader preferences.
+router.get('/recommended', identify, listRecommendedBooks);
 
 // Staff-only full catalog (with chapters) for the Admin panel. Must come
 // before GET /:id, or Express would match "mine" as an :id and 400 on the

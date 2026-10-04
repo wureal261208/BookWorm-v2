@@ -54,6 +54,7 @@ const ContentSchema = new mongoose.Schema(
     status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'published', index: true },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     downloadCount: { type: Number, default: 0 },
+    views: { type: Number, default: 0 },
     lastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true }

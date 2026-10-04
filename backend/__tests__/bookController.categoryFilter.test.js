@@ -123,3 +123,87 @@ describe('listBooks sort=random', () => {
     expect(payload.data.total).toBe(500);
   });
 });
+
+describe('listBooks sort=hot', () => {
+  function setupChain() {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    };
+    Book.find = jest.fn().mockReturnValue(chain);
+    Book.countDocuments = jest.fn().mockResolvedValue(0);
+    return chain;
+  }
+
+  test('prioritizes hot books: library books qualify, customer books require >= 1000 views', async () => {
+    const chain = setupChain();
+    listBooks({ query: { sort: 'hot' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { createdByRole: { $ne: 'customer' } },
+        { createdByRole: 'customer', views: { $gte: 1000 } },
+      ],
+    });
+    expect(chain.sort).toHaveBeenCalledWith({ views: -1, createdAt: -1, _id: -1 });
+  });
+
+  test('combines category filter and hot logic with $and', async () => {
+    setupChain();
+    listBooks({ query: { sort: 'hot', category: 'Romance' } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $and: [
+        {
+          $or: [
+            { category: { $regex: 'Romance', $options: 'i' } },
+            { subjects: { $regex: 'Romance', $options: 'i' } },
+          ],
+        },
+        {
+          $or: [
+            { createdByRole: { $ne: 'customer' } },
+            { createdByRole: 'customer', views: { $gte: 1000 } },
+          ],
+        },
+      ],
+    });
+  });
+});
+
+describe('listBooks sort=recommended', () => {
+  function setupChain() {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    };
+    Book.find = jest.fn().mockReturnValue(chain);
+    Book.countDocuments = jest.fn().mockResolvedValue(0);
+    return chain;
+  }
+
+  test('filters by user preferredCategories when present', async () => {
+    const chain = setupChain();
+    listBooks({ query: { sort: 'recommended' }, user: { preferredCategories: ['Fantasy', 'Horror'] } }, mockRes());
+    await flush();
+
+    expect(Book.find).toHaveBeenCalledWith({
+      status: 'published',
+      $or: [
+        { category: { $regex: 'Fantasy', $options: 'i' } },
+        { subjects: { $regex: 'Fantasy', $options: 'i' } },
+        { category: { $regex: 'Horror', $options: 'i' } },
+        { subjects: { $regex: 'Horror', $options: 'i' } },
+      ],
+    });
+    expect(chain.sort).toHaveBeenCalledWith({ views: -1, createdAt: -1, _id: -1 });
+  });
+});

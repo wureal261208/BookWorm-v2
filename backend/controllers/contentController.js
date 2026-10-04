@@ -25,6 +25,14 @@ const listContent = asyncHandler(async (req, res) => {
   if (language) filter.language = language;
   if (search) filter.$text = { $search: search };
 
+  if (req.query.sort === 'hot') {
+    filter.$or = [
+      { source: { $in: ['Gutenberg', 'LibriVox'] } },
+      { source: 'User', downloadCount: { $gte: 1000 } },
+      { source: 'User', views: { $gte: 1000 } },
+    ];
+  }
+
   const [items, total] = await Promise.all([
     Content.find(filter)
       .sort(search ? { score: { $meta: 'textScore' } } : { downloadCount: -1, createdAt: -1 })

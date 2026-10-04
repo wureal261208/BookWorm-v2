@@ -129,7 +129,7 @@ function AdminPage({
           if (count > lastSupportCountRef.current && lastSupportCountRef.current !== 0) {
             onToast?.({
               type: 'info',
-              message: '💬 New customer support message received in inbox!',
+              message: 'New customer support message received in inbox!',
             })
             playNotificationChime()
           }
@@ -1172,7 +1172,7 @@ function AdminDashboard({ canManageUsers, canPushBooks, onNavigateSection }) {
               style={{ padding: '6px 12px', fontSize: '13px' }}
               type="button"
             >
-              Open inbox &rarr;
+              Open inbox <i className="bi bi-arrow-right" />
             </button>
           </div>
 
@@ -1192,7 +1192,7 @@ function AdminDashboard({ canManageUsers, canPushBooks, onNavigateSection }) {
               style={{ padding: '6px 12px', fontSize: '13px' }}
               type="button"
             >
-              Review &rarr;
+              Review <i className="bi bi-arrow-right" />
             </button>
           </div>
 
@@ -1212,7 +1212,7 @@ function AdminDashboard({ canManageUsers, canPushBooks, onNavigateSection }) {
               style={{ padding: '6px 12px', fontSize: '13px' }}
               type="button"
             >
-              Moderate &rarr;
+              Moderate <i className="bi bi-arrow-right" />
             </button>
           </div>
         </div>

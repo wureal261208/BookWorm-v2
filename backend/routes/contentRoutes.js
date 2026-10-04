@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/auth');
+const { protect, identify } = require('../middleware/auth');
 const {
   listContent,
   createUserContent,
@@ -35,9 +35,9 @@ router.get('/languages', getLanguageFacets);
 // belong to someone).
 router.get('/mine', protect, listMyContent);
 
-// GET /api/content/for-you - personalized Home row, requires login (see
-// getForYou's own comments on how it's scored).
-router.get('/for-you', protect, getForYou);
+// GET /api/content/for-you - personalized Home row, blends reader's preferredCategories
+// with engagement, or falls back to top categories for guests.
+router.get('/for-you', identify, getForYou);
 
 // The AI Suggestions chatbot moved to /api/ai-suggestions/conversations
 // (see routes/aiSuggestionsRoutes.js) - it's now a persisted, per-user

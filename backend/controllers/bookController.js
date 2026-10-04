@@ -145,20 +145,46 @@ const listBooks = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 32));
 
   const filter = { status: 'published' };
+  let categoryClauses = null;
   if (req.query.category && req.query.category !== 'all') {
     const categories = req.query.category.split(',').map((entry) => entry.trim()).filter(Boolean).slice(0, 5);
     if (categories.length) {
-      // Match on the book's one `category` field OR anywhere in its
-      // `subjects` array (a regex against an array field matches if ANY
-      // element matches) - a genre pill/banner for "Romance" should catch
-      // a book whose category is something unrelated but whose subjects
-      // include "Romance", not just an exact category match.
-      filter.$or = categories.flatMap((entry) => {
+      categoryClauses = categories.flatMap((entry) => {
         const pattern = { $regex: escapeRegExp(entry), $options: 'i' };
         return [{ category: pattern }, { subjects: pattern }];
       });
     }
   }
+
+  // Recommended sort by user preferences if requested and user has preferences
+  if (req.query.sort === 'recommended' && !categoryClauses && req.user?.preferredCategories?.length) {
+    const preferred = req.user.preferredCategories.slice(0, 5);
+    categoryClauses = preferred.flatMap((entry) => {
+      const pattern = { $regex: escapeRegExp(entry), $options: 'i' };
+      return [{ category: pattern }, { subjects: pattern }];
+    });
+  }
+
+  // Hot books logic:
+  // - Priority order: highest views / read counts first, then newest books.
+  // - Library / staff books (createdByRole != customer) qualify based on views/reads.
+  // - User-contributed books (createdByRole == customer) MUST have at least 1,000 views.
+  //   Editing views in MongoDB directly updates qualification and ordering.
+  const hotClauses = req.query.sort === 'hot'
+    ? [
+        { createdByRole: { $ne: 'customer' } },
+        { createdByRole: 'customer', views: { $gte: 1000 } },
+      ]
+    : null;
+
+  if (categoryClauses && hotClauses) {
+    filter.$and = [{ $or: categoryClauses }, { $or: hotClauses }];
+  } else if (categoryClauses) {
+    filter.$or = categoryClauses;
+  } else if (hotClauses) {
+    filter.$or = hotClauses;
+  }
+
   if (req.query.q && req.query.q.trim()) {
     filter.$text = { $search: req.query.q.trim() };
   }
@@ -174,15 +200,8 @@ const listBooks = asyncHandler(async (req, res) => {
     return success(res, 200, 'Books retrieved successfully.', { books, page: 1, limit, total });
   }
 
-  const sort = req.query.sort === 'views'
-    ? { views: -1, _id: -1 }
-    // Tie-break on _id too - MongoDB's skip/limit pagination is only
-    // stable when the sort is fully deterministic. Several books created
-    // in the same millisecond (e.g. bulk-imported, or a double-submit
-    // before the duplicate-push guard existed) would otherwise sort
-    // ambiguously between page requests, so the same book could show up
-    // on two pages (visible as duplicate React keys / a book missing from
-    // the site while Admin still counts it as published).
+  const sort = req.query.sort === 'views' || req.query.sort === 'hot' || req.query.sort === 'recommended'
+    ? { views: -1, createdAt: -1, _id: -1 }
     : { createdAt: -1, _id: -1 };
 
   const [books, total] = await Promise.all([
@@ -196,6 +215,21 @@ const listBooks = asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
   return success(res, 200, 'Books retrieved successfully.', { books, page, limit, total });
+});
+
+// @route GET /api/books/hot
+// @desc  Dedicated Hot Books endpoint with priority logic:
+//        Highest views first, library books, and user-added books requiring >= 1,000 views.
+const listHotBooks = asyncHandler(async (req, res) => {
+  req.query.sort = 'hot';
+  return listBooks(req, res);
+});
+
+// @route GET /api/books/recommended
+// @desc  Personalized book recommendations using reader's preferredCategories.
+const listRecommendedBooks = asyncHandler(async (req, res) => {
+  req.query.sort = 'recommended';
+  return listBooks(req, res);
 });
 
 // @route GET /api/books/categories
@@ -574,4 +608,6 @@ module.exports = {
   generateBookMetadata,
   incrementBookViews,
   getBookStats,
+  listHotBooks,
+  listRecommendedBooks,
 };
