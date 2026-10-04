@@ -353,6 +353,58 @@ const updateBook = asyncHandler(async (req, res) => {
   return success(res, 200, 'Book updated successfully.', { book });
 });
 
+// @route PATCH /api/books/:id/mine
+// @desc  Phase 2 of customer self-publishing (see WritePage.jsx) - lets a
+//        customer edit or add chapters to a book THEY submitted, which
+//        updateBook above never allowed (staff-only). Ownership-checked by
+//        filtering on createdBy in the query itself, not by loading the
+//        book and checking after - a book that exists but isn't theirs
+//        404s the same as one that doesn't exist at all, rather than
+//        confirming its existence to someone who shouldn't see it.
+//
+//        If the book was already 'published', any edit here sends it back
+//        to 'draft' - an admin has to re-review it before the new version
+//        (new chapters included) goes live again. This is the real
+//        trade-off of Phase 2: without it, a customer could get a book
+//        approved and then silently swap in different content afterward.
+//        Status itself is deliberately NOT in allowedFields - a customer
+//        can't set their own book to 'published', only an admin can.
+const updateMyBook = asyncHandler(async (req, res) => {
+  const book = await Book.findOne({ _id: req.params.id, createdBy: req.user._id });
+  if (!book) {
+    return fail(res, 404, 'Book not found.');
+  }
+
+  const wasPublished = book.status === 'published';
+
+  const allowedFields = ['title', 'author', 'description', 'category', 'coverUrl', 'chapters', 'subjects', 'language'];
+  allowedFields.forEach((field) => {
+    if (req.body[field] !== undefined) {
+      book[field] = req.body[field];
+    }
+  });
+
+  if (wasPublished) {
+    book.status = 'draft';
+  }
+
+  try {
+    await book.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      return fail(res, 409, `"${book.title}" is already in the catalog.`);
+    }
+    throw error;
+  }
+
+  return success(
+    res,
+    200,
+    wasPublished ? 'Updated - sent back for admin review before it goes live again.' : 'Book updated.',
+    { book },
+  );
+});
+
 // @route DELETE /api/books/:id
 const deleteBook = asyncHandler(async (req, res) => {
   const book = await Book.findByIdAndDelete(req.params.id);
@@ -516,6 +568,7 @@ module.exports = {
   listMyBooks,
   getBook,
   updateBook,
+  updateMyBook,
   deleteBook,
   getBookReaderText,
   generateBookMetadata,

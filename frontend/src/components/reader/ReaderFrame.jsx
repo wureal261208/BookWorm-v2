@@ -1,3 +1,5 @@
+import { renderLiteMarkdown } from '../../utils/liteMarkdown'
+
 function ReaderFrame({
   activeBook,
   chapterPage,
@@ -39,7 +41,8 @@ function ReaderFrame({
         <div className="reader-text-page" aria-live="polite">
           <p className="reader-page-kicker">{currentChapter.title} - Page {chapterPage}</p>
           {currentReaderParagraphs.map((paragraph, index) => (
-            <p key={`${currentPage}-${index}`}>{paragraph}</p>
+            // eslint-disable-next-line react/no-danger
+            <p key={`${currentPage}-${index}`} dangerouslySetInnerHTML={{ __html: renderLiteMarkdown(paragraph) }} />
           ))}
         </div>
       ) : readerUrl ? (

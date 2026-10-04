@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch } from '../../utils/apiClient'
+import { renderLiteMarkdown } from '../../utils/liteMarkdown'
 
 const emptyChapter = () => ({ title: '', content: '' })
 
@@ -14,27 +15,108 @@ const emptyForm = {
   chapters: [emptyChapter()],
 }
 
-// Phase 1, per Wun's call: a straightforward form + chapter list calling
-// the POST /api/books endpoint that already exists and already lets a
-// customer submit (see backend/controllers/bookController.js - it was
-// already open to the 'customer' role, just had no frontend). Lands as
-// status:'draft', reviewed through the existing Book Management panel -
-// no new admin UI needed.
+const AUTOSAVE_DELAY_MS = 800
+
+// Phase 1 (write + submit) + Phase 2 (edit/add chapters afterward) +
+// Phase 3 (draft autosave, preview, light formatting), per Wun's call.
 //
-// Scoped out of this phase on purpose (see the project-plan conversation):
-// editing/adding chapters to a book after it's been submitted (the
-// existing PATCH /api/books/:id is staff-only), a rich text editor (plain
-// textareas for now), and draft preview inside the real reader before
-// submitting. All real, named trade-offs, not oversights.
+// Phase 3 specifically:
+// - Draft autosave is localStorage-only for now, not synced to the
+//   account/server - it's a "don't lose your work if the tab closes"
+//   safety net, not a cross-device draft system. Keyed separately for a
+//   new book vs. editing a specific existing one, so switching between
+//   them never clobbers the other's autosave.
+// - Formatting is a deliberately tiny, SAFE markdown subset (**bold**,
+//   *italic* only - see utils/liteMarkdown.js) rendered at exactly one
+//   point in the real reader (ReaderFrame.jsx), chosen specifically so it
+//   never touches ReaderPage.jsx's existing character-count-based
+//   pagination - that logic still runs on raw text completely unchanged,
+//   for this book and for the ~75k already in the catalog. A full rich
+//   text editor (headings, lists, etc.) would need that pagination logic
+//   itself reworked to be format-aware, which is a much bigger, riskier
+//   change than this phase takes on.
+// - Preview renders chapters in the same typography as the real reader
+//   (reusing ReaderFrame's own CSS classes) but is its own simple view,
+//   not the actual ReaderPage - that page is wired to a real saved book id
+//   (checkpoints, favorites, comments), none of which makes sense for text
+//   that hasn't been submitted yet.
 function WritePage({ account, onDetail }) {
   const isGuest = !auth.currentUser
   const [tab, setTab] = useState('write')
   const [form, setForm] = useState(() => ({ ...emptyForm, author: account?.name || '' }))
+  const [editingBook, setEditingBook] = useState(null) // { id, status } | null
+  const [loadingEdit, setLoadingEdit] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [myBooks, setMyBooks] = useState([])
   const [loadingMine, setLoadingMine] = useState(false)
+  const [previewMode, setPreviewMode] = useState(false)
+  const [draftPrompt, setDraftPrompt] = useState(null) // { form, savedAt } | null
+  const textareaRefs = useRef({})
+  const autosaveTimer = useRef(null)
+  const skipNextAutosave = useRef(true) // don't autosave the very first render
+
+  const draftKey = editingBook ? `bookworm_write_draft_edit_${editingBook.id}` : 'bookworm_write_draft_new'
+
+  // Checks for a saved draft under the CURRENT key (new-book vs this
+  // specific edit) whenever that key changes - e.g. switching into edit
+  // mode checks that book's own autosave, not the new-book one.
+  useEffect(() => {
+    skipNextAutosave.current = true
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (raw) setDraftPrompt(JSON.parse(raw))
+      else setDraftPrompt(null)
+    } catch {
+      setDraftPrompt(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey])
+
+  // Debounced autosave - skips the render right after a restore/discard/
+  // load-for-edit so it doesn't immediately re-save the same thing it just
+  // read.
+  useEffect(() => {
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false
+      return undefined
+    }
+    window.clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ form, savedAt: new Date().toISOString() }))
+      } catch {
+        // Storage can be unavailable (private mode, quota) - losing
+        // autosave silently is better than breaking the writing flow.
+      }
+    }, AUTOSAVE_DELAY_MS)
+    return () => window.clearTimeout(autosaveTimer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, draftKey])
+
+  function restoreDraft() {
+    skipNextAutosave.current = true
+    setForm(draftPrompt.form)
+    setDraftPrompt(null)
+  }
+
+  function discardDraft() {
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // ignore
+    }
+    setDraftPrompt(null)
+  }
+
+  function clearDraftAfterSave() {
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // ignore
+    }
+  }
 
   function loadMine() {
     setLoadingMine(true)
@@ -77,6 +159,64 @@ function WritePage({ account, onDetail }) {
     })
   }
 
+  // Wraps the textarea's current selection in **bold**/*italic* markers
+  // (or inserts them at the cursor if nothing's selected) and restores
+  // focus/selection afterward, so formatting doesn't interrupt typing flow.
+  function wrapSelection(index, marker) {
+    const textarea = textareaRefs.current[index]
+    if (!textarea) return
+
+    const { selectionStart, selectionEnd, value } = textarea
+    const selected = value.slice(selectionStart, selectionEnd) || 'text'
+    const newValue = value.slice(0, selectionStart) + marker + selected + marker + value.slice(selectionEnd)
+    updateChapter(index, 'content', newValue)
+
+    requestAnimationFrame(() => {
+      textarea.focus()
+      textarea.setSelectionRange(selectionStart + marker.length, selectionStart + marker.length + selected.length)
+    })
+  }
+
+  async function startEdit(book) {
+    setError('')
+    setSuccess('')
+    setLoadingEdit(true)
+    setTab('write')
+    setPreviewMode(false)
+    try {
+      const data = await apiFetch(`/api/books/${book.id}`)
+      const fullBook = data.book
+      skipNextAutosave.current = true
+      setEditingBook({ id: fullBook.id, status: fullBook.status })
+      setForm({
+        title: fullBook.title || '',
+        author: fullBook.author || '',
+        description: fullBook.description || '',
+        category: fullBook.category || '',
+        language: fullBook.language || 'en',
+        coverUrl: fullBook.coverUrl || '',
+        chapters: (fullBook.chapters?.length ? fullBook.chapters : [emptyChapter()])
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map((chapter) => ({ title: chapter.title || '', content: chapter.content || '' })),
+      })
+    } catch (err) {
+      setError(err.message)
+      setTab('mine')
+    } finally {
+      setLoadingEdit(false)
+    }
+  }
+
+  function cancelEdit() {
+    skipNextAutosave.current = true
+    setEditingBook(null)
+    setForm({ ...emptyForm, author: account?.name || '' })
+    setError('')
+    setSuccess('')
+    setPreviewMode(false)
+  }
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -97,22 +237,29 @@ function WritePage({ account, onDetail }) {
       return
     }
 
+    const body = {
+      title,
+      author,
+      description: form.description.trim(),
+      category: form.category.trim(),
+      language: form.language.trim() || 'en',
+      coverUrl: form.coverUrl.trim(),
+      chapters,
+    }
+
     setSubmitting(true)
     try {
-      await apiFetch('/api/books', {
-        method: 'POST',
-        body: {
-          title,
-          author,
-          description: form.description.trim(),
-          category: form.category.trim(),
-          language: form.language.trim() || 'en',
-          coverUrl: form.coverUrl.trim(),
-          chapters,
-        },
-      })
-      setSuccess('Submitted! An admin will review it before it goes live.')
-      setForm({ ...emptyForm, author })
+      if (editingBook) {
+        const data = await apiFetch(`/api/books/${editingBook.id}/mine`, { method: 'PATCH', body })
+        setSuccess(editingBook.status === 'published' ? 'Saved - sent back for admin review before it goes live again.' : 'Saved.')
+        setEditingBook({ id: editingBook.id, status: data.book.status })
+      } else {
+        await apiFetch('/api/books', { method: 'POST', body })
+        setSuccess('Submitted! An admin will review it before it goes live.')
+        skipNextAutosave.current = true
+        setForm({ ...emptyForm, author })
+      }
+      clearDraftAfterSave()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -153,104 +300,195 @@ function WritePage({ account, onDetail }) {
       </div>
 
       {tab === 'write' ? (
-        <form className="community-form" onSubmit={submit}>
-          <div className="community-form-row">
-            <label>
-              Title
-              <input onChange={(event) => updateField('title', event.target.value)} type="text" value={form.title} />
-            </label>
-            <label>
-              Author name
-              <input onChange={(event) => updateField('author', event.target.value)} type="text" value={form.author} />
-            </label>
-          </div>
-          <label>
-            Description
-            <textarea onChange={(event) => updateField('description', event.target.value)} value={form.description} />
-          </label>
-          <div className="community-form-row">
-            <label>
-              Category
-              <input onChange={(event) => updateField('category', event.target.value)} type="text" value={form.category} />
-            </label>
-            <label>
-              Language
-              <input onChange={(event) => updateField('language', event.target.value)} type="text" value={form.language} />
-            </label>
-          </div>
-          <label>
-            Cover image link (optional)
-            <input onChange={(event) => updateField('coverUrl', event.target.value)} type="url" value={form.coverUrl} />
-          </label>
+        loadingEdit ? (
+          <p className="inline-loading"><span className="admin-spin-small" /> Loading book...</p>
+        ) : (
+          <>
+            {draftPrompt && (
+              <p className="write-page-editing-banner">
+                <i className="bi bi-clock-history" /> You have an unsaved draft from {new Date(draftPrompt.savedAt).toLocaleString()}.
+                <button onClick={restoreDraft} type="button">
+                  Restore
+                </button>
+                <button onClick={discardDraft} type="button">
+                  Discard
+                </button>
+              </p>
+            )}
 
-          <h3>Chapters</h3>
-          <div className="write-page-chapters">
-            {form.chapters.map((chapter, index) => (
-              <div className="write-page-chapter" key={index}>
-                <div className="write-page-chapter-header">
-                  <strong>Chapter {index + 1}</strong>
-                  <div className="write-page-chapter-actions">
-                    <button disabled={index === 0} onClick={() => moveChapter(index, -1)} type="button">
-                      <i className="bi bi-arrow-up" />
-                    </button>
-                    <button disabled={index === form.chapters.length - 1} onClick={() => moveChapter(index, 1)} type="button">
-                      <i className="bi bi-arrow-down" />
-                    </button>
-                    <button disabled={form.chapters.length === 1} onClick={() => removeChapter(index)} type="button">
-                      <i className="bi bi-trash" />
-                    </button>
-                  </div>
+            {editingBook && (
+              <p className="write-page-editing-banner">
+                <i className="bi bi-pencil-square" /> Editing an existing book.
+                {editingBook.status === 'published' && ' Saving will send it back for admin review before the new version goes live.'}
+                <button onClick={cancelEdit} type="button">
+                  Cancel
+                </button>
+              </p>
+            )}
+
+            <div className="community-form-row write-page-tabs">
+              <button className={!previewMode ? 'active' : ''} onClick={() => setPreviewMode(false)} type="button">
+                <i className="bi bi-pencil" /> Edit
+              </button>
+              <button className={previewMode ? 'active' : ''} onClick={() => setPreviewMode(true)} type="button">
+                <i className="bi bi-eye" /> Preview
+              </button>
+            </div>
+
+            {previewMode ? (
+              <BookPreview form={form} />
+            ) : (
+              <form className="community-form" onSubmit={submit}>
+                <div className="community-form-row">
+                  <label>
+                    Title
+                    <input onChange={(event) => updateField('title', event.target.value)} type="text" value={form.title} />
+                  </label>
+                  <label>
+                    Author name
+                    <input onChange={(event) => updateField('author', event.target.value)} type="text" value={form.author} />
+                  </label>
                 </div>
-                <input
-                  onChange={(event) => updateChapter(index, 'title', event.target.value)}
-                  placeholder={`Chapter ${index + 1} title (optional)`}
-                  type="text"
-                  value={chapter.title}
-                />
-                <textarea
-                  className="write-page-chapter-content"
-                  onChange={(event) => updateChapter(index, 'content', event.target.value)}
-                  placeholder="Write this chapter here..."
-                  value={chapter.content}
-                />
-              </div>
-            ))}
-          </div>
-          <button className="ghost-button" onClick={addChapter} type="button">
-            <i className="bi bi-plus-lg" /> Add chapter
-          </button>
+                <label>
+                  Description
+                  <textarea onChange={(event) => updateField('description', event.target.value)} value={form.description} />
+                </label>
+                <div className="community-form-row">
+                  <label>
+                    Category
+                    <input onChange={(event) => updateField('category', event.target.value)} type="text" value={form.category} />
+                  </label>
+                  <label>
+                    Language
+                    <input onChange={(event) => updateField('language', event.target.value)} type="text" value={form.language} />
+                  </label>
+                </div>
+                <label>
+                  Cover image link (optional)
+                  <input onChange={(event) => updateField('coverUrl', event.target.value)} type="url" value={form.coverUrl} />
+                </label>
 
-          {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
-          {success && <p className="community-success"><i className="bi bi-check-circle" /> {success}</p>}
+                <h3>Chapters</h3>
+                <div className="write-page-chapters">
+                  {form.chapters.map((chapter, index) => (
+                    <div className="write-page-chapter" key={index}>
+                      <div className="write-page-chapter-header">
+                        <strong>Chapter {index + 1}</strong>
+                        <div className="write-page-chapter-actions">
+                          <button disabled={index === 0} onClick={() => moveChapter(index, -1)} type="button">
+                            <i className="bi bi-arrow-up" />
+                          </button>
+                          <button disabled={index === form.chapters.length - 1} onClick={() => moveChapter(index, 1)} type="button">
+                            <i className="bi bi-arrow-down" />
+                          </button>
+                          <button disabled={form.chapters.length === 1} onClick={() => removeChapter(index)} type="button">
+                            <i className="bi bi-trash" />
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        onChange={(event) => updateChapter(index, 'title', event.target.value)}
+                        placeholder={`Chapter ${index + 1} title (optional)`}
+                        type="text"
+                        value={chapter.title}
+                      />
+                      <div className="write-page-format-toolbar">
+                        <button onClick={() => wrapSelection(index, '**')} title="Bold" type="button">
+                          <i className="bi bi-type-bold" />
+                        </button>
+                        <button onClick={() => wrapSelection(index, '*')} title="Italic" type="button">
+                          <i className="bi bi-type-italic" />
+                        </button>
+                      </div>
+                      <textarea
+                        className="write-page-chapter-content"
+                        onChange={(event) => updateChapter(index, 'content', event.target.value)}
+                        placeholder="Write this chapter here... select text and use the Bold/Italic buttons above to format it."
+                        ref={(el) => {
+                          textareaRefs.current[index] = el
+                        }}
+                        value={chapter.content}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button className="ghost-button" onClick={addChapter} type="button">
+                  <i className="bi bi-plus-lg" /> Add chapter
+                </button>
 
-          <button className="primary-button" disabled={submitting} type="submit">
-            {submitting ? 'Submitting...' : 'Submit for review'}
-          </button>
-        </form>
+                {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
+                {success && <p className="community-success"><i className="bi bi-check-circle" /> {success}</p>}
+
+                <button className="primary-button" disabled={submitting} type="submit">
+                  {submitting ? 'Saving...' : editingBook ? 'Save changes' : 'Submit for review'}
+                </button>
+              </form>
+            )}
+          </>
+        )
       ) : loadingMine ? (
         <p className="inline-loading"><span className="admin-spin-small" /> Loading...</p>
       ) : myBooks.length ? (
         <div className="community-submissions-list">
           {myBooks.map((book) => (
-            <button
-              className="table-row community-submission-row write-page-mine-row"
-              disabled={book.status !== 'published'}
-              key={book.id}
-              onClick={() => book.status === 'published' && onDetail?.(book)}
-              type="button"
-            >
-              <span>
+            <div className="table-row community-submission-row write-page-mine-row" key={book.id}>
+              <span
+                onClick={() => book.status === 'published' && onDetail?.(book)}
+                style={book.status === 'published' ? { cursor: 'pointer' } : undefined}
+              >
                 {book.title}
                 <em className={`admin-status status-${book.status}`}>{book.status}</em>
               </span>
-              <small>{book.status === 'published' ? 'Tap to view' : 'Waiting on admin review'}</small>
-            </button>
+              <small>{book.status === 'published' ? 'Tap title to view' : 'Waiting on admin review'}</small>
+              <div className="admin-row-actions">
+                <button className="edit-button" onClick={() => startEdit(book)} type="button">
+                  <i className="bi bi-pencil-square" /> Edit
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       ) : (
         <p className="empty-state">You haven't submitted a book yet.</p>
       )}
     </div>
+  )
+}
+
+// Same typography classes as the real reader (ReaderFrame.jsx) for a
+// faithful preview, but its own simple view - not the actual ReaderPage,
+// which is wired to a real saved book id (checkpoints, favorites,
+// comments) that unsubmitted text doesn't have.
+function BookPreview({ form }) {
+  const chaptersWithContent = form.chapters.filter((chapter) => chapter.content.trim())
+
+  return (
+    <article className="reader-frame write-page-preview">
+      <div className="reader-chapter-header">
+        <div>
+          <p className="mono-eyebrow">Preview</p>
+          <h2>{form.title || 'Untitled'}</h2>
+        </div>
+      </div>
+      <p className="write-page-preview-author">{form.author || 'Unknown author'}</p>
+
+      {chaptersWithContent.length ? (
+        chaptersWithContent.map((chapter, index) => (
+          <div className="reader-text-page" key={index}>
+            <p className="reader-page-kicker">{chapter.title || `Chapter ${index + 1}`}</p>
+            {chapter.content
+              .split(/\n\n+/)
+              .filter((paragraph) => paragraph.trim())
+              .map((paragraph, paragraphIndex) => (
+                // eslint-disable-next-line react/no-danger
+                <p key={paragraphIndex} dangerouslySetInnerHTML={{ __html: renderLiteMarkdown(paragraph) }} />
+              ))}
+          </div>
+        ))
+      ) : (
+        <p className="empty-state">Write something in a chapter to see it previewed here.</p>
+      )}
+    </article>
   )
 }
 
