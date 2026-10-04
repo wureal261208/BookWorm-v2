@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { publicApiFetch } from '../../utils/apiClient'
+import { GENRE_SLIDES } from '../../utils/genreSlides'
 import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 import PromoBanner from '../books/PromoBanner'
 
-// Small helper for "row of books from a real /api/books query" sections -
-// same loading/fetch shape each time, just a different query string.
 function useBookRow(query) {
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -34,16 +33,11 @@ function useBookRow(query) {
   return [books, loading]
 }
 
-// Same idea as useBookRow, but for the unified /api/content route (see
-// backend/controllers/contentController.js), which responds with
-// { items, total, page, limit } rather than a { books: [...] } envelope.
 function useExternalRow(path) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(!!path)
 
   useEffect(() => {
-    // A falsy path (see the For You row's isGuest check above) means
-    // "don't fetch this at all" - not "fetch a broken URL".
     if (!path) {
       setItems([])
       setLoading(false)
@@ -70,20 +64,33 @@ function useExternalRow(path) {
   return [items, loading]
 }
 
-function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite, onRead, onSelectGenre, progress = {}, setPage, viewCounts, viewerCounts }) {
-  // Not real per-user personalization - there's no recommendation engine
-  // (no reading-history model, no collaborative filtering) behind this
-  // site. "Recommended for you" is honestly just the next tier of
-  // most-read books after Discover's own "Most read" sort - a real query,
-  // not a fabricated pick.
-  const [recommended, recommendedLoading] = useBookRow('limit=16&sort=views&page=2')
+const GENRE_EMOJIS = {
+  Romance: '💖',
+  Fantasy: '🧙‍♂️',
+  'Science Fiction': '🚀',
+  Mystery: '🕵️‍♂️',
+  Horror: '👻',
+  History: '📜',
+  Literary: '📖',
+  Biography: '👤',
+}
 
+function HomePage({
+  books = [],
+  booksLoading = false,
+  favorites,
+  onDetail,
+  onFavorite,
+  onRead,
+  onSelectGenre,
+  progress = {},
+  setPage,
+  viewCounts,
+  viewerCounts,
+}) {
+  const [recommended, recommendedLoading] = useBookRow('limit=16&sort=views&page=2')
   const [hotEbooks, hotEbooksLoading] = useExternalRow('/api/content?type=ebook&limit=16')
   const [hotAudiobooks, hotAudiobooksLoading] = useExternalRow('/api/content?type=audiobook&limit=16')
-  // Only fetched for a logged-in reader - GET /api/content/for-you needs an
-  // account to score against (preferredCategories + real categoryEngagement,
-  // see backend/controllers/contentController.js), and there's nothing
-  // honest to show a guest here.
   const isGuest = !auth.currentUser
   const [forYou, forYouLoading] = useExternalRow(isGuest ? null : '/api/content/for-you?limit=16')
 
@@ -92,14 +99,33 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
 
   return (
     <div className="home-page">
-      {/* Real promotional artwork (see PromoBanner.jsx) - clicking a slide
-          goes to /books?category=<genre> (see BooksPage.jsx). Full-width
-          now - the "Find a random book" panel that used to sit next to it
-          pointed at the 'random' page, which isn't reachable from the
-          navbar anymore, so it was a dead end and got removed rather than
-          left orphaned. */}
+      {/* Featured visual banner */}
       <PromoBanner onSelectGenre={onSelectGenre} />
 
+      {/* Genre quick-access navigation strip */}
+      <nav aria-label="Quick genre navigation" className="home-genre-strip">
+        <button
+          className="home-genre-chip"
+          onClick={() => onSelectGenre?.('')}
+          type="button"
+        >
+          <span>✨</span>
+          <span>All genres</span>
+        </button>
+        {GENRE_SLIDES.map((slide) => (
+          <button
+            key={slide.id}
+            className="home-genre-chip"
+            onClick={() => onSelectGenre?.(slide.topic)}
+            type="button"
+          >
+            <span>{GENRE_EMOJIS[slide.topic] || '📚'}</span>
+            <span>{slide.topic}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Continue Reading shelf (only when user has active reading progress) */}
       {continueReading.length > 0 && (
         <section className="section-block">
           <div className="section-heading">
@@ -117,6 +143,7 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
             onDetail={onDetail}
             onFavorite={onFavorite}
             onRead={onRead}
+            progress={progress}
             variant="read"
             viewCounts={viewCounts}
             viewerCounts={viewerCounts}
@@ -124,19 +151,17 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         </section>
       )}
 
-      {/* Real personalization, unlike "Recommended for you" below - blends
-          explicit genre picks (PreferencesModal.jsx, onboarding/Profile)
-          with what this reader actually opens (see
-          backend/controllers/contentController.js's getForYou). Guests
-          don't get this row at all (isGuest above) rather than a fake
-          version of it. */}
+      {/* Personalized For You (Logged-in readers) */}
       {!isGuest && (forYouLoading || forYou.length > 0) && (
-        <ExternalRowSection eyebrow="Picked for you" items={forYou} loading={forYouLoading} title="For You" />
+        <ExternalRowSection
+          eyebrow="Picked for you"
+          items={forYou}
+          loading={forYouLoading}
+          title="For You"
+        />
       )}
 
-      {/* "View library" buttons used to jump to the Discover page, which -
-          like 'random' above - isn't in the navbar anymore, so they were
-          removed rather than left as another dead end. */}
+      {/* Recommended for your shelf */}
       <BookRowSection
         books={recommended}
         eyebrow="For your shelf"
@@ -150,6 +175,7 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         viewerCounts={viewerCounts}
       />
 
+      {/* Just added - New books */}
       <BookRowSection
         books={booksLoading ? [] : newBooks}
         eyebrow="Just added"
@@ -163,22 +189,41 @@ function HomePage({ books, booksLoading = false, favorites, onDetail, onFavorite
         viewerCounts={viewerCounts}
       />
 
-      {/* Straight from the unified Content collection (see
-          backend/utils/contentIngestion.js) - open in BookWorm's own
-          in-app reader/player (ContentReaderPage.jsx/ContentPlayerPage.jsx),
-          not an external Gutenberg/LibriVox tab. */}
-      <ExternalRowSection eyebrow="Popular on Gutenberg" items={hotEbooks} loading={hotEbooksLoading} title="Hot ebooks" />
+      {/* Hot ebooks */}
+      <ExternalRowSection
+        eyebrow="Popular on Gutenberg"
+        icon="bi-journal-bookmark"
+        items={hotEbooks}
+        loading={hotEbooksLoading}
+        title="Hot ebooks"
+      />
 
-      <ExternalRowSection eyebrow="Fresh from LibriVox" items={hotAudiobooks} loading={hotAudiobooksLoading} title="Hot audiobooks" />
+      {/* Hot audiobooks */}
+      <ExternalRowSection
+        eyebrow="Fresh from LibriVox"
+        icon="bi-headphones"
+        items={hotAudiobooks}
+        loading={hotAudiobooksLoading}
+        title="Hot audiobooks"
+      />
     </div>
   )
 }
 
-// One "row of books" section: heading (+ optional "View library" action)
-// above a horizontal carousel, with its own loading skeleton. Every
-// /api/books-backed row on Home is one of these, just pointed at a
-// different real query.
-function BookRowSection({ actionLabel, books, eyebrow, favorites, loading, onAction, onDetail, onFavorite, onRead, title, viewCounts, viewerCounts }) {
+function BookRowSection({
+  actionLabel,
+  books,
+  eyebrow,
+  favorites,
+  loading,
+  onAction,
+  onDetail,
+  onFavorite,
+  onRead,
+  title,
+  viewCounts,
+  viewerCounts,
+}) {
   return (
     <section className="section-block">
       <div className="section-heading">
@@ -209,16 +254,16 @@ function BookRowSection({ actionLabel, books, eyebrow, favorites, loading, onAct
   )
 }
 
-// Same header/skeleton shell as BookRowSection, but for the Content-backed
-// rows - no favorites/onRead wiring, since this content hasn't gone
-// through the in-app reader/player yet (see ExternalMediaCarousel.jsx).
-function ExternalRowSection({ eyebrow, items, loading, title }) {
+function ExternalRowSection({ eyebrow, icon, items, loading, title }) {
   return (
     <section className="section-block">
       <div className="section-heading">
         <div>
           <p className="mono-eyebrow">{eyebrow}</p>
-          <h2>{title}</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {icon && <i className={`bi ${icon}`} style={{ color: 'var(--app-accent)' }} />}
+            {title}
+          </h2>
         </div>
       </div>
       {loading ? <CarouselSkeleton /> : <ExternalMediaCarousel items={items} />}
@@ -226,9 +271,6 @@ function ExternalRowSection({ eyebrow, items, loading, title }) {
   )
 }
 
-// A row of blank cover-shaped placeholders the same width as a real
-// BookCarousel item - so there's never a blank gap under a heading while
-// its row is still loading.
 function CarouselSkeleton() {
   return (
     <div className="book-carousel">

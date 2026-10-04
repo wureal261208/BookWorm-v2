@@ -54,6 +54,25 @@ function handleGutenbergCoverError(event, etextNumber) {
   }
 }
 
+function playNotificationChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
+    gain.gain.setValueAtTime(0.12, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.35)
+  } catch (_) {}
+}
+
 const languageChoices = [
   { value: 'en', label: 'English', disabled: false },
   { value: 'vi', label: 'Vietnamese - Coming soon', disabled: true },
@@ -95,10 +114,48 @@ function AdminPage({
   const canPushBooks = isAdmin
   const canManageUsers = isAdmin
 
+  const [pendingSupportCount, setPendingSupportCount] = useState(0)
+  const lastSupportCountRef = useRef(0)
+
+  useEffect(() => {
+    if (!canManageUsers) return
+
+    let ignore = false
+    function checkSupportInbox() {
+      apiFetch('/api/admin/support/conversations?status=escalated')
+        .then((data) => {
+          if (ignore) return
+          const count = Array.isArray(data) ? data.length : 0
+          if (count > lastSupportCountRef.current && lastSupportCountRef.current !== 0) {
+            onToast?.({
+              type: 'info',
+              message: '💬 New customer support message received in inbox!',
+            })
+            playNotificationChime()
+          }
+          lastSupportCountRef.current = count
+          setPendingSupportCount(count)
+        })
+        .catch(() => {})
+    }
+
+    checkSupportInbox()
+    const interval = setInterval(checkSupportInbox, 25000)
+    return () => {
+      ignore = true
+      clearInterval(interval)
+    }
+  }, [canManageUsers, onToast])
+
   const adminNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
     canPushBooks && { id: 'book', label: 'Book Management', icon: 'bi-collection' },
-    canManageUsers && { id: 'contributions', label: 'User Contributions', icon: 'bi-people' },
+    canManageUsers && {
+      id: 'contributions',
+      label: 'User Contributions',
+      icon: 'bi-people',
+      badge: pendingSupportCount > 0 ? pendingSupportCount : null,
+    },
     { id: 'settings', label: 'Settings', icon: 'bi-gear' },
   ].filter(Boolean)
   const availableSections = adminNavItems.map((item) => item.id)
@@ -345,6 +402,7 @@ function AdminPage({
               >
                 <i className={`bi ${item.icon}`} />
                 <span>{item.label}</span>
+                {item.badge && <span className="admin-inbox-badge" style={{ marginLeft: 'auto' }}>{item.badge}</span>}
               </button>
             ))}
           </div>
@@ -561,6 +619,11 @@ function AdminPage({
             >
               <i className="bi bi-chat-left-dots" style={{ marginRight: '6px' }} />
               Help chat inbox
+              {pendingSupportCount > 0 && (
+                <span className="admin-inbox-badge" style={{ marginLeft: '8px' }}>
+                  {pendingSupportCount}
+                </span>
+              )}
             </button>
             <button
               className={contributionsTab === 'broadcast' ? 'active' : ''}
@@ -583,7 +646,9 @@ function AdminPage({
             />
           )}
           {contributionsTab === 'comments' && <CommentsModerationPanel onToast={onToast} />}
-          {contributionsTab === 'support' && <SupportInboxPanel onToast={onToast} />}
+          {contributionsTab === 'support' && (
+            <SupportInboxPanel onCountChange={setPendingSupportCount} onToast={onToast} />
+          )}
           {contributionsTab === 'broadcast' && <SystemBroadcastPanel onToast={onToast} />}
         </>
       ) : null}
@@ -1801,7 +1866,7 @@ function UsersDirectoryPanel({ banBusyId, onBan, onToast, onUnban, refreshTick =
   )
 }
 
-function SupportInboxPanel({ onToast }) {
+function SupportInboxPanel({ onCountChange, onToast }) {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState(null)
@@ -1814,7 +1879,13 @@ function SupportInboxPanel({ onToast }) {
   function loadList() {
     setLoading(true)
     apiFetch(`/api/admin/support/conversations?status=${statusFilter}`)
-      .then((data) => setConversations(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : []
+        setConversations(list)
+        if (statusFilter === 'escalated') {
+          onCountChange?.(list.length)
+        }
+      })
       .catch((error) => onToast?.({ type: 'error', message: error.message }))
       .finally(() => setLoading(false))
   }

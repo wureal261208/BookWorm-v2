@@ -1519,6 +1519,7 @@ progress {
   min-height: 100svh;
   background: var(--app-bg);
   color: var(--app-text);
+  font-family: var(--font-body);
 }
 
 /* The Admin dashboard is a self-contained "app shell" (fixed-height
@@ -1599,6 +1600,14 @@ progress {
   color: var(--app-text);
 }
 
+
+.book-app .book-card h2,
+.book-app .shelf-item h2,
+.book-app .detail-copy h1,
+.promo-slide h2 {
+  font-family: var(--font-display, 'Lora', Georgia, serif);
+  letter-spacing: -0.015em;
+}
 
 .book-app .book-card h2,
 .book-app .shelf-item h2,
@@ -2199,12 +2208,14 @@ progress {
 .promo-banner {
   position: relative;
   width: 100%;
-  margin: 0;
+  margin: 0 0 20px 0;
   overflow: hidden;
-  background: #f6f6f3;
+  background: var(--app-surface-muted, #f6f6f3);
+  border-radius: 12px;
+  border: 1px solid var(--app-line, #d8d8d3);
   /* Keep the hero at a familiar carousel height instead of letting the
      portrait-ish source artwork fill most of a desktop screen. */
-  height: clamp(240px, 34vw, 480px);
+  height: clamp(230px, 32vw, 440px);
 }
 
 .promo-banner-track {
@@ -2258,7 +2269,8 @@ progress {
   z-index: 2;
   display: flex;
   justify-content: center;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
 }
 
 .promo-banner-dots button {
@@ -2266,14 +2278,15 @@ progress {
   height: 8px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.55);
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: width 0.22s ease, background 0.22s ease;
+  cursor: pointer;
 }
 
 .promo-banner-dots button.active {
   background: #ffffff;
-  transform: scale(1.3);
+  width: 20px;
 }
 
 .random-feature-panel {
@@ -10204,4 +10217,77 @@ progress {
   word-break: break-word;
 }
 
+/* Admin Inbox live notification badge */
+.admin-inbox-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  animation: pulse-badge 2s infinite;
+}
 
+@keyframes pulse-badge {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Minimalist Customer Home Page */
+.home-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-page .section-block {
+  margin-bottom: 36px;
+}
+
+.home-genre-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 24px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.home-genre-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.home-genre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #111111);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.home-genre-chip:hover {
+  border-color: var(--app-accent, #16a09a);
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 8%, var(--app-surface, #ffffff));
+  color: var(--app-accent, #16a09a);
+  transform: translateY(-1px);
+}
+
+.home-genre-chip:active {
+  transform: translateY(0);
+}

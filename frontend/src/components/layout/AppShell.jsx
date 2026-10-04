@@ -17,7 +17,7 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 // redundant now that the avatar chip next to Login/Logout already opens it.
 const navItems = [
   { id: 'ebooks', label: 'Ebooks', icon: 'bi-book', target: 'books', query: 'type=ebook' },
-  { id: 'audiobooks', label: 'Audiobooks', icon: 'bi-headphones', target: 'books', query: 'type=audiobook' },
+  { id: 'audiobooks', label: 'Audio', icon: 'bi-headphones', target: 'books', query: 'type=audiobook' },
   { id: 'ai-suggestions', label: 'AI Suggestions', icon: 'bi-stars' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },

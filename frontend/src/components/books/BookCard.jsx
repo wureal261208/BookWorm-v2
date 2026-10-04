@@ -1,7 +1,8 @@
 import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bookUtils'
 
-function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, viewCount = 0 }) {
+function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progressPercent, viewCount = 0 }) {
   const totalReads = (book.download_count || 0) + viewCount
+  const hasProgress = typeof progressPercent === 'number' && progressPercent > 0
 
   return (
     <article className="book-card">
@@ -19,13 +20,22 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, viewCoun
         <p>{getAuthor(book)}</p>
       </div>
       <div className="book-card-meta">
-        <i className="bi bi-eye" />
-        <small>{totalReads.toLocaleString()} reads</small>
+        {hasProgress ? (
+          <>
+            <i className="bi bi-bookmark-check" style={{ color: 'var(--app-accent)' }} />
+            <small style={{ color: 'var(--app-accent)', fontWeight: 600 }}>{Math.round(progressPercent)}% completed</small>
+          </>
+        ) : (
+          <>
+            <i className="bi bi-eye" />
+            <small>{totalReads.toLocaleString()} reads</small>
+          </>
+        )}
       </div>
       <div className="card-actions">
         <button className="primary-button" onClick={() => onRead(book)} type="button">
           <i className="bi bi-journal-text" />
-          Read
+          {hasProgress ? 'Continue' : 'Read'}
         </button>
         <button className="ghost-button" onClick={() => onFavorite(book.id)} type="button">
           <i className={`bi ${favorites.includes(book.id) ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
