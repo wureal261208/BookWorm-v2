@@ -8,7 +8,7 @@ const VALID_STATUSES = ['draft', 'published', 'hidden'];
 // this sees every status - an admin needs to find drafts/hidden items to
 // act on them, not just what's already live.
 const listContentForAdmin = asyncHandler(async (req, res) => {
-  const { type, category, author, status, search } = req.query;
+  const { type, category, author, status, search, source } = req.query;
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const page = Math.max(Number(req.query.page) || 1, 1);
 
@@ -20,6 +20,7 @@ const listContentForAdmin = asyncHandler(async (req, res) => {
   if (category) filter.categories = { $regex: category, $options: 'i' };
   if (author) filter.author = { $regex: author, $options: 'i' };
   if (status && VALID_STATUSES.includes(status)) filter.status = status;
+  if (source) filter.source = source;
   if (search) filter.$text = { $search: search };
 
   const [items, total] = await Promise.all([
@@ -27,6 +28,7 @@ const listContentForAdmin = asyncHandler(async (req, res) => {
       .sort(search ? { score: { $meta: 'textScore' } } : { updatedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
+      .populate('uploadedBy', 'name email')
       .lean(),
     Content.countDocuments(filter),
   ]);

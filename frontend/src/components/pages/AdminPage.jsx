@@ -441,7 +441,14 @@ function AdminPage({
         <div className="admin-shell-content">
 
       {activeAdminSection === 'dashboard' ? (
-        <AdminDashboard canPushBooks={canPushBooks} />
+        <AdminDashboard
+          canManageUsers={canManageUsers}
+          canPushBooks={canPushBooks}
+          onNavigateSection={(section, subTab) => {
+            setActiveAdminSection(section)
+            if (subTab) setContributionsTab(subTab)
+          }}
+        />
       ) : null}
 
       {activeAdminSection === 'book' && canPushBooks ? (
@@ -645,7 +652,9 @@ function AdminPage({
               refreshTick={userRefreshTick}
             />
           )}
-          {contributionsTab === 'comments' && <CommentsModerationPanel onToast={onToast} />}
+          {contributionsTab === 'comments' && (
+            <CommentsModerationPanel onBanUser={(user) => setBanTarget(user)} onToast={onToast} />
+          )}
           {contributionsTab === 'support' && (
             <SupportInboxPanel onCountChange={setPendingSupportCount} onToast={onToast} />
           )}
@@ -1062,28 +1071,58 @@ function ContentDetailModal({ item, onChangeStatus, onClose }) {
   )
 }
 
-function AdminDashboard({ canPushBooks }) {
+function AdminDashboard({ canManageUsers, canPushBooks, onNavigateSection }) {
   const [stats, setStats] = useState(null)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [opsCounts, setOpsCounts] = useState({
+    pendingSupport: 0,
+    pendingSubmissions: 0,
+    totalComments: 0,
+  })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let ignore = false
     setLoading(true)
-    apiFetch('/api/books/stats')
-      .then((data) => {
-        if (!ignore) setStats(data)
+
+    const calls = [
+      apiFetch('/api/books/stats'),
+      canManageUsers ? apiFetch('/api/users?limit=1') : Promise.resolve(null),
+      canManageUsers ? apiFetch('/api/admin/support/conversations?status=escalated') : Promise.resolve([]),
+      canManageUsers ? apiFetch('/api/books/mine?status=draft&contributorRole=customer&limit=1') : Promise.resolve({ total: 0 }),
+      canManageUsers ? apiFetch('/api/admin/comments?limit=1') : Promise.resolve({ total: 0 }),
+      canManageUsers ? apiFetch('/api/admin/content?status=draft&source=User&limit=1') : Promise.resolve({ total: 0 }),
+    ]
+
+    Promise.allSettled(calls).then(([statsRes, usersRes, supportRes, subsRes, commentsRes, commRes]) => {
+      if (ignore) return
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
+        setStats(statsRes.value)
+      } else {
+        setError(statsRes.reason?.message || 'Could not load stats.')
+      }
+
+      if (usersRes.status === 'fulfilled' && usersRes.value?.total) {
+        setTotalUsers(usersRes.value.total)
+      }
+
+      const booksPending = subsRes.status === 'fulfilled' && typeof subsRes.value?.total === 'number' ? subsRes.value.total : 0
+      const communityPending = commRes.status === 'fulfilled' && typeof commRes.value?.total === 'number' ? commRes.value.total : 0
+
+      setOpsCounts({
+        pendingSupport: supportRes.status === 'fulfilled' && Array.isArray(supportRes.value) ? supportRes.value.length : 0,
+        pendingSubmissions: booksPending + communityPending,
+        totalComments: commentsRes.status === 'fulfilled' && typeof commentsRes.value?.total === 'number' ? commentsRes.value.total : 0,
       })
-      .catch((err) => {
-        if (!ignore) setError(err.message)
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false)
-      })
+
+      setLoading(false)
+    })
+
     return () => {
       ignore = true
     }
-  }, [])
+  }, [canManageUsers])
 
   if (loading) {
     return <AdminLoadingScreen fill label="Loading your dashboard..." />
@@ -1115,12 +1154,83 @@ function AdminDashboard({ canPushBooks }) {
         <span>Real numbers straight from the database - refresh the page to update.</span>
       </div>
 
+      {canManageUsers && (
+        <div className="admin-ops-pulse">
+          <div className="admin-ops-card admin-row-fade-in">
+            <div className="admin-ops-card-left">
+              <span className="admin-ops-icon admin-ops-icon-support">
+                <i className="bi bi-chat-dots-fill" />
+              </span>
+              <div className="admin-ops-info">
+                <strong>{opsCounts.pendingSupport} escalated</strong>
+                <span>Support chats waiting for response</span>
+              </div>
+            </div>
+            <button
+              className="ghost-button"
+              onClick={() => onNavigateSection?.('contributions', 'support')}
+              style={{ padding: '6px 12px', fontSize: '13px' }}
+              type="button"
+            >
+              Open inbox &rarr;
+            </button>
+          </div>
+
+          <div className="admin-ops-card admin-row-fade-in">
+            <div className="admin-ops-card-left">
+              <span className="admin-ops-icon admin-ops-icon-submissions">
+                <i className="bi bi-file-earmark-text-fill" />
+              </span>
+              <div className="admin-ops-info">
+                <strong>{opsCounts.pendingSubmissions} submissions</strong>
+                <span>Customer submissions to review</span>
+              </div>
+            </div>
+            <button
+              className="ghost-button"
+              onClick={() => onNavigateSection?.('contributions', 'submissions')}
+              style={{ padding: '6px 12px', fontSize: '13px' }}
+              type="button"
+            >
+              Review &rarr;
+            </button>
+          </div>
+
+          <div className="admin-ops-card admin-row-fade-in">
+            <div className="admin-ops-card-left">
+              <span className="admin-ops-icon admin-ops-icon-comments">
+                <i className="bi bi-shield-check" />
+              </span>
+              <div className="admin-ops-info">
+                <strong>{opsCounts.totalComments} comments</strong>
+                <span>Customer comments & reviews</span>
+              </div>
+            </div>
+            <button
+              className="ghost-button"
+              onClick={() => onNavigateSection?.('contributions', 'comments')}
+              style={{ padding: '6px 12px', fontSize: '13px' }}
+              type="button"
+            >
+              Moderate &rarr;
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="admin-dashboard-summary">
         <div className="admin-summary-card admin-row-fade-in">
           <i className="bi bi-collection" />
           <strong>{stats.totalBooks}</strong>
           <span>Total books</span>
         </div>
+        {totalUsers > 0 && (
+          <div className="admin-summary-card admin-row-fade-in">
+            <i className="bi bi-people-fill" />
+            <strong>{totalUsers}</strong>
+            <span>Registered users</span>
+          </div>
+        )}
         {statusEntries.map((entry) => (
           <div className="admin-summary-card admin-row-fade-in" key={entry.key}>
             <i className={`bi ${entry.key === 'published' ? 'bi-check-circle' : entry.key === 'draft' ? 'bi-pencil-square' : 'bi-eye-slash'}`} />
@@ -1307,6 +1417,7 @@ function ContentStatsSection() {
 }
 
 function UserSubmissionsPanel({ onToast }) {
+  const [submissionSource, setSubmissionSource] = useState('stories')
   const [submissions, setSubmissions] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -1322,22 +1433,45 @@ function UserSubmissionsPanel({ onToast }) {
   useEffect(() => {
     let ignore = false
     setLoading(true)
-    const params = new URLSearchParams({
-      contributorRole: 'customer',
-      page: String(page),
-      limit: String(LIMIT),
-    })
-    if (statusFilter && statusFilter !== 'all') {
-      params.set('status', statusFilter)
-    }
-    if (searchQuery.trim()) {
-      params.set('q', searchQuery.trim())
-    }
 
-    apiFetch(`/api/books/mine?${params.toString()}`)
+    const isCommunity = submissionSource === 'community'
+    const endpoint = isCommunity
+      ? (() => {
+          const params = new URLSearchParams({
+            source: 'User',
+            page: String(page),
+            limit: String(LIMIT),
+          })
+          if (statusFilter && statusFilter !== 'all') {
+            params.set('status', statusFilter)
+          }
+          if (searchQuery.trim()) {
+            params.set('search', searchQuery.trim())
+          }
+          return `/api/admin/content?${params.toString()}`
+        })()
+      : (() => {
+          const params = new URLSearchParams({
+            contributorRole: 'customer',
+            page: String(page),
+            limit: String(LIMIT),
+          })
+          if (statusFilter && statusFilter !== 'all') {
+            params.set('status', statusFilter)
+          }
+          if (searchQuery.trim()) {
+            params.set('q', searchQuery.trim())
+          }
+          return `/api/books/mine?${params.toString()}`
+        })()
+
+    apiFetch(endpoint)
       .then((data) => {
         if (!ignore) {
-          setSubmissions(Array.isArray(data.books) ? data.books : [])
+          const list = isCommunity
+            ? (Array.isArray(data.items) ? data.items : [])
+            : (Array.isArray(data.books) ? data.books : [])
+          setSubmissions(list)
           setTotal(data.total || 0)
         }
       })
@@ -1351,23 +1485,35 @@ function UserSubmissionsPanel({ onToast }) {
     return () => {
       ignore = true
     }
-  }, [page, statusFilter, searchQuery, refreshTick])
+  }, [submissionSource, page, statusFilter, searchQuery, refreshTick])
 
-  async function updateStatus(bookId, newStatus) {
-    setActionBusyId(bookId)
+  async function updateStatus(itemId, newStatus) {
+    setActionBusyId(itemId)
     try {
-      await apiFetch(`/api/books/${bookId}`, {
-        method: 'PATCH',
-        body: { status: newStatus },
-      })
-      onToast?.({
-        type: 'success',
-        message: newStatus === 'published' ? 'Book approved and published.' : 'Book hidden/rejected.',
-      })
+      const isCommunity = submissionSource === 'community' || reviewTarget?.source === 'User'
+      if (isCommunity) {
+        await apiFetch(`/api/admin/content/${itemId}/status`, {
+          method: 'PATCH',
+          body: { status: newStatus },
+        })
+        onToast?.({
+          type: 'success',
+          message: newStatus === 'published' ? 'Community contribution approved and published.' : 'Community contribution hidden/rejected.',
+        })
+      } else {
+        await apiFetch(`/api/books/${itemId}`, {
+          method: 'PATCH',
+          body: { status: newStatus },
+        })
+        onToast?.({
+          type: 'success',
+          message: newStatus === 'published' ? 'Book approved and published.' : 'Book hidden/rejected.',
+        })
+      }
       setSubmissions((current) =>
-        current.map((item) => (item.id === bookId || item._id === bookId ? { ...item, status: newStatus } : item))
+        current.map((item) => (item.id === itemId || item._id === itemId ? { ...item, status: newStatus } : item))
       )
-      if (reviewTarget && (reviewTarget.id === bookId || reviewTarget._id === bookId)) {
+      if (reviewTarget && (reviewTarget.id === itemId || reviewTarget._id === itemId)) {
         setReviewTarget((curr) => ({ ...curr, status: newStatus }))
       }
       setRefreshTick((t) => t + 1)
@@ -1404,9 +1550,34 @@ function UserSubmissionsPanel({ onToast }) {
       <div className="section-heading">
         <div>
           <p className="mono-eyebrow">User Contributions</p>
-          <h2>Customer book submissions</h2>
+          <h2>Customer submissions</h2>
         </div>
-        <span>Review stories and books submitted by customers. Approve to publish to the catalog, or reject/hide.</span>
+        <span>Review written stories and community narrations submitted by readers. Approve to publish to the catalog, or reject/hide.</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <button
+          className={submissionSource === 'stories' ? 'primary-button' : 'ghost-button'}
+          onClick={() => {
+            setSubmissionSource('stories')
+            setPage(1)
+          }}
+          type="button"
+        >
+          <i className="bi bi-journal-text" style={{ marginRight: '6px' }} />
+          Written stories (Original books)
+        </button>
+        <button
+          className={submissionSource === 'community' ? 'primary-button' : 'ghost-button'}
+          onClick={() => {
+            setSubmissionSource('community')
+            setPage(1)
+          }}
+          type="button"
+        >
+          <i className="bi bi-mic" style={{ marginRight: '6px' }} />
+          Community narrations (Audio & files)
+        </button>
       </div>
 
       <div className="admin-filter-bar" aria-label="Filter customer submissions">
@@ -1448,7 +1619,7 @@ function UserSubmissionsPanel({ onToast }) {
 
       <section className="admin-table admin-book-grid">
         <div className="admin-table-heading">
-          <h2>Submissions</h2>
+          <h2>{submissionSource === 'community' ? 'Community narrations' : 'Written stories'}</h2>
           <span className="admin-count-pill">{total.toLocaleString()}</span>
         </div>
 
@@ -1459,7 +1630,13 @@ function UserSubmissionsPanel({ onToast }) {
             <div className="admin-book-grid-rows">
               {submissions.map((book, bookIndex) => {
                 const bookId = book.id || book._id
-                const submitter = book.createdBy?.name || book.author || 'Customer'
+                const isCommunity = submissionSource === 'community' || book.source === 'User'
+                const submitter = isCommunity
+                  ? (book.uploadedBy?.name || book.uploadedBy?.email || 'Community member')
+                  : (book.createdBy?.name || book.author || 'Customer')
+                const categoryLabel = isCommunity
+                  ? (Array.isArray(book.categories) && book.categories.length ? book.categories.join(', ') : book.type === 'audiobook' ? 'Audiobook' : 'Ebook')
+                  : getCategory(book)
                 const isBusy = actionBusyId === bookId
 
                 return (
@@ -1474,9 +1651,15 @@ function UserSubmissionsPanel({ onToast }) {
                     <span>
                       {book.title}
                       <em className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</em>
+                      {isCommunity && (
+                        <span style={{ marginLeft: '6px', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: '#ecece8', color: '#555', textTransform: 'uppercase' }}>
+                          {book.type || 'audio'}
+                        </span>
+                      )}
                     </span>
                     <small>
-                      By {book.author} · Contributor: {submitter} · {getCategory(book)}
+                      By {book.author || 'Unknown'} · Contributor: {submitter} · {categoryLabel}
+                      {isCommunity && book.files?.length ? ` · ${book.files.length} file(s)` : ''}
                       {book.createdAt && ` · ${new Date(book.createdAt).toLocaleDateString()}`}
                     </small>
                     <div className="admin-row-actions">
@@ -1527,6 +1710,7 @@ function UserSubmissionsPanel({ onToast }) {
         <SubmissionReviewModal
           book={reviewTarget}
           busy={actionBusyId === (reviewTarget.id || reviewTarget._id)}
+          isCommunity={submissionSource === 'community' || reviewTarget.source === 'User'}
           onChangeStatus={updateStatus}
           onClose={() => setReviewTarget(null)}
         />
@@ -1535,7 +1719,7 @@ function UserSubmissionsPanel({ onToast }) {
   )
 }
 
-function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
+function SubmissionReviewModal({ book, busy, isCommunity, onChangeStatus, onClose }) {
   const [fullBook, setFullBook] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeChapterIndex, setActiveChapterIndex] = useState(0)
@@ -1545,7 +1729,12 @@ function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
   useEffect(() => {
     let ignore = false
     setLoading(true)
-    apiFetch(`/api/books/${bookId}`)
+
+    const endpoint = isCommunity
+      ? `/api/admin/content/${bookId}`
+      : `/api/books/${bookId}`
+
+    apiFetch(endpoint)
       .then((data) => {
         if (!ignore) {
           setFullBook(data.book || data)
@@ -1563,11 +1752,13 @@ function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
     return () => {
       ignore = true
     }
-  }, [bookId])
+  }, [bookId, isCommunity])
 
   const targetBook = fullBook || book
   const chapters = targetBook.chapters || []
   const activeChapter = chapters[activeChapterIndex] || null
+  const submitterName = targetBook.createdBy?.name || targetBook.uploadedBy?.name || targetBook.author || 'Customer'
+  const submitterEmail = targetBook.createdBy?.email || targetBook.uploadedBy?.email
 
   return (
     <div
@@ -1582,7 +1773,7 @@ function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
       <div className="admin-book-modal" style={{ maxWidth: '920px', width: '95%' }}>
         <header className="admin-book-modal-header">
           <div>
-            <p className="mono-eyebrow">Submission Review</p>
+            <p className="mono-eyebrow">{isCommunity ? 'Community Contribution Review' : 'Book Submission Review'}</p>
             <h2 id="submission-review-title">{targetBook.title}</h2>
           </div>
           <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
@@ -1603,17 +1794,22 @@ function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span className={`admin-status status-${targetBook.status || 'draft'}`}>{targetBook.status || 'draft'}</span>
-                <span style={{ fontSize: '13px', color: '#555550' }}>{getCategory(targetBook)}</span>
-                <span style={{ fontSize: '13px', color: '#74746f' }}>· {chapters.length} chapter(s)</span>
+                <span style={{ fontSize: '13px', color: '#555550' }}>
+                  {isCommunity
+                    ? (Array.isArray(targetBook.categories) && targetBook.categories.length ? targetBook.categories.join(', ') : targetBook.type === 'audiobook' ? 'Audiobook' : 'Ebook')
+                    : getCategory(targetBook)}
+                </span>
+                {!isCommunity && <span style={{ fontSize: '13px', color: '#74746f' }}>· {chapters.length} chapter(s)</span>}
+                {isCommunity && targetBook.language && (
+                  <span style={{ fontSize: '13px', color: '#74746f' }}>· Language: {targetBook.language}</span>
+                )}
               </div>
               <p style={{ margin: '4px 0', fontSize: '15px' }}>
                 <strong>Author:</strong> {targetBook.author}
               </p>
-              {targetBook.createdBy && (
-                <p style={{ margin: '0', fontSize: '13px', color: '#555550' }}>
-                  <strong>Submitter:</strong> {targetBook.createdBy.name || 'Customer'} ({targetBook.createdBy.email || 'N/A'})
-                </p>
-              )}
+              <p style={{ margin: '0', fontSize: '13px', color: '#555550' }}>
+                <strong>Submitter:</strong> {submitterName} {submitterEmail ? `(${submitterEmail})` : ''}
+              </p>
               {targetBook.createdAt && (
                 <small style={{ color: '#74746f' }}>
                   Submitted on {new Date(targetBook.createdAt).toLocaleString()}
@@ -1627,56 +1823,103 @@ function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
             </div>
           </div>
 
-          <div style={{ marginTop: '16px', borderTop: '1px solid #e4e4df', paddingTop: '16px' }}>
-            <h3 style={{ fontSize: '16px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <i className="bi bi-book-half" /> Chapters & Content Preview ({chapters.length})
-            </h3>
-
-            {loading ? (
-              <AdminLoadingScreen label="Loading chapters..." />
-            ) : chapters.length ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '16px', minHeight: '260px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '360px', overflowY: 'auto' }}>
-                  {chapters.map((ch, idx) => (
-                    <button
-                      className={`ghost-button ${idx === activeChapterIndex ? 'active' : ''}`}
-                      key={ch.id || ch._id || `ch-${idx}`}
-                      onClick={() => setActiveChapterIndex(idx)}
+          {isCommunity ? (
+            <div style={{ marginTop: '16px', borderTop: '1px solid #e4e4df', paddingTop: '16px' }}>
+              <h3 style={{ fontSize: '16px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="bi bi-file-earmark-music" /> Attached Audio & Files ({targetBook.files?.length || 0})
+              </h3>
+              {targetBook.files && targetBook.files.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {targetBook.files.map((file, idx) => (
+                    <div
+                      key={idx}
                       style={{
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: idx === activeChapterIndex ? '1px solid var(--app-accent, #16a09a)' : '1px solid #e4e4df',
-                        background: idx === activeChapterIndex ? 'color-mix(in srgb, var(--app-accent, #16a09a) 12%, transparent)' : '#ffffff',
-                        fontWeight: idx === activeChapterIndex ? 'bold' : 'normal',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: '#f8f8f6',
+                        borderRadius: '8px',
+                        border: '1px solid #e4e4df',
                       }}
-                      type="button"
                     >
-                      {ch.title || `Chapter ${idx + 1}`}
-                    </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ textTransform: 'uppercase', fontSize: '12px', fontWeight: 'bold', background: '#e0e0dc', padding: '3px 8px', borderRadius: '4px' }}>
+                          {file.format || 'file'}
+                        </span>
+                        <span style={{ fontSize: '13px', color: '#333', maxWidth: '450px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.url}>
+                          {file.url}
+                        </span>
+                      </div>
+                      <a
+                        className="ghost-button"
+                        href={file.url}
+                        rel="noopener noreferrer"
+                        style={{ textDecoration: 'none', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        target="_blank"
+                      >
+                        <i className="bi bi-box-arrow-up-right" />
+                        Open / Listen
+                      </a>
+                    </div>
                   ))}
                 </div>
+              ) : (
+                <p style={{ color: '#74746f', fontStyle: 'italic' }}>No media files attached to this contribution.</p>
+              )}
+            </div>
+          ) : (
+            <div style={{ marginTop: '16px', borderTop: '1px solid #e4e4df', paddingTop: '16px' }}>
+              <h3 style={{ fontSize: '16px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="bi bi-book-half" /> Chapters & Content Preview ({chapters.length})
+              </h3>
 
-                <div style={{ background: '#fbfbf8', border: '1px solid #e4e4df', borderRadius: '8px', padding: '16px', maxHeight: '360px', overflowY: 'auto' }}>
-                  <h4 style={{ margin: '0 0 10px', fontSize: '15px' }}>
-                    {activeChapter?.title || `Chapter ${activeChapterIndex + 1}`}
-                  </h4>
-                  <div style={{ fontSize: '13px', lineHeight: '1.7', whiteSpace: 'pre-wrap', color: '#2d2d2d' }}>
-                    {activeChapter?.content || activeChapter?.text || 'No text content available in this chapter.'}
+              {loading ? (
+                <AdminLoadingScreen label="Loading chapters..." />
+              ) : chapters.length ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '16px', minHeight: '260px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '360px', overflowY: 'auto' }}>
+                    {chapters.map((ch, idx) => (
+                      <button
+                        className={`ghost-button ${idx === activeChapterIndex ? 'active' : ''}`}
+                        key={ch.id || ch._id || `ch-${idx}`}
+                        onClick={() => setActiveChapterIndex(idx)}
+                        style={{
+                          textAlign: 'left',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: idx === activeChapterIndex ? '1px solid var(--app-accent, #16a09a)' : '1px solid #e4e4df',
+                          background: idx === activeChapterIndex ? 'color-mix(in srgb, var(--app-accent, #16a09a) 12%, transparent)' : '#ffffff',
+                          fontWeight: idx === activeChapterIndex ? 'bold' : 'normal',
+                        }}
+                        type="button"
+                      >
+                        {ch.title || `Chapter ${idx + 1}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ background: '#fbfbf8', border: '1px solid #e4e4df', borderRadius: '8px', padding: '16px', maxHeight: '360px', overflowY: 'auto' }}>
+                    <h4 style={{ margin: '0 0 10px', fontSize: '15px' }}>
+                      {activeChapter?.title || `Chapter ${activeChapterIndex + 1}`}
+                    </h4>
+                    <div style={{ fontSize: '13px', lineHeight: '1.7', whiteSpace: 'pre-wrap', color: '#2d2d2d' }}>
+                      {activeChapter?.content || activeChapter?.text || 'No text content available in this chapter.'}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <p style={{ color: '#74746f', fontStyle: 'italic' }}>
-                This book does not have structured chapters (plain readerUrl or empty draft).
-                {targetBook.readerUrl && (
-                  <span style={{ display: 'block', marginTop: '6px' }}>
-                    Reader link: <a href={targetBook.readerUrl} rel="noreferrer" target="_blank">{targetBook.readerUrl}</a>
-                  </span>
-                )}
-              </p>
-            )}
-          </div>
+              ) : (
+                <p style={{ color: '#74746f', fontStyle: 'italic' }}>
+                  This book does not have structured chapters (plain readerUrl or empty draft).
+                  {targetBook.readerUrl && (
+                    <span style={{ display: 'block', marginTop: '6px' }}>
+                      Reader link: <a href={targetBook.readerUrl} rel="noreferrer" target="_blank">{targetBook.readerUrl}</a>
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <footer className="admin-book-modal-footer">
@@ -2095,7 +2338,7 @@ function DeleteCommentModal({ busy, item, onClose, onConfirm }) {
   )
 }
 
-function CommentsModerationPanel({ onToast }) {
+function CommentsModerationPanel({ onBanUser, onToast }) {
   const [comments, setComments] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -2297,6 +2540,25 @@ function CommentsModerationPanel({ onToast }) {
                         <i className={item.target.type === 'book' ? 'bi bi-book' : 'bi bi-headphones'} style={{ marginRight: '5px' }} />
                         {item.target.title}
                       </span>
+                    )}
+
+                    {onBanUser && item.author?.id && !item.author?.isRestricted && (
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        style={{ padding: '4px 10px', fontSize: '12px', minHeight: '28px', color: 'var(--app-danger, #ef4444)' }}
+                        onClick={() =>
+                          onBanUser({
+                            id: item.author.id,
+                            name: item.author.name || 'Reader',
+                            email: item.author.email || item.author.maskedEmail || '',
+                          })
+                        }
+                        title={`Ban user ${item.author.name || ''}`}
+                      >
+                        <i className="bi bi-slash-circle" style={{ marginRight: '4px' }} />
+                        Ban user
+                      </button>
                     )}
 
                     <button
@@ -3621,7 +3883,8 @@ function createPreviewBook(adminBook) {
 }
 
 function getAdminCover(book) {
-  return book.coverUrl || book.formats?.['image/jpeg'] || book.cover || NONE_COVER_URL
+  if (!book) return NONE_COVER_URL
+  return book.coverUrl || book.cover_image || book.formats?.['image/jpeg'] || book.cover || NONE_COVER_URL
 }
 
 function getFormWarnings(book) {
