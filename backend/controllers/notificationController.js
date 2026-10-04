@@ -118,4 +118,58 @@ const markAllAsRead = asyncHandler(async (req, res) => {
   return success(res, 200, 'All notifications marked as read.', {});
 });
 
-module.exports = { createNotification, getNotifications, markAsRead, markAllAsRead };
+// @route GET /api/notifications/broadcasts
+// @desc  Admin retrieves all broadcasts sent in the system
+const getBroadcastHistory = asyncHandler(async (req, res) => {
+  const notifications = await Notification.find({})
+    .populate('createdBy', 'name email role')
+    .populate('targetUser', 'name email role')
+    .sort({ createdAt: -1 })
+    .limit(100);
+
+  const history = notifications.map((n) => ({
+    id: n._id,
+    title: n.title,
+    message: n.message,
+    audience: n.audience,
+    targetUser: n.targetUser
+      ? {
+          id: n.targetUser._id,
+          name: n.targetUser.name,
+          email: n.targetUser.email,
+        }
+      : null,
+    creator: n.createdBy
+      ? {
+          id: n.createdBy._id,
+          name: n.createdBy.name,
+          role: n.createdBy.role,
+        }
+      : null,
+    readCount: Array.isArray(n.readBy) ? n.readBy.length : 0,
+    createdAt: n.createdAt,
+  }));
+
+  return success(res, 200, 'Broadcast history retrieved.', { broadcasts: history });
+});
+
+// @route DELETE /api/notifications/:id
+// @desc  Admin deletes/recalls a notification
+const deleteNotification = asyncHandler(async (req, res) => {
+  const notification = await Notification.findByIdAndDelete(req.params.id);
+  if (!notification) {
+    return fail(res, 404, 'Notification not found.');
+  }
+
+  return success(res, 200, 'Notification removed.');
+});
+
+module.exports = {
+  createNotification,
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  getBroadcastHistory,
+  deleteNotification,
+};
+

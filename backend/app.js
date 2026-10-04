@@ -14,6 +14,7 @@ const librivoxRoutes = require('./routes/librivoxRoutes');
 const aiSuggestionsRoutes = require('./routes/aiSuggestionsRoutes');
 const supportRoutes = require('./routes/supportRoutes');
 const adminSupportRoutes = require('./routes/adminSupportRoutes');
+const adminCommentRoutes = require('./routes/adminCommentRoutes');
 const cronRoutes = require('./routes/cronRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { success } = require('./utils/response');
@@ -114,6 +115,8 @@ app.use('/api/ai-suggestions', aiSuggestionsRoutes);
 app.use('/api/support', supportRoutes);
 // Help chat inbox (admin side), see adminSupportRoutes.js
 app.use('/api/admin/support', adminSupportRoutes);
+// Comments moderation (admin side), see adminCommentRoutes.js
+app.use('/api/admin/comments', adminCommentRoutes);
 // GET /api/cron/ingest-content - daily Vercel Cron target, see cronRoutes.js
 app.use('/api/cron', cronRoutes);
 

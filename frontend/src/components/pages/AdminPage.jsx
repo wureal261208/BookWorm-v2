@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials } from '../../utils/bookUtils'
 import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
@@ -230,7 +230,7 @@ function AdminPage({
     setCatalogRefreshTick((tick) => tick + 1)
   }
 
-  const customerAccounts = users.filter((item) => normalizeRole(item.role) === 'customer')
+  const [userRefreshTick, setUserRefreshTick] = useState(0)
 
   function updateAdminBook(name, value) {
     setAdminBook({ ...adminBook, [name]: value })
@@ -247,23 +247,6 @@ function AdminPage({
       }
     }
     reader.readAsDataURL(file)
-  }
-
-  async function removeStaffAccount(member) {
-    if (!member?.id) {
-      setStaffActionError('This account was created before the account-management update - ask an admin to remove it from MongoDB directly.')
-      return
-    }
-    setStaffActionError('')
-    setStaffActionBusy(member.email)
-    try {
-      await apiFetch(`/api/users/${member.id}`, { method: 'DELETE' })
-      await onRefreshStaff()
-    } catch (error) {
-      setStaffActionError(error.message)
-    } finally {
-      setStaffActionBusy('')
-    }
   }
 
   async function handleBookSubmit(event) {
@@ -308,13 +291,19 @@ function AdminPage({
     setBanBusyId(banTarget.id)
     const ok = await onBanUser(banTarget.id, { days, reason })
     setBanBusyId('')
-    if (ok) setBanTarget(null)
+    if (ok) {
+      setBanTarget(null)
+      setUserRefreshTick((tick) => tick + 1)
+    }
   }
 
   async function handleUnban(user) {
     setBanBusyId(user.id)
-    await onUnbanUser(user.id)
+    const ok = await onUnbanUser(user.id)
     setBanBusyId('')
+    if (ok) {
+      setUserRefreshTick((tick) => tick + 1)
+    }
   }
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -540,9 +529,62 @@ function AdminPage({
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
-          <SupportInboxPanel onToast={onToast} />
-          <UserSubmissionsPanel />
-          <UsersDirectoryPanel onToast={onToast} />
+          <div className="admin-filter-bar admin-book-management-tabs" aria-label="User Contributions view">
+            <button
+              className={contributionsTab === 'submissions' ? 'active' : ''}
+              onClick={() => setContributionsTab('submissions')}
+              type="button"
+            >
+              <i className="bi bi-journal-arrow-up" style={{ marginRight: '6px' }} />
+              Book submissions
+            </button>
+            <button
+              className={contributionsTab === 'users' ? 'active' : ''}
+              onClick={() => setContributionsTab('users')}
+              type="button"
+            >
+              <i className="bi bi-people" style={{ marginRight: '6px' }} />
+              User directory
+            </button>
+            <button
+              className={contributionsTab === 'comments' ? 'active' : ''}
+              onClick={() => setContributionsTab('comments')}
+              type="button"
+            >
+              <i className="bi bi-chat-square-quote" style={{ marginRight: '6px' }} />
+              Comments moderation
+            </button>
+            <button
+              className={contributionsTab === 'support' ? 'active' : ''}
+              onClick={() => setContributionsTab('support')}
+              type="button"
+            >
+              <i className="bi bi-chat-left-dots" style={{ marginRight: '6px' }} />
+              Help chat inbox
+            </button>
+            <button
+              className={contributionsTab === 'broadcast' ? 'active' : ''}
+              onClick={() => setContributionsTab('broadcast')}
+              type="button"
+            >
+              <i className="bi bi-megaphone" style={{ marginRight: '6px' }} />
+              System broadcast
+            </button>
+          </div>
+
+          {contributionsTab === 'submissions' && <UserSubmissionsPanel onToast={onToast} />}
+          {contributionsTab === 'users' && (
+            <UsersDirectoryPanel
+              banBusyId={banBusyId}
+              onBan={(user) => setBanTarget(user)}
+              onToast={onToast}
+              onUnban={handleUnban}
+              refreshTick={userRefreshTick}
+            />
+          )}
+          {contributionsTab === 'comments' && <CommentsModerationPanel onToast={onToast} />}
+          {contributionsTab === 'support' && <SupportInboxPanel onToast={onToast} />}
+          {contributionsTab === 'broadcast' && <SystemBroadcastPanel onToast={onToast} />}
         </>
       ) : null}
 
@@ -1199,44 +1241,433 @@ function ContentStatsSection() {
   )
 }
 
-function UserSubmissionsPanel() {
-  // The customer "push a book" review flow hasn't been wired into the new
-  // main-site redesign yet, so this panel is a placeholder until that work
-  // starts - no fetch, no loading state to get wrong.
+function UserSubmissionsPanel({ onToast }) {
+  const [submissions, setSubmissions] = useState([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState('draft')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [actionBusyId, setActionBusyId] = useState('')
+  const [reviewTarget, setReviewTarget] = useState(null)
+  const [refreshTick, setRefreshTick] = useState(0)
+  const LIMIT = 12
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    const params = new URLSearchParams({
+      contributorRole: 'customer',
+      page: String(page),
+      limit: String(LIMIT),
+    })
+    if (statusFilter && statusFilter !== 'all') {
+      params.set('status', statusFilter)
+    }
+    if (searchQuery.trim()) {
+      params.set('q', searchQuery.trim())
+    }
+
+    apiFetch(`/api/books/mine?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) {
+          setSubmissions(Array.isArray(data.books) ? data.books : [])
+          setTotal(data.total || 0)
+        }
+      })
+      .catch((error) => {
+        if (!ignore) onToast?.({ type: 'error', message: error.message })
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [page, statusFilter, searchQuery, refreshTick])
+
+  async function updateStatus(bookId, newStatus) {
+    setActionBusyId(bookId)
+    try {
+      await apiFetch(`/api/books/${bookId}`, {
+        method: 'PATCH',
+        body: { status: newStatus },
+      })
+      onToast?.({
+        type: 'success',
+        message: newStatus === 'published' ? 'Book approved and published.' : 'Book hidden/rejected.',
+      })
+      setSubmissions((current) =>
+        current.map((item) => (item.id === bookId || item._id === bookId ? { ...item, status: newStatus } : item))
+      )
+      if (reviewTarget && (reviewTarget.id === bookId || reviewTarget._id === bookId)) {
+        setReviewTarget((curr) => ({ ...curr, status: newStatus }))
+      }
+      setRefreshTick((t) => t + 1)
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message })
+    } finally {
+      setActionBusyId('')
+    }
+  }
+
+  function handleSearchSubmit(event) {
+    event.preventDefault()
+    setSearchQuery(searchInput.trim())
+    setPage(1)
+  }
+
+  function handleClearSearch() {
+    setSearchInput('')
+    setSearchQuery('')
+    setPage(1)
+  }
+
+  const submissionFilters = [
+    { id: 'draft', label: 'Pending review (Draft)' },
+    { id: 'published', label: 'Published' },
+    { id: 'hidden', label: 'Hidden / Rejected' },
+    { id: 'all', label: 'All submissions' },
+  ]
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
+
   return (
-    <section className="admin-workspace">
+    <section className="admin-workspace admin-book-toolbar">
       <div className="section-heading">
         <div>
           <p className="mono-eyebrow">User Contributions</p>
-          <h2>Book submissions</h2>
+          <h2>Customer book submissions</h2>
         </div>
-        <span>Books customers pushed themselves - they land as a draft until a staff member reviews and publishes them.</span>
+        <span>Review stories and books submitted by customers. Approve to publish to the catalog, or reject/hide.</span>
       </div>
 
-      <section className="admin-table">
-        <div className="admin-coming-soon">
-          <i className="bi bi-hourglass-split" />
-          <p>Coming soon</p>
+      <div className="admin-filter-bar" aria-label="Filter customer submissions">
+        {submissionFilters.map((filter) => (
+          <button
+            className={statusFilter === filter.id ? 'active' : ''}
+            key={filter.id}
+            onClick={() => {
+              setStatusFilter(filter.id)
+              setPage(1)
+            }}
+            type="button"
+          >
+            {filter.label}
+          </button>
+        ))}
+
+        <form className="admin-catalog-search" onSubmit={handleSearchSubmit}>
+          <i className="bi bi-search" />
+          <input
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search title, author... (Enter)"
+            type="text"
+            value={searchInput}
+          />
+          {searchQuery && (
+            <button
+              className="ghost-button"
+              onClick={handleClearSearch}
+              style={{ border: 'none', padding: '0 8px', minHeight: 'auto' }}
+              title="Clear search"
+              type="button"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+          )}
+        </form>
+      </div>
+
+      <section className="admin-table admin-book-grid">
+        <div className="admin-table-heading">
+          <h2>Submissions</h2>
+          <span className="admin-count-pill">{total.toLocaleString()}</span>
         </div>
+
+        {loading ? (
+          <AdminLoadingScreen label="Loading submissions..." />
+        ) : submissions.length ? (
+          <>
+            <div className="admin-book-grid-rows">
+              {submissions.map((book, bookIndex) => {
+                const bookId = book.id || book._id
+                const submitter = book.createdBy?.name || book.author || 'Customer'
+                const isBusy = actionBusyId === bookId
+
+                return (
+                  <div className="table-row admin-book-row admin-row-fade-in" key={bookId || `sub-${bookIndex}`}>
+                    <img
+                      alt=""
+                      onError={(event) => {
+                        event.currentTarget.src = NONE_COVER_URL
+                      }}
+                      src={getAdminCover(book)}
+                    />
+                    <span>
+                      {book.title}
+                      <em className={`admin-status status-${book.status || 'draft'}`}>{book.status || 'draft'}</em>
+                    </span>
+                    <small>
+                      By {book.author} · Contributor: {submitter} · {getCategory(book)}
+                      {book.createdAt && ` · ${new Date(book.createdAt).toLocaleDateString()}`}
+                    </small>
+                    <div className="admin-row-actions">
+                      <button
+                        className="edit-button"
+                        onClick={() => setReviewTarget(book)}
+                        type="button"
+                      >
+                        <i className="bi bi-eye" style={{ marginRight: '4px' }} />
+                        Review
+                      </button>
+                      {book.status !== 'published' && (
+                        <button
+                          className="primary-button"
+                          disabled={isBusy}
+                          onClick={() => updateStatus(bookId, 'published')}
+                          type="button"
+                        >
+                          {isBusy ? 'Publishing...' : 'Publish'}
+                        </button>
+                      )}
+                      {book.status !== 'hidden' && (
+                        <button
+                          className="danger-button"
+                          disabled={isBusy}
+                          onClick={() => updateStatus(bookId, 'hidden')}
+                          type="button"
+                        >
+                          {isBusy ? 'Hiding...' : 'Reject'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {total > LIMIT && (
+              <AdminPagination currentPage={page} onPageChange={setPage} totalPages={totalPages} />
+            )}
+          </>
+        ) : (
+          <p>No customer submissions match this filter.</p>
+        )}
       </section>
+
+      {reviewTarget && (
+        <SubmissionReviewModal
+          book={reviewTarget}
+          busy={actionBusyId === (reviewTarget.id || reviewTarget._id)}
+          onChangeStatus={updateStatus}
+          onClose={() => setReviewTarget(null)}
+        />
+      )}
     </section>
   )
 }
 
-function UsersDirectoryPanel({ onToast }) {
+function SubmissionReviewModal({ book, busy, onChangeStatus, onClose }) {
+  const [fullBook, setFullBook] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [activeChapterIndex, setActiveChapterIndex] = useState(0)
+
+  const bookId = book.id || book._id
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    apiFetch(`/api/books/${bookId}`)
+      .then((data) => {
+        if (!ignore) {
+          setFullBook(data.book || data)
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setFullBook(book)
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [bookId])
+
+  const targetBook = fullBook || book
+  const chapters = targetBook.chapters || []
+  const activeChapter = chapters[activeChapterIndex] || null
+
+  return (
+    <div
+      aria-labelledby="submission-review-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-book-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-book-modal" style={{ maxWidth: '920px', width: '95%' }}>
+        <header className="admin-book-modal-header">
+          <div>
+            <p className="mono-eyebrow">Submission Review</p>
+            <h2 id="submission-review-title">{targetBook.title}</h2>
+          </div>
+          <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+            <i className="bi bi-x-lg" />
+          </button>
+        </header>
+
+        <div className="admin-book-modal-body" style={{ maxHeight: '72vh' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '20px', alignItems: 'start' }}>
+            <img
+              alt=""
+              onError={(e) => {
+                e.currentTarget.src = NONE_COVER_URL
+              }}
+              src={getAdminCover(targetBook)}
+              style={{ width: '120px', height: '168px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #d8d8d3' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span className={`admin-status status-${targetBook.status || 'draft'}`}>{targetBook.status || 'draft'}</span>
+                <span style={{ fontSize: '13px', color: '#555550' }}>{getCategory(targetBook)}</span>
+                <span style={{ fontSize: '13px', color: '#74746f' }}>· {chapters.length} chapter(s)</span>
+              </div>
+              <p style={{ margin: '4px 0', fontSize: '15px' }}>
+                <strong>Author:</strong> {targetBook.author}
+              </p>
+              {targetBook.createdBy && (
+                <p style={{ margin: '0', fontSize: '13px', color: '#555550' }}>
+                  <strong>Submitter:</strong> {targetBook.createdBy.name || 'Customer'} ({targetBook.createdBy.email || 'N/A'})
+                </p>
+              )}
+              {targetBook.createdAt && (
+                <small style={{ color: '#74746f' }}>
+                  Submitted on {new Date(targetBook.createdAt).toLocaleString()}
+                </small>
+              )}
+              {targetBook.description && (
+                <div style={{ marginTop: '8px', padding: '10px 14px', background: '#f8f8f6', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6' }}>
+                  <strong>Description:</strong> {targetBook.description}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginTop: '16px', borderTop: '1px solid #e4e4df', paddingTop: '16px' }}>
+            <h3 style={{ fontSize: '16px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="bi bi-book-half" /> Chapters & Content Preview ({chapters.length})
+            </h3>
+
+            {loading ? (
+              <AdminLoadingScreen label="Loading chapters..." />
+            ) : chapters.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '16px', minHeight: '260px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '360px', overflowY: 'auto' }}>
+                  {chapters.map((ch, idx) => (
+                    <button
+                      className={`ghost-button ${idx === activeChapterIndex ? 'active' : ''}`}
+                      key={ch.id || ch._id || `ch-${idx}`}
+                      onClick={() => setActiveChapterIndex(idx)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        border: idx === activeChapterIndex ? '1px solid var(--app-accent, #16a09a)' : '1px solid #e4e4df',
+                        background: idx === activeChapterIndex ? 'color-mix(in srgb, var(--app-accent, #16a09a) 12%, transparent)' : '#ffffff',
+                        fontWeight: idx === activeChapterIndex ? 'bold' : 'normal',
+                      }}
+                      type="button"
+                    >
+                      {ch.title || `Chapter ${idx + 1}`}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ background: '#fbfbf8', border: '1px solid #e4e4df', borderRadius: '8px', padding: '16px', maxHeight: '360px', overflowY: 'auto' }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '15px' }}>
+                    {activeChapter?.title || `Chapter ${activeChapterIndex + 1}`}
+                  </h4>
+                  <div style={{ fontSize: '13px', lineHeight: '1.7', whiteSpace: 'pre-wrap', color: '#2d2d2d' }}>
+                    {activeChapter?.content || activeChapter?.text || 'No text content available in this chapter.'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: '#74746f', fontStyle: 'italic' }}>
+                This book does not have structured chapters (plain readerUrl or empty draft).
+                {targetBook.readerUrl && (
+                  <span style={{ display: 'block', marginTop: '6px' }}>
+                    Reader link: <a href={targetBook.readerUrl} rel="noreferrer" target="_blank">{targetBook.readerUrl}</a>
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <footer className="admin-book-modal-footer">
+          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+            Close
+          </button>
+          {targetBook.status !== 'published' && (
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() => onChangeStatus(bookId, 'published')}
+              type="button"
+            >
+              <i className="bi bi-check-circle" style={{ marginRight: '6px' }} />
+              {busy ? 'Publishing...' : 'Approve & Publish'}
+            </button>
+          )}
+          {targetBook.status !== 'hidden' && (
+            <button
+              className="danger-button"
+              disabled={busy}
+              onClick={() => onChangeStatus(bookId, 'hidden')}
+              type="button"
+            >
+              <i className="bi bi-eye-slash" style={{ marginRight: '6px' }} />
+              {busy ? 'Hiding...' : 'Reject / Hide'}
+            </button>
+          )}
+        </footer>
+      </div>
+    </div>
+  )
+}
+
+function UsersDirectoryPanel({ banBusyId, onBan, onToast, onUnban, refreshTick = 0 }) {
   const [users, setUsers] = useState([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const LIMIT = 10
 
   useEffect(() => {
     let ignore = false
     setLoading(true)
-    // role=customer both drops admin accounts from this list and switches
-    // the backend to rank results by push count (see userController.js) -
-    // this panel only ever wants to show contributors, most active first.
-    apiFetch(`/api/users?role=customer&page=${page}&limit=${LIMIT}`)
+    const params = new URLSearchParams({
+      role: 'customer',
+      page: String(page),
+      limit: String(LIMIT),
+    })
+    if (searchQuery.trim()) {
+      params.set('q', searchQuery.trim())
+    }
+
+    apiFetch(`/api/users?${params.toString()}`)
       .then((data) => {
         if (!ignore) {
           setUsers(Array.isArray(data.users) ? data.users : [])
@@ -1252,7 +1683,19 @@ function UsersDirectoryPanel({ onToast }) {
     return () => {
       ignore = true
     }
-  }, [page])
+  }, [page, searchQuery, refreshTick])
+
+  function handleSearchSubmit(event) {
+    event.preventDefault()
+    setSearchQuery(searchInput.trim())
+    setPage(1)
+  }
+
+  function handleClearSearch() {
+    setSearchInput('')
+    setSearchQuery('')
+    setPage(1)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
@@ -1261,12 +1704,39 @@ function UsersDirectoryPanel({ onToast }) {
       <div className="section-heading">
         <div>
           <p className="mono-eyebrow">User Contributions</p>
-          <h2>Users</h2>
+          <h2>User directory</h2>
         </div>
         <span>Customer accounts only - display name and masked email, ranked by how many books they've pushed.</span>
       </div>
 
+      <div className="admin-book-toolbar-row" style={{ marginBottom: '16px' }}>
+        <form className="admin-catalog-search" onSubmit={handleSearchSubmit} style={{ maxWidth: '420px', width: '100%' }}>
+          <i className="bi bi-search" />
+          <input
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search by name... (Enter to search)"
+            type="text"
+            value={searchInput}
+          />
+          {searchQuery && (
+            <button
+              className="ghost-button"
+              onClick={handleClearSearch}
+              style={{ border: 'none', padding: '0 8px', minHeight: 'auto' }}
+              title="Clear search"
+              type="button"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+          )}
+        </form>
+      </div>
+
       <section className="admin-table">
+        <div className="admin-table-heading">
+          <h2>Users</h2>
+          <span className="admin-count-pill">{total.toLocaleString()}</span>
+        </div>
         {loading ? (
           <AdminLoadingScreen label="Loading users..." />
         ) : users.length ? (
@@ -1278,13 +1748,43 @@ function UsersDirectoryPanel({ onToast }) {
                   <span className="admin-users-directory-info">
                     <strong>{user.name}</strong>
                     <small>{user.email}</small>
+                    {user.isRestricted && (
+                      <span style={{ fontSize: '12px', color: '#dc2626', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <i className="bi bi-exclamation-triangle-fill" />
+                        {user.banReason ? `Banned: ${user.banReason}` : 'Account suspended'}
+                        {user.banExpiresAt ? ` (until ${new Date(user.banExpiresAt).toLocaleDateString()})` : ' (Permanent)'}
+                      </span>
+                    )}
                   </span>
                   <span className="admin-contributor-tag">
                     <i className="bi bi-journal-text" /> Pushed {user.bookCount || 0} books
                   </span>
-                  {user.isRestricted && (
+                  {user.isRestricted ? (
                     <span className="admin-status status-hidden">Restricted</span>
+                  ) : (
+                    <span className="admin-status status-published">Active</span>
                   )}
+                  <div className="admin-row-actions">
+                    {user.isRestricted ? (
+                      <button
+                        className="edit-button"
+                        disabled={banBusyId === user.id}
+                        onClick={() => onUnban?.(user)}
+                        type="button"
+                      >
+                        {banBusyId === user.id ? 'Unbanning...' : 'Unban'}
+                      </button>
+                    ) : (
+                      <button
+                        className="danger-button"
+                        disabled={banBusyId === user.id}
+                        onClick={() => onBan?.(user)}
+                        type="button"
+                      >
+                        Ban
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1301,11 +1801,6 @@ function UsersDirectoryPanel({ onToast }) {
   )
 }
 
-// The Help chat widget's escalation queue (see backend/controllers/
-// adminSupportController.js) - conversations the AI couldn't finish after
-// a few messages land here for a staff member to pick up. Closing one
-// clears it from this list and blanks it for the visitor next time they
-// open the chat bubble (a fresh conversation starts on their next message).
 function SupportInboxPanel({ onToast }) {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1313,16 +1808,22 @@ function SupportInboxPanel({ onToast }) {
   const [detail, setDetail] = useState(null)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [statusFilter, setStatusFilter] = useState('escalated')
+  const messagesEndRef = useRef(null)
 
   function loadList() {
     setLoading(true)
-    apiFetch('/api/admin/support/conversations?status=escalated')
+    apiFetch(`/api/admin/support/conversations?status=${statusFilter}`)
       .then((data) => setConversations(Array.isArray(data) ? data : []))
       .catch((error) => onToast?.({ type: 'error', message: error.message }))
       .finally(() => setLoading(false))
   }
 
-  useEffect(loadList, [])
+  useEffect(loadList, [statusFilter])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [detail?.messages])
 
   function openConversation(id) {
     setActiveId(id)
@@ -1369,6 +1870,27 @@ function SupportInboxPanel({ onToast }) {
         <span>Conversations the AI couldn't finish - the visitor's account is notified as soon as you reply.</span>
       </div>
 
+      <div className="admin-filter-bar" style={{ marginBottom: '14px' }}>
+        {[
+          { id: 'escalated', label: 'Escalated (Pending)' },
+          { id: 'closed', label: 'Closed' },
+          { id: 'all', label: 'All conversations' },
+        ].map((tab) => (
+          <button
+            className={statusFilter === tab.id ? 'active' : ''}
+            key={tab.id}
+            onClick={() => {
+              setStatusFilter(tab.id)
+              setActiveId(null)
+              setDetail(null)
+            }}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="support-inbox-layout">
         <section className="admin-table support-inbox-list">
           {loading ? (
@@ -1381,12 +1903,17 @@ function SupportInboxPanel({ onToast }) {
                 onClick={() => openConversation(conversation.id)}
                 type="button"
               >
-                <strong>{conversation.user?.name || 'Reader'}</strong>
-                <small>{conversation.lastMessage?.text}</small>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong>{conversation.user?.name || 'Reader'}</strong>
+                  <em className={`admin-status status-${conversation.status === 'closed' ? 'hidden' : 'published'}`} style={{ fontSize: '10px' }}>
+                    {conversation.status}
+                  </em>
+                </div>
+                <small>{conversation.lastMessage?.text || 'No messages'}</small>
               </button>
             ))
           ) : (
-            <p>No conversations waiting on a reply.</p>
+            <p>No conversations in this status.</p>
           )}
         </section>
 
@@ -1397,7 +1924,7 @@ function SupportInboxPanel({ onToast }) {
             <p>Loading...</p>
           ) : (
             <>
-              <div className="ai-chat-messages support-inbox-messages">
+              <div className="ai-chat-messages support-inbox-messages" style={{ maxHeight: '420px', overflowY: 'auto' }}>
                 {detail.messages.map((message, index) => (
                   <div
                     className={`ai-chat-bubble ${
@@ -1414,6 +1941,7 @@ function SupportInboxPanel({ onToast }) {
                     <p>{message.text}</p>
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
               <div className="admin-row-actions">
                 <input
@@ -1428,14 +1956,752 @@ function SupportInboxPanel({ onToast }) {
                 <button className="primary-button" disabled={!reply.trim() || sending} onClick={sendReply} type="button">
                   Send
                 </button>
-                <button className="danger-button" onClick={closeConversation} type="button">
-                  Close
-                </button>
+                {detail.status !== 'closed' && (
+                  <button className="danger-button" onClick={closeConversation} type="button">
+                    Close
+                  </button>
+                )}
               </div>
             </>
           )}
         </section>
       </div>
+    </section>
+  )
+}
+
+function DeleteCommentModal({ busy, item, onClose, onConfirm }) {
+  if (!item) return null
+
+  return (
+    <div
+      aria-labelledby="admin-delete-comment-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-ban-modal">
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Moderation</p>
+        <h2 id="admin-delete-comment-title">Delete this comment?</h2>
+        <p className="form-note">
+          Are you sure you want to delete this comment by{' '}
+          <strong>{item.author?.name || 'Reader'}</strong>? It will be removed permanently from readers' view.
+        </p>
+
+        <blockquote
+          style={{
+            margin: '12px 0 20px',
+            padding: '10px 14px',
+            borderLeft: '3px solid var(--app-line)',
+            background: 'var(--app-surface-soft)',
+            fontStyle: 'italic',
+            fontSize: '13.5px',
+            color: 'var(--app-muted)',
+            maxHeight: '120px',
+            overflowY: 'auto',
+          }}
+        >
+          "{item.text}"
+        </blockquote>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button className="danger-button" disabled={busy} onClick={onConfirm} type="button">
+            <i className="bi bi-trash" />
+            {busy ? 'Deleting...' : 'Delete comment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CommentsModerationPanel({ onToast }) {
+  const [comments, setComments] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [targetType, setTargetType] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [refreshTick, setRefreshTick] = useState(0)
+  const LIMIT = 15
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(LIMIT),
+    })
+    if (targetType && targetType !== 'all') {
+      params.set('targetType', targetType)
+    }
+    if (searchQuery.trim()) {
+      params.set('q', searchQuery.trim())
+    }
+
+    apiFetch(`/api/admin/comments?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) {
+          setComments(Array.isArray(data?.comments) ? data.comments : [])
+          setTotal(data?.total || 0)
+          setTotalPages(data?.totalPages || 1)
+        }
+      })
+      .catch((error) => {
+        if (!ignore) onToast?.({ type: 'error', message: error.message || 'Failed to load comments.' })
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [page, targetType, searchQuery, refreshTick, onToast])
+
+  function handleSearchSubmit(e) {
+    e.preventDefault()
+    setSearchQuery(searchInput.trim())
+    setPage(1)
+  }
+
+  function handleClearSearch() {
+    setSearchInput('')
+    setSearchQuery('')
+    setPage(1)
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    try {
+      await apiFetch(`/api/admin/comments/${deleteTarget.id}`, { method: 'DELETE' })
+      onToast?.({ type: 'success', message: 'Comment removed successfully.' })
+      setComments((curr) => curr.filter((c) => c.id !== deleteTarget.id))
+      setTotal((t) => Math.max(0, t - 1))
+      setDeleteTarget(null)
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message || 'Failed to delete comment.' })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  return (
+    <section className="admin-workspace">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">User Contributions</p>
+          <h2>Comments & reviews moderation</h2>
+        </div>
+        <span className="admin-count-pill">{total} total</span>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
+        <form onSubmit={handleSearchSubmit} className="admin-catalog-search" style={{ margin: 0, maxWidth: '380px' }}>
+          <i className="bi bi-search" />
+          <input
+            type="text"
+            placeholder="Search comment contents..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--app-muted)' }}
+              title="Clear search"
+            >
+              <i className="bi bi-x-circle-fill" />
+            </button>
+          )}
+        </form>
+
+        <div className="admin-filter-bar">
+          <button
+            type="button"
+            className={targetType === 'all' ? 'active' : ''}
+            onClick={() => {
+              setTargetType('all')
+              setPage(1)
+            }}
+          >
+            All sources
+          </button>
+          <button
+            type="button"
+            className={targetType === 'book' ? 'active' : ''}
+            onClick={() => {
+              setTargetType('book')
+              setPage(1)
+            }}
+          >
+            <i className="bi bi-book" style={{ marginRight: '4px' }} />
+            Books
+          </button>
+          <button
+            type="button"
+            className={targetType === 'content' ? 'active' : ''}
+            onClick={() => {
+              setTargetType('content')
+              setPage(1)
+            }}
+          >
+            <i className="bi bi-headphones" style={{ marginRight: '4px' }} />
+            Audio / Media
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <AdminLoadingScreen label="Loading comments for moderation..." />
+      ) : comments.length === 0 ? (
+        <div className="admin-submissions-empty" style={{ padding: '48px 16px' }}>
+          <i className="bi bi-chat-square-quote" style={{ fontSize: '36px', color: 'var(--app-muted)' }} />
+          <p style={{ margin: '10px 0 0' }}>
+            {searchQuery
+              ? `No comments match keyword "${searchQuery}".`
+              : 'No reader comments found in this category.'}
+          </p>
+        </div>
+      ) : (
+        <div className="admin-comments-list">
+          {comments.map((item) => {
+            const authorInitials = (item.author?.name || 'R').slice(0, 2).toUpperCase()
+            const formattedDate = item.createdAt
+              ? new Date(item.createdAt).toLocaleString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : 'Recent'
+
+            return (
+              <article key={item.id} className="admin-comment-card admin-row-fade-in">
+                <div className="admin-comment-header">
+                  <div className="admin-comment-author-info">
+                    <span className="admin-comment-author-avatar">{authorInitials}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <strong style={{ fontSize: '14px' }}>{item.author?.name || 'Reader'}</strong>
+                        <span className={`admin-status status-${item.author?.role || 'draft'}`} style={{ fontSize: '11px', padding: '1px 6px' }}>
+                          {item.author?.role || 'customer'}
+                        </span>
+                        {item.author?.isRestricted && (
+                          <span className="admin-status status-hidden" style={{ fontSize: '11px', padding: '1px 6px' }}>
+                            Restricted
+                          </span>
+                        )}
+                      </div>
+                      <small style={{ color: 'var(--app-muted)', fontSize: '12px' }}>
+                        {item.author?.maskedEmail || item.author?.email || 'Anonymous'} · {formattedDate}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {item.target && (
+                      <span
+                        className={`admin-status ${item.target.type === 'book' ? 'status-published' : 'status-draft'}`}
+                        style={{ fontSize: '12px', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={`${item.target.type === 'book' ? 'Book' : 'Media'}: ${item.target.title}`}
+                      >
+                        <i className={item.target.type === 'book' ? 'bi bi-book' : 'bi bi-headphones'} style={{ marginRight: '5px' }} />
+                        {item.target.title}
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      className="danger-button"
+                      style={{ padding: '4px 10px', fontSize: '12px', minHeight: '28px' }}
+                      onClick={() => setDeleteTarget(item)}
+                      title="Delete inappropriate comment"
+                    >
+                      <i className="bi bi-trash" style={{ marginRight: '4px' }} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+
+                <p className="admin-comment-text">{item.text}</p>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <AdminPagination
+          currentPage={page}
+          onPageChange={setPage}
+          totalPages={totalPages}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteCommentModal
+          busy={deleteBusy}
+          item={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
+    </section>
+  )
+}
+
+function DeleteBroadcastModal({ busy, item, onClose, onConfirm }) {
+  if (!item) return null
+
+  return (
+    <div
+      aria-labelledby="admin-delete-broadcast-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-ban-modal">
+        <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Remove Announcement</p>
+        <h2 id="admin-delete-broadcast-title">{item.title}</h2>
+        <p className="form-note">
+          Are you sure you want to remove this announcement? Readers will no longer see it in their notifications list.
+        </p>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button className="danger-button" disabled={busy} onClick={onConfirm} type="button">
+            <i className="bi bi-trash" />
+            {busy ? 'Removing...' : 'Remove'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SystemBroadcastPanel({ onToast }) {
+  const [broadcasts, setBroadcasts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [title, setTitle] = useState('')
+  const [message, setMessage] = useState('')
+  const [audience, setAudience] = useState('all-customers')
+  const [targetUserId, setTargetUserId] = useState('')
+  const [targetUserQuery, setTargetUserQuery] = useState('')
+  const [suggestedUsers, setSuggestedUsers] = useState([])
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [searchingUsers, setSearchingUsers] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [filterAudience, setFilterAudience] = useState('all')
+
+  const loadBroadcasts = useCallback(() => {
+    setLoading(true)
+    apiFetch('/api/notifications/broadcasts')
+      .then((data) => {
+        setBroadcasts(Array.isArray(data?.broadcasts) ? data.broadcasts : [])
+      })
+      .catch((error) => {
+        onToast?.({ type: 'error', message: error.message || 'Failed to load announcements.' })
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [onToast])
+
+  useEffect(() => {
+    loadBroadcasts()
+  }, [loadBroadcasts])
+
+  useEffect(() => {
+    if (audience !== 'single-customer' || !targetUserQuery.trim() || selectedUser) {
+      setSuggestedUsers([])
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setSearchingUsers(true)
+      apiFetch(`/api/users?role=customer&q=${encodeURIComponent(targetUserQuery.trim())}&limit=5`)
+        .then((data) => {
+          setSuggestedUsers(Array.isArray(data?.users) ? data.users : [])
+        })
+        .catch(() => {
+          setSuggestedUsers([])
+        })
+        .finally(() => {
+          setSearchingUsers(false)
+        })
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [audience, targetUserQuery, selectedUser])
+
+  function handleSelectUser(u) {
+    setSelectedUser(u)
+    setTargetUserId(u.id || u._id)
+    setTargetUserQuery(u.name || u.email)
+    setSuggestedUsers([])
+  }
+
+  function handleClearUser() {
+    setSelectedUser(null)
+    setTargetUserId('')
+    setTargetUserQuery('')
+  }
+
+  async function handleSend(e) {
+    e.preventDefault()
+    if (!title.trim() || !message.trim() || sending) return
+
+    if (audience === 'single-customer' && !targetUserId) {
+      onToast?.({ type: 'error', message: 'Please select a recipient customer.' })
+      return
+    }
+
+    setSending(true)
+    try {
+      await apiFetch('/api/notifications', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          message: message.trim(),
+          targetUserId: audience === 'single-customer' ? targetUserId : undefined,
+        },
+      })
+      onToast?.({ type: 'success', message: 'Broadcast announcement sent successfully!' })
+      setTitle('')
+      setMessage('')
+      setAudience('all-customers')
+      handleClearUser()
+      loadBroadcasts()
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message || 'Failed to send announcement.' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    try {
+      await apiFetch(`/api/notifications/${deleteTarget.id}`, { method: 'DELETE' })
+      onToast?.({ type: 'success', message: 'Announcement deleted.' })
+      setBroadcasts((curr) => curr.filter((item) => item.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (error) {
+      onToast?.({ type: 'error', message: error.message || 'Failed to delete announcement.' })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  const filteredBroadcasts = broadcasts.filter((item) => {
+    if (filterAudience === 'all') return true
+    return item.audience === filterAudience
+  })
+
+  return (
+    <section className="admin-workspace">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">User Contributions</p>
+          <h2>System broadcast & announcements</h2>
+        </div>
+        <span className="admin-count-pill">{broadcasts.length} sent</span>
+      </div>
+
+      <div className="admin-broadcast-layout">
+        {/* Compose Form Card */}
+        <div className="admin-broadcast-card">
+          <h3>
+            <i className="bi bi-megaphone" style={{ color: 'var(--app-accent)' }} />
+            Compose Announcement
+          </h3>
+          <p className="form-note" style={{ margin: 0 }}>
+            Send real-time alerts or updates to readers. They will see it immediately in their header notification bell.
+          </p>
+
+          <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="form-field">
+              <label htmlFor="broadcast-audience">Target Audience</label>
+              <div className="admin-broadcast-audience-selector" id="broadcast-audience">
+                <button
+                  type="button"
+                  className={`admin-broadcast-audience-btn ${audience === 'all-customers' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAudience('all-customers')
+                    handleClearUser()
+                  }}
+                >
+                  <i className="bi bi-people" />
+                  All customers
+                </button>
+                <button
+                  type="button"
+                  className={`admin-broadcast-audience-btn ${audience === 'single-customer' ? 'active' : ''}`}
+                  onClick={() => setAudience('single-customer')}
+                >
+                  <i className="bi bi-person" />
+                  Single customer
+                </button>
+              </div>
+            </div>
+
+            {audience === 'single-customer' && (
+              <div className="form-field admin-broadcast-user-select-wrap">
+                <label htmlFor="broadcast-target-user">Search Recipient</label>
+                {selectedUser ? (
+                  <div className="admin-broadcast-user-tag">
+                    <span>
+                      <i className="bi bi-person-check" style={{ marginRight: '6px' }} />
+                      <strong>{selectedUser.name || 'Customer'}</strong> ({selectedUser.email || selectedUser.id})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearUser}
+                      style={{
+                        background: 'transparent',
+                        border: 0,
+                        cursor: 'pointer',
+                        color: 'var(--app-muted)',
+                      }}
+                      title="Clear selection"
+                    >
+                      <i className="bi bi-x-circle-fill" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      id="broadcast-target-user"
+                      type="text"
+                      placeholder="Type customer name or email..."
+                      value={targetUserQuery}
+                      onChange={(e) => setTargetUserQuery(e.target.value)}
+                      autoComplete="off"
+                    />
+                    {searchingUsers && <small style={{ color: 'var(--app-muted)' }}>Searching customers...</small>}
+                    {suggestedUsers.length > 0 && (
+                      <div className="admin-broadcast-user-suggestions">
+                        {suggestedUsers.map((u) => (
+                          <div
+                            key={u.id || u._id}
+                            className="admin-broadcast-user-suggestion-item"
+                            onClick={() => handleSelectUser(u)}
+                          >
+                            <strong>{u.name || 'Unnamed'}</strong>
+                            <small style={{ color: 'var(--app-muted)' }}>{u.email}</small>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="form-field">
+              <label htmlFor="broadcast-title">Announcement Title</label>
+              <input
+                id="broadcast-title"
+                type="text"
+                placeholder="e.g. System Maintenance Tonight, New Library Release"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                maxLength={120}
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="broadcast-message">Message</label>
+              <textarea
+                id="broadcast-message"
+                rows={4}
+                placeholder="Write your announcement details here..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                required
+                maxLength={1000}
+                style={{ resize: 'vertical' }}
+              />
+              <small style={{ color: 'var(--app-muted)', textAlign: 'right' }}>
+                {message.length} / 1000 characters
+              </small>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={sending || !title.trim() || !message.trim()}
+                style={{ flex: 1 }}
+              >
+                <i className={sending ? 'bi bi-hourglass-split' : 'bi bi-send'} style={{ marginRight: '6px' }} />
+                {sending ? 'Sending...' : 'Send Announcement'}
+              </button>
+              {(title || message) && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    setTitle('')
+                    setMessage('')
+                    handleClearUser()
+                  }}
+                  disabled={sending}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* History List Card */}
+        <div className="admin-broadcast-card">
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <h3>
+              <i className="bi bi-clock-history" style={{ color: 'var(--app-muted)' }} />
+              Broadcast History
+            </h3>
+
+            <div className="admin-filter-bar" style={{ gap: '4px' }}>
+              <button
+                type="button"
+                className={filterAudience === 'all' ? 'active' : ''}
+                onClick={() => setFilterAudience('all')}
+                style={{ minHeight: '30px', fontSize: '12px', padding: '0 8px' }}
+              >
+                All ({broadcasts.length})
+              </button>
+              <button
+                type="button"
+                className={filterAudience === 'all-customers' ? 'active' : ''}
+                onClick={() => setFilterAudience('all-customers')}
+                style={{ minHeight: '30px', fontSize: '12px', padding: '0 8px' }}
+              >
+                All customers
+              </button>
+              <button
+                type="button"
+                className={filterAudience === 'single-customer' ? 'active' : ''}
+                onClick={() => setFilterAudience('single-customer')}
+                style={{ minHeight: '30px', fontSize: '12px', padding: '0 8px' }}
+              >
+                Single customer
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <AdminLoadingScreen label="Loading broadcast history..." />
+          ) : filteredBroadcasts.length === 0 ? (
+            <div className="admin-submissions-empty" style={{ padding: '36px 16px' }}>
+              <i className="bi bi-megaphone" style={{ fontSize: '32px', color: 'var(--app-muted)' }} />
+              <p style={{ margin: '8px 0 0' }}>
+                {filterAudience === 'all'
+                  ? 'No broadcast announcements sent yet.'
+                  : `No announcements match the "${filterAudience}" filter.`}
+              </p>
+            </div>
+          ) : (
+            <div className="admin-broadcast-history-list">
+              {filteredBroadcasts.map((item) => {
+                const isAll = item.audience === 'all-customers'
+                const formattedDate = item.createdAt
+                  ? new Date(item.createdAt).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'Recent'
+
+                return (
+                  <article key={item.id} className="admin-broadcast-item admin-row-fade-in">
+                    <div className="admin-broadcast-item-header">
+                      <div className="admin-broadcast-item-meta">
+                        <span className={`admin-status ${isAll ? 'status-published' : 'status-draft'}`}>
+                          <i className={isAll ? 'bi bi-people' : 'bi bi-person'} style={{ marginRight: '4px' }} />
+                          {isAll
+                            ? 'All customers'
+                            : `Direct: ${item.targetUser?.name || item.targetUser?.email || 'Customer'}`}
+                        </span>
+                        <span>
+                          <i className="bi bi-calendar3" style={{ marginRight: '4px' }} />
+                          {formattedDate}
+                        </span>
+                        {item.creator?.name && (
+                          <span>
+                            <i className="bi bi-person-badge" style={{ marginRight: '4px' }} />
+                            By {item.creator.name}
+                          </span>
+                        )}
+                        <span title="Readers who viewed this notification">
+                          <i className="bi bi-eye" style={{ marginRight: '4px' }} />
+                          {item.readCount || 0} read
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="danger-button"
+                        style={{ padding: '4px 8px', fontSize: '12px', minHeight: '26px' }}
+                        onClick={() => setDeleteTarget(item)}
+                        title="Remove announcement"
+                      >
+                        <i className="bi bi-trash" style={{ marginRight: '4px' }} />
+                        Remove
+                      </button>
+                    </div>
+
+                    <h4 className="admin-broadcast-item-title">{item.title}</h4>
+                    <p className="admin-broadcast-item-message">{item.message}</p>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {deleteTarget && (
+        <DeleteBroadcastModal
+          busy={deleteBusy}
+          item={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </section>
   )
 }
@@ -2141,75 +3407,6 @@ function BookFormModal({
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function ExistingAccountPicker({ onPick }) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [picked, setPicked] = useState('')
-
-  function handleChange(value) {
-    setQuery(value)
-    setPicked('')
-    setResults([])
-  }
-
-  async function search(event) {
-    event.preventDefault()
-    if (!query.trim()) return
-    setLoading(true)
-    setError('')
-    try {
-      const data = await apiFetch(`/api/users/search?q=${encodeURIComponent(query.trim())}`)
-      setResults(data.users || [])
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function pick(user) {
-    onPick(user)
-    setPicked(user.email)
-    setResults([])
-    setQuery('')
-  }
-
-  return (
-    <div className="admin-import-panel">
-      <p className="form-note">
-        Search for someone who already has an account instead of typing a brand new person.
-      </p>
-      <form className="admin-form compact-form" onSubmit={search}>
-        <label className="wide-field">
-          Search by name or email
-          <input onChange={(event) => handleChange(event.target.value)} placeholder="jane@bookworm.com" value={query} />
-        </label>
-        <button className="ghost-button" disabled={loading} type="submit">
-          <i className="bi bi-search" />
-          {loading ? 'Searching...' : 'Search'}
-        </button>
-      </form>
-      {error && <p className="settings-error">{error}</p>}
-      {picked && <p className="form-note">Filled the form below with {picked} - review and submit to grant access.</p>}
-      {results.length > 0 && (
-        <div className="book-thumb-list">
-          {results.map((user) => (
-            <button className="book-pick-row" key={user.email} onClick={() => pick(user)} type="button">
-              <div>
-                <strong>{user.name}</strong>
-                <span>{user.email} - currently {user.role}</span>
-              </div>
-              <i className="bi bi-arrow-return-left" />
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
