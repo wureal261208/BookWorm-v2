@@ -2,6 +2,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const Comment = require('../models/Comment');
 const Content = require('../models/Content');
+const Book = require('../models/Book');
 const maskEmail = require('../utils/maskEmail');
 
 // Same shape as commentController.js's serializeComment, with `contentId`
@@ -11,7 +12,7 @@ const maskEmail = require('../utils/maskEmail');
 function serializeComment(comment) {
   return {
     id: comment._id,
-    contentId: comment.content,
+    contentId: comment.content || comment.book,
     text: comment.text,
     createdAt: comment.createdAt,
     author: {
@@ -25,7 +26,9 @@ function serializeComment(comment) {
 // @route GET /api/content/:id/comments
 // @desc  Public - anyone can read a content item's comments.
 const listContentComments = asyncHandler(async (req, res) => {
-  const comments = await Comment.find({ content: req.params.id })
+  const comments = await Comment.find({
+    $or: [{ content: req.params.id }, { book: req.params.id }],
+  })
     .sort({ createdAt: -1 })
     .populate('user', 'name role email')
     .limit(200);
@@ -43,13 +46,23 @@ const createContentComment = asyncHandler(async (req, res) => {
     return fail(res, 400, 'Comment text is required.');
   }
 
-  const content = await Content.findOne({ _id: req.params.id, status: 'published' }).select('_id');
-  if (!content) {
+  let target = await Content.findOne({ _id: req.params.id, status: 'published' }).select('_id');
+  let isBook = false;
+  if (!target) {
+    const book = await Book.findOne({ _id: req.params.id, status: 'published' }).select('_id');
+    if (book) {
+      target = book;
+      isBook = true;
+    }
+  }
+
+  if (!target) {
     return fail(res, 404, 'Content not found.');
   }
 
   const comment = await Comment.create({
-    content: content._id,
+    content: isBook ? null : target._id,
+    book: isBook ? target._id : null,
     user: req.user._id,
     text,
   });

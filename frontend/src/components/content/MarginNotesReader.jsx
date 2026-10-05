@@ -70,12 +70,25 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
     if (!paragraphs.length) return []
     const CHUNK_SIZE = 35
     const totalChunks = Math.ceil(paragraphs.length / CHUNK_SIZE)
-    return Array.from({ length: totalChunks }, (_, i) => ({
-      order: i + 1,
-      title: `Section ${i + 1}`,
-      startParagraph: i * CHUNK_SIZE,
-      excerpt: paragraphs[i * CHUNK_SIZE]?.slice(0, 100) || '',
-    }))
+    const list = [
+      {
+        order: 0,
+        isIntro: true,
+        title: 'Phần mở đầu (Introduction)',
+        startParagraph: 0,
+        excerpt: paragraphs[0]?.slice(0, 100) || '',
+      },
+    ]
+    for (let i = 1; i < totalChunks; i++) {
+      list.push({
+        order: i,
+        isIntro: false,
+        title: `Chương ${i}`,
+        startParagraph: i * CHUNK_SIZE,
+        excerpt: paragraphs[i * CHUNK_SIZE]?.slice(0, 100) || '',
+      })
+    }
+    return list
   }, [chapters, paragraphs])
 
   const effectiveChapters = chapters.length > 0 ? chapters : virtualChapters
@@ -87,16 +100,16 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
   const endParagraph =
     nextChapter && typeof nextChapter.startParagraph === 'number' && nextChapter.startParagraph > startParagraph
       ? nextChapter.startParagraph
-      : Math.min(startParagraph + 35, paragraphs.length)
+      : Math.min(startParagraph + 60, paragraphs.length)
 
-  // Strictly bound paragraphs rendered in DOM to at most 45 to prevent browser freezes
+  // Bound paragraphs rendered in DOM safely (up to 200) to keep browsing ultra-fast
   const chapterParagraphs = useMemo(() => {
     if (!paragraphs.length) return []
     const slice = paragraphs.slice(startParagraph, endParagraph)
     if (slice.length > 0) {
-      return slice.slice(0, 45)
+      return slice.slice(0, 200)
     }
-    return paragraphs.slice(startParagraph, Math.min(startParagraph + 35, paragraphs.length))
+    return paragraphs.slice(startParagraph, Math.min(startParagraph + 60, paragraphs.length))
   }, [paragraphs, startParagraph, endParagraph])
 
   if (loading) {
@@ -115,7 +128,9 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
     )
   }
   if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
-  if (!paragraphs.length) return <p className="empty-state">No readable text available for this book.</p>
+  if (!paragraphs.length) return <p className="empty-state">Chưa có văn bản đọc cho cuốn sách này.</p>
+
+  const totalRegularChapters = effectiveChapters.filter((c) => !c.isIntro && c.order !== 0).length || effectiveChapters.length
 
   return (
     <div className="margin-notes-reader">
@@ -123,7 +138,11 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
       {currentChapter && effectiveChapters.length > 0 && (
         <header className="reader-chapter-header">
           <div className="reader-chapter-badge">
-            <span>Chapter {currentChapter.order || activeChapterIndex + 1} of {effectiveChapters.length}</span>
+            <span>
+              {currentChapter.isIntro || currentChapter.order === 0
+                ? 'Phần mở đầu (Introduction)'
+                : `Chương ${currentChapter.order || activeChapterIndex} / ${totalRegularChapters}`}
+            </span>
           </div>
           <h2 className="reader-chapter-title">{currentChapter.title}</h2>
           {currentChapter.excerpt && <p className="reader-chapter-excerpt">{currentChapter.excerpt}</p>}
@@ -141,10 +160,10 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
             <div className="margin-notes-paragraph" id={`paragraph-${globalIndex}`}>
               <p>{paragraph}</p>
               <button
-                aria-label={`Notes for paragraph ${globalIndex + 1}`}
+                aria-label={`Ghi chú cho đoạn ${globalIndex + 1}`}
                 className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}
                 onClick={() => toggleParagraph(globalIndex)}
-                title="Add or view margin notes"
+                title="Thêm hoặc xem ghi chú bên lề"
                 type="button"
               >
                 <i className="bi bi-chat-square-text" /> {notes.length > 0 ? notes.length : ''}
@@ -159,16 +178,16 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
                     </div>
                   ))}
                   {isGuest ? (
-                    <p className="empty-state">Log in to add a note.</p>
+                    <p className="empty-state">Đăng nhập để thêm ghi chú bên lề.</p>
                   ) : (
                     <div className="margin-notes-form">
                       <textarea
                         onChange={(event) => setNoteText(event.target.value)}
-                        placeholder="Add a note on this paragraph..."
+                        placeholder="Thêm ghi chú suy nghĩ cho đoạn văn này..."
                         value={noteText}
                       />
                       <button className="primary-button" disabled={!noteText.trim() || posting} onClick={() => submitNote(globalIndex)} type="button">
-                        {posting ? 'Posting...' : 'Add note'}
+                        {posting ? 'Đang lưu...' : 'Thêm ghi chú'}
                       </button>
                     </div>
                   )}
@@ -181,7 +200,7 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
 
       {/* Chapter Navigation Footer */}
       {effectiveChapters.length > 0 && (
-        <nav aria-label="Chapter navigation" className="reader-chapter-nav">
+        <nav aria-label="Điều hướng chương" className="reader-chapter-nav">
           <button
             className="ghost-button reader-nav-prev-btn"
             disabled={activeChapterIndex <= 0}
@@ -192,11 +211,13 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
             type="button"
           >
             <i className="bi bi-chevron-left" />
-            <span>{prevChapter ? prevChapter.title : 'Previous chapter'}</span>
+            <span>{prevChapter ? prevChapter.title : 'Chương trước'}</span>
           </button>
 
           <span className="reader-nav-indicator">
-            Chapter {activeChapterIndex + 1} / {effectiveChapters.length}
+            {currentChapter?.isIntro || currentChapter?.order === 0
+              ? 'Phần mở đầu'
+              : `Chương ${currentChapter?.order || activeChapterIndex} / ${totalRegularChapters}`}
           </span>
 
           {activeChapterIndex < effectiveChapters.length - 1 ? (
@@ -208,12 +229,12 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
               }}
               type="button"
             >
-              <span>{nextChapter ? nextChapter.title : 'Next chapter'}</span>
+              <span>{nextChapter ? nextChapter.title : 'Chương tiếp'}</span>
               <i className="bi bi-chevron-right" />
             </button>
           ) : (
             <div className="reader-nav-finished">
-              <i className="bi bi-check-circle-fill" /> Completed book
+              <i className="bi bi-check-circle-fill" /> Đã hoàn thành sách
             </div>
           )}
         </nav>

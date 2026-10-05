@@ -548,7 +548,7 @@ function ContentPlayerPage() {
       )}
 
       <section style={{ marginTop: '36px' }}>
-        <ContentComments contentId={item._id} />
+        <ContentComments contentId={item._id || item.id || id} />
       </section>
     </div>
   )
