@@ -1,5 +1,12 @@
 export function getCover(book) {
-  return book.formats?.['image/jpeg'] || book.cover || book.coverUrl || 'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
+  if (!book) return 'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
+  return (
+    book.cover_image ||
+    book.coverUrl ||
+    book.cover ||
+    book.formats?.['image/jpeg'] ||
+    'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
+  )
 }
 
 export function getAuthor(book) {

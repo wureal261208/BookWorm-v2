@@ -35,7 +35,39 @@ function ContentReaderPage() {
   const [chapters, setChapters] = useState([])
   const [chaptersLoading, setChaptersLoading] = useState(false)
   const [showToc, setShowToc] = useState(false)
-  const [activeChapterIndex, setActiveChapterIndex] = useState(0)
+  // Restore saved chapter progress on initial load
+  useEffect(() => {
+    if (!id) return
+    try {
+      const raw = localStorage.getItem(`bookworm_reading_progress_${id}`)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (typeof parsed?.chapterIndex === 'number' && parsed.chapterIndex > 0) {
+          setActiveChapterIndex(parsed.chapterIndex)
+          setSavedResume(parsed)
+          setShowResumeBanner(true)
+        }
+      }
+    } catch (_) {}
+  }, [id])
+
+  // Save chapter progress whenever chapter changes
+  useEffect(() => {
+    if (!id || !chapters.length) return
+    const ch = chapters[activeChapterIndex]
+    try {
+      const progressData = {
+        id,
+        chapterIndex: activeChapterIndex,
+        chapterOrder: ch?.order || activeChapterIndex + 1,
+        chapterTitle: ch?.title || `Chapter ${activeChapterIndex + 1}`,
+        totalChapters: chapters.length,
+        percent: Math.round(((activeChapterIndex + 1) / chapters.length) * 100),
+        updatedAt: Date.now(),
+      }
+      localStorage.setItem(`bookworm_reading_progress_${id}`, JSON.stringify(progressData))
+    } catch (_) {}
+  }, [id, activeChapterIndex, chapters])
 
   useEffect(() => {
     if (!id) return
@@ -60,12 +92,7 @@ function ContentReaderPage() {
     if (index < 0 || index >= chapters.length) return
     setActiveChapterIndex(index)
     setShowToc(false)
-    const target = chapters[index]
-    if (!target) return
-    const el = document.getElementById(`chapter-start-${target.order}`) || document.getElementById(`paragraph-${target.startParagraph}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   useEffect(() => {
@@ -159,7 +186,11 @@ function ContentReaderPage() {
   }, [id, item])
 
   function handleResume() {
-    if (savedResume && savedResume.scrollY) {
+    if (savedResume && typeof savedResume.chapterIndex === 'number') {
+      setActiveChapterIndex(savedResume.chapterIndex)
+      setShowResumeBanner(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else if (savedResume && savedResume.scrollY) {
       window.scrollTo({ top: savedResume.scrollY, behavior: 'smooth' })
       setShowResumeBanner(false)
     }
@@ -203,8 +234,11 @@ function ContentReaderPage() {
             </button>
 
             {/* Reading progress indicator */}
-            <span className="reader-progress-indicator" title={`${readPercent}% read`}>
-              <i className="bi bi-bookmark-check-fill" /> {readPercent}%
+            <span
+              className="reader-progress-indicator"
+              title={chapters.length > 0 ? `Chapter ${activeChapterIndex + 1} of ${chapters.length}` : `${readPercent}% read`}
+            >
+              <i className="bi bi-bookmark-check-fill" /> {chapters.length > 0 ? `Ch. ${activeChapterIndex + 1}/${chapters.length}` : `${readPercent}%`}
             </span>
 
             {/* Font size adjustments */}
@@ -275,11 +309,11 @@ function ContentReaderPage() {
           <div className="reader-resume-banner">
             <span>
               <i className="bi bi-clock-history" style={{ marginRight: '6px' }} />
-              You stopped at <strong>{savedResume.percent}%</strong> last time.
+              You were reading <strong>{savedResume.chapterTitle || `Chapter ${savedResume.chapterOrder || (savedResume.chapterIndex != null ? savedResume.chapterIndex + 1 : '')}`}</strong> last time.
             </span>
             <div className="resume-banner-actions">
               <button className="primary-button" onClick={handleResume} type="button">
-                Resume reading
+                Continue reading
               </button>
               <button
                 aria-label="Dismiss"
@@ -379,7 +413,12 @@ function ContentReaderPage() {
 
         {/* Reading Body Column */}
         <article className="content-reader-body-wrap" style={{ fontSize: `${fontSize}px` }}>
-          <MarginNotesReader chapters={chapters} contentId={item._id || id} />
+          <MarginNotesReader
+            activeChapterIndex={activeChapterIndex}
+            chapters={chapters}
+            contentId={item._id || id}
+            onChapterChange={setActiveChapterIndex}
+          />
         </article>
 
         {/* Bottom Reader Utilities */}

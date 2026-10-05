@@ -1,6 +1,8 @@
 import { useRef } from 'react'
 import { useNavigation } from '../../context/NavigationContext'
 
+import { getCover } from '../../utils/bookUtils'
+
 // "Hot ebooks"/"Hot audiobooks" on Home show Content documents synced from
 // Gutendex/LibriVox (see backend/utils/contentIngestion.js). Clicking one
 // opens BookWorm's BookDetailPage (mainPage -> detailPage -> read/audioPage)
@@ -10,8 +12,8 @@ function ExternalMediaCard({ item, onDetail }) {
   const isEbook = item.type === 'ebook'
   const title = item.title || 'Untitled'
   const author = item.author || 'Unknown author'
-  const cover = item.cover_image || ''
-  const meta = isEbook ? `${(item.downloadCount || 0).toLocaleString()} downloads on Gutenberg` : 'LibriVox audiobook'
+  const cover = getCover(item)
+  const meta = isEbook ? `${(item.downloadCount || 0).toLocaleString()} downloads` : 'LibriVox audio'
 
   function openDetail() {
     if (onDetail) {
@@ -21,30 +23,37 @@ function ExternalMediaCard({ item, onDetail }) {
     }
   }
 
+  function handleAction() {
+    navigateTo(isEbook ? 'read' : 'listen', { query: `id=${item._id || item.id}` })
+  }
+
   return (
     <article className="book-card">
       <button className="book-cover-button" onClick={openDetail} style={{ display: 'block', width: '100%', border: 0, padding: 0 }} type="button">
-        {cover ? (
-          <img alt={`${title} cover`} loading="lazy" src={cover} />
-        ) : (
-          <span className="book-cover-overlay" style={{ position: 'static', opacity: 1 }}>
-            <i className={`bi ${isEbook ? 'bi-book' : 'bi-headphones'}`} style={{ fontSize: '2rem' }} />
-          </span>
-        )}
+        <img alt={`${title} cover`} loading="lazy" src={cover} />
+        <span className="book-cover-overlay">
+          <strong>{title}</strong>
+          <em>{author}</em>
+          <p>{item.description || ''}</p>
+        </span>
       </button>
       <div className="book-card-body">
-        <span className="category">{item.source}</span>
-        <h2 onClick={openDetail} style={{ cursor: 'pointer' }}>{title}</h2>
-        <p>{author}</p>
+        <span className="category">{item.source || (isEbook ? 'Gutenberg' : 'LibriVox')}</span>
+        <h2 onClick={openDetail} style={{ cursor: 'pointer' }} title={title}>{title}</h2>
+        <p title={author}>{author}</p>
       </div>
       <div className="book-card-meta">
-        <i className={`bi ${isEbook ? 'bi-download' : 'bi-clock'}`} />
+        <i className={`bi ${isEbook ? 'bi-download' : 'bi-headphones'}`} />
         <small>{meta}</small>
       </div>
       <div className="card-actions">
-        <button className="primary-button" onClick={openDetail} type="button">
+        <button className="primary-button" onClick={handleAction} type="button">
+          <i className={`bi ${isEbook ? 'bi-journal-text' : 'bi-headphones'}`} />
+          {isEbook ? 'Read' : 'Listen'}
+        </button>
+        <button className="ghost-button" onClick={openDetail} type="button">
           <i className="bi bi-info-circle" />
-          Details
+          Detail
         </button>
       </div>
     </article>

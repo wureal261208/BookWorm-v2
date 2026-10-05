@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAudioPlayer } from '../../context/AudioPlayerContext'
 import { useNavigation } from '../../context/NavigationContext'
+import { getCover } from '../../utils/bookUtils'
 
 function formatTime(seconds) {
   if (!seconds || Number.isNaN(seconds) || seconds < 0) return '00:00'
@@ -116,17 +117,11 @@ export default function GlobalMiniPlayer() {
             title="Open audiobook details"
             type="button"
           >
-            {audioItem.cover_image ? (
-              <img
-                alt=""
-                className={`mini-player-cover ${isPlaying ? 'is-playing' : ''}`}
-                src={audioItem.cover_image}
-              />
-            ) : (
-              <div className="mini-player-cover-placeholder">
-                <i className="bi bi-headphones" />
-              </div>
-            )}
+            <img
+              alt=""
+              className={`mini-player-cover ${isPlaying ? 'is-playing' : ''}`}
+              src={getCover(audioItem)}
+            />
           </button>
           <div className="mini-player-meta">
             <button

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { useAudioPlayer } from '../../context/AudioPlayerContext'
+import { getCover } from '../../utils/bookUtils'
 import ContentComments from '../content/ContentComments'
 
 function formatTime(seconds) {
@@ -29,6 +30,11 @@ function ContentPlayerPage() {
   const [pageChapters, setPageChapters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [readAlongText, setReadAlongText] = useState([])
+  const [readAlongLoading, setReadAlongLoading] = useState(false)
+  const [showReadAlong, setShowReadAlong] = useState(true)
+  const [readAlongFontSize, setReadAlongFontSize] = useState(16)
 
   const {
     audioItem,
@@ -82,19 +88,55 @@ function ContentPlayerPage() {
         if (!ignore) setLoading(false)
       })
 
+    // Fetch synchronized story text for Read-Along
+    setReadAlongLoading(true)
+    publicApiFetch(`/api/content/${id}/text`)
+      .then((tData) => {
+        if (!ignore && Array.isArray(tData?.paragraphs)) {
+          setReadAlongText(tData.paragraphs)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setReadAlongLoading(false)
+      })
+
     return () => {
       ignore = true
     }
   }, [id])
+
+  const activeChapters = isCurrentTrackLoaded && pageChapters.length === 0 ? [] : pageChapters
+  const currentChapter = activeChapters[currentChapterIndex] || null
+
+  const currentChapterParagraphs = useMemo(() => {
+    if (!readAlongText.length) return []
+    const currentCh = activeChapters[currentChapterIndex]
+    const nextCh = activeChapters[currentChapterIndex + 1]
+
+    if (typeof currentCh?.startParagraph === 'number') {
+      const start = currentCh.startParagraph
+      const end = typeof nextCh?.startParagraph === 'number' && nextCh.startParagraph > start
+        ? nextCh.startParagraph
+        : readAlongText.length
+      return readAlongText.slice(start, end)
+    }
+
+    if (activeChapters.length > 1) {
+      const perCh = Math.max(15, Math.floor(readAlongText.length / activeChapters.length))
+      const start = currentChapterIndex * perCh
+      const end = currentChapterIndex === activeChapters.length - 1 ? readAlongText.length : (currentChapterIndex + 1) * perCh
+      return readAlongText.slice(start, end)
+    }
+
+    return readAlongText
+  }, [readAlongText, activeChapters, currentChapterIndex])
 
   if (!id) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> No audiobook selected.</p>
   if (loading && !item) return <p className="settings-copy">Loading audiobook details...</p>
   if (error || !item) {
     return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Audiobook not found.'}</p>
   }
-
-  const activeChapters = isCurrentTrackLoaded && pageChapters.length === 0 ? [] : pageChapters
-  const currentChapter = activeChapters[currentChapterIndex] || null
 
   return (
     <div className="content-player-page">
@@ -106,13 +148,7 @@ function ContentPlayerPage() {
 
       <section className="content-player-hero">
         <div className="player-hero-cover-wrap">
-          {item.cover_image ? (
-            <img alt={`${item.title} audiobook cover`} className="player-hero-cover" src={item.cover_image} />
-          ) : (
-            <div className="player-hero-cover-placeholder">
-              <i className="bi bi-headphones" />
-            </div>
-          )}
+          <img alt={`${item.title} audiobook cover`} className="player-hero-cover" src={getCover(item)} />
         </div>
 
         <div className="player-hero-info">
@@ -275,6 +311,89 @@ function ContentPlayerPage() {
             <p className="empty-state">No playable chapters found for this audiobook yet.</p>
           )}
         </div>
+      </section>
+
+      {/* Read-Along Subtitles / Synchronized Story Text */}
+      <section className="player-readalong-card">
+        <div className="player-readalong-header">
+          <div className="player-readalong-title-group">
+            <span className="mono-eyebrow">
+              <i className="bi bi-body-text" style={{ marginRight: '6px' }} />
+              Read-Along Companion
+            </span>
+            <h3>
+              {currentChapter ? currentChapter.title : 'Story Transcript'}
+            </h3>
+          </div>
+
+          <div className="player-readalong-controls">
+            <div className="reader-btn-group" role="group" aria-label="Subtitle font size">
+              <button
+                className="ghost-button"
+                disabled={readAlongFontSize <= 14}
+                onClick={() => setReadAlongFontSize((s) => Math.max(14, s - 2))}
+                title="Smaller text"
+                type="button"
+              >
+                A-
+              </button>
+              <button
+                className="ghost-button"
+                disabled={readAlongFontSize >= 22}
+                onClick={() => setReadAlongFontSize((s) => Math.min(22, s + 2))}
+                title="Larger text"
+                type="button"
+              >
+                A+
+              </button>
+            </div>
+
+            <button
+              className={`ghost-button player-readalong-toggle ${showReadAlong ? 'active' : ''}`}
+              onClick={() => setShowReadAlong((v) => !v)}
+              title="Toggle subtitles view"
+              type="button"
+            >
+              <i className={`bi ${showReadAlong ? 'bi-eye-fill' : 'bi-eye-slash-fill'}`} />
+              <span>{showReadAlong ? 'Hide text' : 'Show text'}</span>
+            </button>
+          </div>
+        </div>
+
+        {showReadAlong && (
+          <div className="player-readalong-body" style={{ fontSize: `${readAlongFontSize}px` }}>
+            {readAlongLoading ? (
+              <p className="inline-loading">
+                <span className="admin-spin-small" /> Loading synchronized story text...
+              </p>
+            ) : currentChapterParagraphs.length > 0 ? (
+              <div className="player-readalong-paragraphs">
+                {currentChapterParagraphs.map((para, pIdx) => (
+                  <p key={pIdx} className="player-readalong-para">
+                    {para}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <div className="player-readalong-empty">
+                <i className="bi bi-headphones" style={{ fontSize: '1.8rem', color: 'var(--app-muted)' }} />
+                <p>
+                  Full synchronized transcript is not available for this recording. Enjoy the narration by listening to <strong>{currentChapter?.title || item.title}</strong>!
+                </p>
+                {item.pairedContent && (
+                  <button
+                    className="primary-button"
+                    onClick={() => navigateTo('read', { query: `id=${item.pairedContent.id}` })}
+                    style={{ marginTop: '10px' }}
+                    type="button"
+                  >
+                    <i className="bi bi-journal-text" /> Read full Ebook text
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Chapter List */}

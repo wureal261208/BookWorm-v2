@@ -185,12 +185,25 @@ const getPublicContentDetail = asyncHandler(async (req, res) => {
 // @desc  Public - powers the in-app margin-notes reader (see ContentReaderPage.jsx).
 //        Supports both Content documents and Book documents from the catalog.
 const getContentText = asyncHandler(async (req, res) => {
-  let item = await Content.findOne({ _id: req.params.id, status: 'published', type: 'ebook' }).lean();
+  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
   let book = null;
 
   if (!item) {
     book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
     if (!book) return fail(res, 404, 'Content not found.');
+  }
+
+  // If item is an audiobook, resolve matching ebook text for Read-Along subtitles
+  if (item && item.type === 'audiobook') {
+    const baseTitle = item.title.replace(/\s*\(Audiobook\)\s*/i, '').trim();
+    const matchingEbook = await Content.findOne({
+      type: 'ebook',
+      status: 'published',
+      title: { $regex: new RegExp(escapeRegExp(baseTitle), 'i') },
+    }).lean();
+    if (matchingEbook) {
+      item = matchingEbook;
+    }
   }
 
   // If Book has explicit chapters with content

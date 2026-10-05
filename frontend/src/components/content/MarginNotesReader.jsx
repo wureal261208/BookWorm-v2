@@ -4,7 +4,7 @@ import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const EXCERPT_LENGTH = 80
 
-function MarginNotesReader({ contentId, chapters = [] }) {
+function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, onChapterChange }) {
   const isGuest = !auth.currentUser
   const [paragraphs, setParagraphs] = useState([])
   const [notesByParagraph, setNotesByParagraph] = useState({})
@@ -13,16 +13,6 @@ function MarginNotesReader({ contentId, chapters = [] }) {
   const [activeParagraph, setActiveParagraph] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [posting, setPosting] = useState(false)
-
-  const chapterByStartParagraph = useMemo(() => {
-    const map = new Map()
-    for (const ch of chapters) {
-      if (typeof ch.startParagraph === 'number') {
-        map.set(ch.startParagraph, ch)
-      }
-    }
-    return map
-  }, [chapters])
 
   useEffect(() => {
     let ignore = false
@@ -74,63 +64,127 @@ function MarginNotesReader({ contentId, chapters = [] }) {
     }
   }
 
-  if (loading) return <p>Loading book text...</p>
+  const currentChapter = chapters[activeChapterIndex] || chapters[0]
+  const nextChapter = chapters[activeChapterIndex + 1]
+  const prevChapter = activeChapterIndex > 0 ? chapters[activeChapterIndex - 1] : null
+
+  const startParagraph = typeof currentChapter?.startParagraph === 'number' ? currentChapter.startParagraph : 0
+  const endParagraph =
+    nextChapter && typeof nextChapter.startParagraph === 'number' && nextChapter.startParagraph > startParagraph
+      ? nextChapter.startParagraph
+      : paragraphs.length
+
+  const chapterParagraphs = useMemo(() => {
+    if (!chapters.length || !paragraphs.length) return paragraphs
+    const slice = paragraphs.slice(startParagraph, endParagraph)
+    return slice.length > 0 ? slice : paragraphs.slice(startParagraph, startParagraph + 40)
+  }, [paragraphs, chapters, startParagraph, endParagraph])
+
+  if (loading) return <p className="settings-copy"><span className="admin-spin-small" /> Loading book text...</p>
   if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
   if (!paragraphs.length) return <p className="empty-state">No readable text available for this book.</p>
 
   return (
     <div className="margin-notes-reader">
-      {paragraphs.map((paragraph, index) => {
-        const notes = notesByParagraph[index] || []
-        const isActive = activeParagraph === index
-        const chapterAtThisIndex = chapterByStartParagraph.get(index)
+      {/* Chapter Title & Header */}
+      {currentChapter && chapters.length > 0 && (
+        <header className="reader-chapter-header">
+          <div className="reader-chapter-badge">
+            <span>Chapter {currentChapter.order || activeChapterIndex + 1} of {chapters.length}</span>
+          </div>
+          <h2 className="reader-chapter-title">{currentChapter.title}</h2>
+          {currentChapter.excerpt && <p className="reader-chapter-excerpt">{currentChapter.excerpt}</p>}
+        </header>
+      )}
+
+      {/* Render Current Chapter Paragraphs */}
+      {chapterParagraphs.map((paragraph, localIndex) => {
+        const globalIndex = chapters.length > 0 ? startParagraph + localIndex : localIndex
+        const notes = notesByParagraph[globalIndex] || []
+        const isActive = activeParagraph === globalIndex
 
         return (
-          <div key={index} className="margin-notes-paragraph-wrapper">
-            {chapterAtThisIndex && (
-              <div className="reader-chapter-divider" id={`chapter-start-${chapterAtThisIndex.order}`}>
-                <span className="mono-eyebrow">Chapter {chapterAtThisIndex.order}</span>
-                <h2>{chapterAtThisIndex.title}</h2>
-              </div>
-            )}
-            <div className="margin-notes-paragraph" id={`paragraph-${index}`}>
+          <div key={globalIndex} className="margin-notes-paragraph-wrapper">
+            <div className="margin-notes-paragraph" id={`paragraph-${globalIndex}`}>
               <p>{paragraph}</p>
               <button
+                aria-label={`Notes for paragraph ${globalIndex + 1}`}
                 className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}
-                onClick={() => toggleParagraph(index)}
+                onClick={() => toggleParagraph(globalIndex)}
+                title="Add or view margin notes"
                 type="button"
               >
                 <i className="bi bi-chat-square-text" /> {notes.length > 0 ? notes.length : ''}
               </button>
 
-            {isActive && (
-              <div className="margin-notes-panel">
-                {notes.map((note) => (
-                  <div className="margin-notes-item" key={note.id}>
-                    <strong>{note.author}</strong>
-                    <p>{note.text}</p>
-                  </div>
-                ))}
-                {isGuest ? (
-                  <p className="empty-state">Log in to add a note.</p>
-                ) : (
-                  <div className="margin-notes-form">
-                    <textarea
-                      onChange={(event) => setNoteText(event.target.value)}
-                      placeholder="Add a note on this paragraph..."
-                      value={noteText}
-                    />
-                    <button className="primary-button" disabled={!noteText.trim() || posting} onClick={() => submitNote(index)} type="button">
-                      {posting ? 'Posting...' : 'Add note'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              {isActive && (
+                <div className="margin-notes-panel">
+                  {notes.map((note) => (
+                    <div className="margin-notes-item" key={note.id}>
+                      <strong>{note.author}</strong>
+                      <p>{note.text}</p>
+                    </div>
+                  ))}
+                  {isGuest ? (
+                    <p className="empty-state">Log in to add a note.</p>
+                  ) : (
+                    <div className="margin-notes-form">
+                      <textarea
+                        onChange={(event) => setNoteText(event.target.value)}
+                        placeholder="Add a note on this paragraph..."
+                        value={noteText}
+                      />
+                      <button className="primary-button" disabled={!noteText.trim() || posting} onClick={() => submitNote(globalIndex)} type="button">
+                        {posting ? 'Posting...' : 'Add note'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )
-    })}
+        )
+      })}
+
+      {/* Chapter Navigation Footer */}
+      {chapters.length > 0 && (
+        <nav aria-label="Chapter navigation" className="reader-chapter-nav">
+          <button
+            className="ghost-button reader-nav-prev-btn"
+            disabled={activeChapterIndex <= 0}
+            onClick={() => {
+              onChapterChange?.(activeChapterIndex - 1)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            type="button"
+          >
+            <i className="bi bi-chevron-left" />
+            <span>{prevChapter ? prevChapter.title : 'Previous chapter'}</span>
+          </button>
+
+          <span className="reader-nav-indicator">
+            Chapter {activeChapterIndex + 1} / {chapters.length}
+          </span>
+
+          {activeChapterIndex < chapters.length - 1 ? (
+            <button
+              className="primary-button reader-nav-next-btn"
+              onClick={() => {
+                onChapterChange?.(activeChapterIndex + 1)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              type="button"
+            >
+              <span>{nextChapter ? nextChapter.title : 'Next chapter'}</span>
+              <i className="bi bi-chevron-right" />
+            </button>
+          ) : (
+            <div className="reader-nav-finished">
+              <i className="bi bi-check-circle-fill" /> Completed book
+            </div>
+          )}
+        </nav>
+      )}
     </div>
   )
 }
