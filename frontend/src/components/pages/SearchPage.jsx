@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { GENRE_SLIDES } from '../../utils/genreSlides'
+import { getCover } from '../../utils/bookUtils'
 
 const RECENT_SEARCHES_KEY = 'bookworm_recent_searches'
 const MAX_RECENT_SEARCHES = 6
@@ -255,7 +256,18 @@ function BooksResults({ navigateTo, query }) {
       </div>
 
       {loading ? (
-        <p>Searching...</p>
+        <div className="search-results-list" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div className="search-result-row search-skeleton-row" key={i}>
+              <div className="skeleton-box search-skeleton-thumb" />
+              <div className="search-skeleton-info">
+                <div className="skeleton-box" style={{ width: '70px', height: '18px', borderRadius: '4px' }} />
+                <div className="skeleton-box" style={{ width: '65%', height: '18px' }} />
+                <div className="skeleton-box" style={{ width: '35%', height: '14px' }} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : error ? (
         <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
       ) : !items.length ? (
@@ -269,7 +281,7 @@ function BooksResults({ navigateTo, query }) {
               onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item._id}` })}
               type="button"
             >
-              <img alt="" src={item.cover_image || ''} />
+              <img alt="" loading="lazy" src={getCover(item)} />
               <span className="search-result-text">
                 <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
                 <strong>{item.title}</strong>
@@ -307,7 +319,21 @@ function AuthorsResults({ onSelectAuthor, query }) {
     }
   }, [query])
 
-  if (loading) return <p>Searching...</p>
+  if (loading) {
+    return (
+      <div className="search-results-list" aria-busy="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div className="search-result-row search-skeleton-row" key={i}>
+            <div className="skeleton-box search-skeleton-avatar" />
+            <div className="search-skeleton-info">
+              <div className="skeleton-box" style={{ width: '50%', height: '18px' }} />
+              <div className="skeleton-box" style={{ width: '25%', height: '14px' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
   if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
   // "None user found" per Wun's call - this tab searches book authors, not
   // real accounts, but keeps the plain "nothing here" wording simple.

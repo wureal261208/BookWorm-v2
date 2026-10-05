@@ -106,8 +106,8 @@ function BookDetailPage({
 
   if (loading) {
     return (
-      <section className="detail-page">
-        <p className="settings-copy"><span className="admin-spin-small" /> Loading book details...</p>
+      <section className="detail-page" aria-busy="true">
+        <DetailSkeleton />
       </section>
     )
   }
@@ -261,6 +261,36 @@ function getLatestComments(comments = []) {
 
     return secondTime - firstTime
   })
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="detail-layout detail-skeleton-layout">
+      <div className="detail-cover-wrapper">
+        <div className="skeleton-box detail-skeleton-cover" />
+      </div>
+      <div className="detail-copy">
+        <div className="skeleton-box detail-skeleton-eyebrow" />
+        <div className="skeleton-box detail-skeleton-title" />
+        <div className="skeleton-box detail-skeleton-author" />
+        <div className="detail-meta-grid">
+          <div className="skeleton-box detail-skeleton-metric" />
+          <div className="skeleton-box detail-skeleton-metric" />
+          <div className="skeleton-box detail-skeleton-metric" />
+          <div className="skeleton-box detail-skeleton-metric" />
+        </div>
+        <div className="detail-skeleton-lines">
+          <div className="skeleton-box" style={{ height: '16px', width: '92%' }} />
+          <div className="skeleton-box" style={{ height: '16px', width: '85%' }} />
+          <div className="skeleton-box" style={{ height: '16px', width: '60%' }} />
+        </div>
+        <div className="hero-actions" style={{ marginTop: '24px' }}>
+          <div className="skeleton-box" style={{ width: '130px', height: '42px', borderRadius: '8px' }} />
+          <div className="skeleton-box" style={{ width: '110px', height: '42px', borderRadius: '8px' }} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default BookDetailPage

@@ -131,11 +131,16 @@ export function AudioPlayerProvider({ children }) {
   }
 
   function safePlay(el, onFail) {
-    if (!el) return
+    if (!el || !el.src) {
+      onFail?.()
+      return
+    }
     try {
       const p = el.play()
       if (p && typeof p.catch === 'function') {
-        p.catch(() => onFail?.())
+        p.catch(() => {
+          onFail?.()
+        })
       }
     } catch (_) {
       onFail?.()

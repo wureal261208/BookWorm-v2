@@ -123,7 +123,11 @@ function AiSuggestionsPage() {
         </button>
         <div className="ai-suggestions-history">
           {loadingList ? (
-            <p className="inline-loading"><span className="admin-spin-small" /> Loading...</p>
+            <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div className="skeleton-box" key={i} style={{ height: '36px', borderRadius: '6px' }} />
+              ))}
+            </div>
           ) : conversations.length ? (
             conversations.map((conversation) => (
               <button
@@ -145,7 +149,10 @@ function AiSuggestionsPage() {
       <div className="ai-suggestions-main">
         <div className="ai-chat-messages">
           {loadingConversation ? (
-            <p className="inline-loading"><span className="admin-spin-small" /> Loading conversation...</p>
+            <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px 0' }}>
+              <div className="skeleton-box" style={{ width: '55%', height: '44px', borderRadius: '12px', marginLeft: 'auto' }} />
+              <div className="skeleton-box" style={{ width: '75%', height: '70px', borderRadius: '12px' }} />
+            </div>
           ) : messages.length === 0 ? (
             <>
               <p className="empty-state">Tell me what kind of story you're in the mood for, and I'll pull real picks from BookWorm's library.</p>

@@ -35,6 +35,7 @@ function ContentReaderPage() {
   const [chapters, setChapters] = useState([])
   const [chaptersLoading, setChaptersLoading] = useState(false)
   const [showToc, setShowToc] = useState(false)
+  const [activeChapterIndex, setActiveChapterIndex] = useState(0)
   // Restore saved chapter progress on initial load
   useEffect(() => {
     if (!id) return
@@ -197,7 +198,9 @@ function ContentReaderPage() {
   }
 
   if (!id) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> No book selected.</p>
-  if (loading && !item) return <p className="settings-copy">Loading book text...</p>
+  if (loading && !item) {
+    return <ContentReaderSkeleton />
+  }
   if (error || !item) {
     return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Book not found.'}</p>
   }
@@ -466,6 +469,35 @@ function ContentReaderPage() {
           <ContentComments contentId={item._id} />
         </section>
       </main>
+    </div>
+  )
+}
+
+function ContentReaderSkeleton() {
+  return (
+    <div className="content-reader-page reader-skeleton-page" aria-busy="true" aria-label="Loading reading content">
+      <header className="content-reader-sticky-bar">
+        <div className="reader-bar-inner">
+          <div className="skeleton-box" style={{ width: '80px', height: '34px', borderRadius: '8px' }} />
+          <div className="skeleton-box" style={{ width: '220px', height: '20px', borderRadius: '6px' }} />
+          <div className="skeleton-box" style={{ width: '100px', height: '34px', borderRadius: '8px' }} />
+        </div>
+      </header>
+      <div className="content-reader-container">
+        <div className="content-reader-body-wrap">
+          <div className="skeleton-box" style={{ width: '140px', height: '22px', borderRadius: '999px', marginBottom: '14px' }} />
+          <div className="skeleton-box" style={{ maxWidth: '420px', height: '34px', marginBottom: '32px' }} />
+          <div className="reader-skeleton-paragraphs">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="reader-skeleton-para">
+                <div className="skeleton-box" style={{ height: '18px', width: '98%', marginBottom: '8px' }} />
+                <div className="skeleton-box" style={{ height: '18px', width: '94%', marginBottom: '8px' }} />
+                <div className="skeleton-box" style={{ height: '18px', width: i % 2 === 0 ? '75%' : '88%' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -177,7 +177,14 @@ function CommunityPage() {
       </div>
 
       {loadingMine ? (
-        <p>Loading...</p>
+        <div className="community-submissions-list" aria-busy="true">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div className="table-row community-submission-row" key={i}>
+              <div className="skeleton-box" style={{ width: '45%', height: '18px' }} />
+              <div className="skeleton-box" style={{ width: '70px', height: '18px' }} />
+            </div>
+          ))}
+        </div>
       ) : mine.length ? (
         <div className="community-submissions-list">
           {mine.map((item) => (

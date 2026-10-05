@@ -23,9 +23,10 @@ function DetailHero({
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summaryError, setSummaryError] = useState('')
 
-  const numericId = typeof book.id === 'number'
-    ? book.id
-    : (book.id ? String(book.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) : 42)
+  const bId = book.id || book._id || '42'
+  const numericId = typeof bId === 'number'
+    ? bId
+    : String(bId).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const ratingScore = (4.6 + ((numericId % 4) * 0.1)).toFixed(1)
   const reviewCount = Math.max(18, ((numericId * 13) % 240) + 38)
   const isSaved = favorites.includes(book.id || book._id)
@@ -96,7 +97,7 @@ function DetailHero({
           <span className="detail-rating-count">({reviewCount} reviews)</span>
           <span className="detail-meta-dot">•</span>
           <span className="detail-reads-count">
-            <i className="bi bi-eye" /> {totalReads.toLocaleString()} reads
+            <i className="bi bi-eye" /> {(totalReads || 0).toLocaleString()} reads
           </span>
         </div>
 

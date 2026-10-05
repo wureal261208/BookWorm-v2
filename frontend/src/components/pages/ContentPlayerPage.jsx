@@ -76,9 +76,9 @@ function ContentPlayerPage() {
           apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: itemData.categories } }).catch(() => {})
         }
 
-        // Auto load into persistent player if not already playing this item
+        // Prepare track in persistent player without forcing unauthorized autoplay
         if (!isCurrentTrackLoaded && chList.length > 0) {
-          loadAudiobook(itemData, chList, 0, 0, true)
+          loadAudiobook(itemData, chList, 0, 0, false)
         }
       })
       .catch((err) => {
@@ -107,12 +107,21 @@ function ContentPlayerPage() {
   }, [id])
 
   const activeChapters = isCurrentTrackLoaded && pageChapters.length === 0 ? [] : pageChapters
-  const currentChapter = activeChapters[currentChapterIndex] || null
+  const currentChapter = activeChapters[currentChapterIndex] || activeChapters[0] || null
+
+  function handlePlayClick() {
+    if (!isCurrentTrackLoaded && activeChapters.length > 0) {
+      loadAudiobook(item, activeChapters, currentChapterIndex || 0, currentTime || 0, true)
+    } else {
+      togglePlay()
+    }
+  }
 
   const currentChapterParagraphs = useMemo(() => {
     if (!readAlongText.length) return []
-    const currentCh = activeChapters[currentChapterIndex]
-    const nextCh = activeChapters[currentChapterIndex + 1]
+    const safeIdx = Math.min(Math.max(0, currentChapterIndex), Math.max(0, activeChapters.length - 1))
+    const currentCh = activeChapters[safeIdx]
+    const nextCh = activeChapters[safeIdx + 1]
 
     if (typeof currentCh?.startParagraph === 'number') {
       const start = currentCh.startParagraph
@@ -124,8 +133,8 @@ function ContentPlayerPage() {
 
     if (activeChapters.length > 1) {
       const perCh = Math.max(15, Math.floor(readAlongText.length / activeChapters.length))
-      const start = currentChapterIndex * perCh
-      const end = currentChapterIndex === activeChapters.length - 1 ? readAlongText.length : (currentChapterIndex + 1) * perCh
+      const start = safeIdx * perCh
+      const end = safeIdx === activeChapters.length - 1 ? readAlongText.length : (safeIdx + 1) * perCh
       return readAlongText.slice(start, end)
     }
 
@@ -133,7 +142,9 @@ function ContentPlayerPage() {
   }, [readAlongText, activeChapters, currentChapterIndex])
 
   if (!id) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> No audiobook selected.</p>
-  if (loading && !item) return <p className="settings-copy">Loading audiobook details...</p>
+  if (loading && !item) {
+    return <ContentPlayerSkeleton />
+  }
   if (error || !item) {
     return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error || 'Audiobook not found.'}</p>
   }
@@ -273,7 +284,7 @@ function ContentPlayerPage() {
                 <button
                   aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
                   className="player-btn-play-round"
-                  onClick={togglePlay}
+                  onClick={handlePlayClick}
                   type="button"
                 >
                   {isBuffering ? (
@@ -444,6 +455,30 @@ function ContentPlayerPage() {
       <section style={{ marginTop: '36px' }}>
         <ContentComments contentId={item._id} />
       </section>
+    </div>
+  )
+}
+
+function ContentPlayerSkeleton() {
+  return (
+    <div className="content-player-page player-skeleton-page" aria-busy="true" aria-label="Loading audiobook player">
+      <div className="skeleton-box" style={{ width: '120px', height: '36px', marginBottom: '16px', borderRadius: '8px' }} />
+      <div className="content-player-hero">
+        <div className="player-hero-cover-wrap">
+          <div className="skeleton-box player-skeleton-cover" />
+        </div>
+        <div className="player-hero-info">
+          <div className="skeleton-box" style={{ width: '90px', height: '16px', marginBottom: '8px' }} />
+          <div className="skeleton-box" style={{ width: '80%', height: '36px', marginBottom: '10px' }} />
+          <div className="skeleton-box" style={{ width: '40%', height: '20px', marginBottom: '24px' }} />
+          <div className="skeleton-box" style={{ width: '100%', height: '8px', marginBottom: '20px', borderRadius: '4px' }} />
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="skeleton-box" style={{ width: '44px', height: '44px', borderRadius: '50%' }} />
+            <div className="skeleton-box" style={{ width: '56px', height: '56px', borderRadius: '50%' }} />
+            <div className="skeleton-box" style={{ width: '44px', height: '44px', borderRadius: '50%' }} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

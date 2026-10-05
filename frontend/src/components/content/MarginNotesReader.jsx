@@ -80,7 +80,21 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
     return slice.length > 0 ? slice : paragraphs.slice(startParagraph, startParagraph + 40)
   }, [paragraphs, chapters, startParagraph, endParagraph])
 
-  if (loading) return <p className="settings-copy"><span className="admin-spin-small" /> Loading book text...</p>
+  if (loading) {
+    return (
+      <div className="reader-skeleton-paragraphs" aria-busy="true" aria-label="Loading chapter text">
+        <div className="skeleton-box" style={{ width: '130px', height: '22px', borderRadius: '999px', marginBottom: '12px' }} />
+        <div className="skeleton-box" style={{ maxWidth: '360px', height: '30px', marginBottom: '24px' }} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="reader-skeleton-para" style={{ marginBottom: '20px' }}>
+            <div className="skeleton-box" style={{ height: '18px', width: '98%', marginBottom: '8px' }} />
+            <div className="skeleton-box" style={{ height: '18px', width: '93%', marginBottom: '8px' }} />
+            <div className="skeleton-box" style={{ height: '18px', width: i % 2 === 0 ? '70%' : '85%' }} />
+          </div>
+        ))}
+      </div>
+    )
+  }
   if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
   if (!paragraphs.length) return <p className="empty-state">No readable text available for this book.</p>
 

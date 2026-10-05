@@ -12648,6 +12648,129 @@ progress {
   }
 }
 
+/* ==========================================================================
+   Progressive Loading & Shimmer Skeletons (Smooth UI Reveal)
+   ========================================================================== */
+.skeleton-box {
+  background: linear-gradient(100deg, var(--app-surface-soft, #ecece8) 30%, var(--app-surface, #fbfbf9) 50%, var(--app-surface-soft, #ecece8) 70%);
+  background-size: 220% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.app-theme-dark .skeleton-box {
+  background: linear-gradient(100deg, #1c1c1f 30%, #29292e 50%, #1c1c1f 70%);
+  background-size: 220% 100%;
+}
+
+/* Detail Page Skeleton */
+.detail-skeleton-layout {
+  opacity: 0.95;
+  animation: fadeIn 0.25s ease both;
+}
+
+.detail-skeleton-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+}
+
+.detail-skeleton-eyebrow {
+  width: 80px;
+  height: 14px;
+  margin-bottom: 12px;
+}
+
+.detail-skeleton-title {
+  width: 70%;
+  height: 38px;
+  margin-bottom: 12px;
+}
+
+.detail-skeleton-author {
+  width: 45%;
+  height: 18px;
+  margin-bottom: 20px;
+}
+
+.detail-skeleton-metric {
+  height: 58px;
+  border-radius: 8px;
+}
+
+.detail-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 24px 0 16px;
+}
+
+/* Reader Page Skeleton */
+.reader-skeleton-page {
+  animation: fadeIn 0.25s ease both;
+}
+
+.reader-skeleton-paragraphs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 12px 0;
+}
+
+.reader-skeleton-para {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Player Page Skeleton */
+.player-skeleton-page {
+  animation: fadeIn 0.25s ease both;
+}
+
+.player-skeleton-cover {
+  width: clamp(160px, 24vw, 240px);
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+}
+
+/* Search Page Skeleton */
+.search-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.search-skeleton-thumb {
+  width: 44px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.search-skeleton-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.search-skeleton-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Progressive smooth reveal for loaded content */
+.content-fade-in {
+  animation: pageRise 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 
 
 
