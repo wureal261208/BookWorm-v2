@@ -179,7 +179,7 @@ function ContentReaderPage() {
       {/* Sticky Top Reading Control Bar */}
       <header className="content-reader-sticky-bar">
         <div className="reader-bar-inner">
-          <button className="ghost-button reader-bar-back" onClick={() => navigateTo('books')} type="button">
+          <button className="ghost-button reader-bar-back" onClick={() => navigateTo('detail', { query: `id=${id}` })} type="button">
             <i className="bi bi-arrow-left" /> Back
           </button>
 
@@ -379,11 +379,7 @@ function ContentReaderPage() {
 
         {/* Reading Body Column */}
         <article className="content-reader-body-wrap" style={{ fontSize: `${fontSize}px` }}>
-          {hasHtmlEdition ? (
-            <MarginNotesReader chapters={chapters} contentId={item._id} />
-          ) : (
-            <p className="empty-state">No readable HTML edition on file for this book - try one of the download links above.</p>
-          )}
+          <MarginNotesReader chapters={chapters} contentId={item._id || id} />
         </article>
 
         {/* Bottom Reader Utilities */}

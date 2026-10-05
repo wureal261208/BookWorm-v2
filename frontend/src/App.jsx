@@ -926,11 +926,17 @@ function App() {
   }
 
   function openBook(book, startPage = null) {
+    const bookId = book?._id || book?.id
     setSelectedBook(book)
-    setReaderStartPage(startPage)
-    navigateTo('reader')
-    if (account.role !== 'guest') {
-      setHistory((current) => [book.id, ...current.filter((id) => id !== book.id)].slice(0, 20))
+    const isAudio = book?.type === 'audiobook' || book?.category === 'Audiobook' || (book?.title && book?.title.toLowerCase().includes('(audiobook)'))
+    if (isAudio) {
+      navigateTo('listen', { query: `id=${bookId}` })
+    } else {
+      setReaderStartPage(startPage)
+      navigateTo('read', { query: `id=${bookId}` })
+    }
+    if (account.role !== 'guest' && bookId) {
+      setHistory((current) => [bookId, ...current.filter((id) => id !== bookId)].slice(0, 20))
       recordReadingDay()
     }
   }
@@ -1245,10 +1251,14 @@ function App() {
         onAuth={goAuth}
         onRead={(targetBook) => {
           const b = targetBook || selectedBook
-          if (b && (b.files?.some((f) => f.format === 'html' || f.format === 'txt') || b.type === 'ebook')) {
-            navigateTo('read', { query: `id=${b._id || b.id}` })
-          } else if (b) {
-            openBook(b)
+          if (b) {
+            setSelectedBook(b)
+            const isAudio = b.type === 'audiobook' || b.category === 'Audiobook' || (b.title && b.title.toLowerCase().includes('(audiobook)'))
+            if (isAudio) {
+              navigateTo('listen', { query: `id=${b._id || b.id}` })
+            } else {
+              navigateTo('read', { query: `id=${b._id || b.id}` })
+            }
           }
         }}
         onListen={(targetBook) => {

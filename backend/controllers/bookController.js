@@ -1,4 +1,5 @@
 const Book = require('../models/Book');
+const Content = require('../models/Content');
 const BookMetadata = require('../models/BookMetadata');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -311,9 +312,33 @@ const listMyBooks = asyncHandler(async (req, res) => {
 // @route GET /api/books/:id
 // @desc  Read a book. Anonymous visitors only get the first 3 chapters.
 const getBook = asyncHandler(async (req, res) => {
-  const book = await Book.findById(req.params.id);
+  let book = await Book.findById(req.params.id);
 
   if (!book) {
+    const content = await Content.findById(req.params.id).lean();
+    if (content) {
+      const isAudio = content.type === 'audiobook';
+      book = {
+        _id: content._id,
+        id: content._id,
+        title: content.title,
+        author: content.author,
+        description: content.description,
+        category: isAudio ? 'Audiobook' : (content.categories?.[0] || 'Classic'),
+        coverUrl: content.cover_image,
+        readerUrl: (content.files?.find((f) => f.format === 'html')?.url) || (content.files?.find((f) => f.format === 'txt')?.url) || '',
+        chapters: [],
+        status: content.status || 'published',
+        subjects: content.categories || [],
+        language: content.language || 'en',
+        views: content.downloadCount || content.views || 0,
+        download_count: content.downloadCount || 0,
+        type: content.type,
+        files: content.files || [],
+        source: content.source,
+      };
+      return success(res, 200, 'Book retrieved successfully.', { book, isLimited: false });
+    }
     return fail(res, 404, 'Book not found.');
   }
 
@@ -458,30 +483,75 @@ const deleteBook = asyncHandler(async (req, res) => {
 //        CORS headers there) and returns the cleaned book body only, not
 //        the page itself.
 const getBookReaderText = asyncHandler(async (req, res) => {
-  const book = await Book.findById(req.params.id).select('sourceEtextNumber chapters');
+  const book = await Book.findById(req.params.id).select('sourceEtextNumber chapters readerUrl title');
 
   if (!book) {
+    const content = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+    if (content) {
+      const htmlFile = (content.files || []).find((file) => file.format === 'html');
+      const txtFile = (content.files || []).find((file) => file.format === 'txt');
+      if (htmlFile || txtFile) {
+        try {
+          const text = await fetchGutenbergReaderText({
+            readOnlineUrl: htmlFile?.url,
+            plainTextUtf8Url: txtFile?.url,
+          });
+          return success(res, 200, 'Reader text retrieved successfully.', { text });
+        } catch (err) {
+          return fail(res, 502, `Could not fetch reader text: ${err.message}`);
+        }
+      }
+    }
     return fail(res, 404, 'Book not found.');
   }
 
-  if (book.chapters.some((chapter) => chapter.content)) {
-    return fail(res, 400, 'This book already has chapter content stored directly - reader text is not needed.');
+  if (book.chapters && book.chapters.some((chapter) => chapter.content)) {
+    const text = book.chapters
+      .map((ch, idx) => `## ${ch.title || `Chapter ${idx + 1}`}\n\n${ch.content || ''}`)
+      .join('\n\n');
+    return success(res, 200, 'Reader text retrieved successfully.', { text });
   }
 
-  if (!book.sourceEtextNumber) {
-    return fail(res, 404, 'This book is not linked to a Gutenberg catalog entry, so no reader text is available.');
+  let readOnlineUrl = book.readerUrl;
+  let plainTextUtf8Url = null;
+
+  if (book.sourceEtextNumber) {
+    if (!readOnlineUrl) {
+      readOnlineUrl = `https://www.gutenberg.org/ebooks/${book.sourceEtextNumber}.html.images`;
+    }
+    plainTextUtf8Url = `https://www.gutenberg.org/cache/epub/${book.sourceEtextNumber}/pg${book.sourceEtextNumber}.txt`;
   }
 
-  const metadata = await BookMetadata.findOne({ etextNumber: book.sourceEtextNumber });
+  if (!readOnlineUrl && !plainTextUtf8Url) {
+    const metadata = await BookMetadata.findOne({ etextNumber: book.sourceEtextNumber });
+    if (metadata && (metadata.readOnlineUrl || metadata.plainTextUtf8Url)) {
+      readOnlineUrl = metadata.readOnlineUrl;
+      plainTextUtf8Url = metadata.plainTextUtf8Url;
+    }
+  }
 
-  if (!metadata || (!metadata.readOnlineUrl && !metadata.plainTextUtf8Url)) {
+  if (!readOnlineUrl && !plainTextUtf8Url) {
+    const matchingContent = await Content.findOne({
+      title: { $regex: new RegExp(escapeRegExp(book.title), 'i') },
+      type: 'ebook',
+      status: 'published',
+    }).lean();
+    if (matchingContent) {
+      const htmlFile = (matchingContent.files || []).find((file) => file.format === 'html');
+      const txtFile = (matchingContent.files || []).find((file) => file.format === 'txt');
+      readOnlineUrl = htmlFile?.url;
+      plainTextUtf8Url = txtFile?.url;
+    }
+  }
+
+  if (!readOnlineUrl && !plainTextUtf8Url) {
     return fail(res, 404, 'No readable source is on file for this book in the Gutenberg catalog.');
   }
 
   try {
     const text = await fetchGutenbergReaderText({
-      readOnlineUrl: metadata.readOnlineUrl,
-      plainTextUtf8Url: metadata.plainTextUtf8Url,
+      readOnlineUrl,
+      plainTextUtf8Url,
     });
     return success(res, 200, 'Reader text retrieved successfully.', { text });
   } catch (error) {

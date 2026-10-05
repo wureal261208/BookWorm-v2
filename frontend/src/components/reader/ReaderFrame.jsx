@@ -45,14 +45,11 @@ function ReaderFrame({
             <p key={`${currentPage}-${index}`} dangerouslySetInnerHTML={{ __html: renderLiteMarkdown(paragraph) }} />
           ))}
         </div>
-      ) : readerUrl ? (
-        <div className="reader-source-fallback">
-          <p>{readerMessage || 'Readable text is not available for this generated page.'}</p>
-          <a href={readerUrl} rel="noreferrer" target="_blank">Open original reader</a>
-          <iframe loading="lazy" src={readerUrl} title={`Read ${activeBook.title}`} />
-        </div>
       ) : (
-        <p>This book does not include a readable text link.</p>
+        <div className="reader-text-state">
+          <i className="bi bi-book-half" style={{ fontSize: '2rem', color: 'var(--app-muted)' }} />
+          <p>{readerMessage || 'Chapter text is being prepared. Please check the chapters list or select another page.'}</p>
+        </div>
       )}
       {hasReachedGuestLimit && (
         <div className="reader-lock">

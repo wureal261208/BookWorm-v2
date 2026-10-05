@@ -99,8 +99,8 @@ function ContentPlayerPage() {
   return (
     <div className="content-player-page">
       <nav aria-label="Audiobook navigation" style={{ marginBottom: '16px' }}>
-        <button className="ghost-button" onClick={() => navigateTo('books')} type="button">
-          <i className="bi bi-arrow-left" style={{ marginRight: '6px' }} /> Back to catalog
+        <button className="ghost-button" onClick={() => navigateTo('detail', { query: `id=${id}` })} type="button">
+          <i className="bi bi-arrow-left" style={{ marginRight: '6px' }} /> Back to details
         </button>
       </nav>
 

@@ -1,10 +1,12 @@
 const Content = require('../models/Content');
+const Book = require('../models/Book');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
 const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
+const escapeRegExp = require('../utils/escapeRegExp');
 
 // Public reads - only ever published content, straight from Mongo. User
 // uploads sit as status:'draft' until an admin publishes or hides them
@@ -111,17 +113,62 @@ function normalizeTitle(title) {
 }
 
 const getPublicContentDetail = asyncHandler(async (req, res) => {
-  const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
-  if (!item) return fail(res, 404, 'Content not found.');
+  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
 
-  // "Also available as..." cross-link (see nhóm 1's simpler, actually
-  // buildable version of the ebook<->audiobook pairing idea - a real
-  // position-synced switch would need the two sources to share some
-  // notion of chapter/paragraph alignment, which neither Gutendex nor
-  // LibriVox provide, so this only ever offers "open the other version",
-  // not "resume at the same spot"). Only bothers checking when there's a
-  // reasonably specific title to match on - a one- or two-character title
-  // would false-positive against unrelated books.
+  if (!item) {
+    const book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    if (book) {
+      const isAudiobook = book.category === 'Audiobook' || book.title.toLowerCase().includes('(audiobook)');
+      const baseTitle = book.title.replace(/\s*\(Audiobook\)\s*/i, '').trim();
+      let pairedContent = null;
+      const normalizedTitle = normalizeTitle(baseTitle);
+
+      if (normalizedTitle.length > 3) {
+        const otherType = isAudiobook ? 'ebook' : 'audiobook';
+        const match = await Content.findOne({
+          status: 'published',
+          type: otherType,
+          title: { $regex: new RegExp(escapeRegExp(baseTitle), 'i') },
+        }).select('title type').lean();
+        if (match) pairedContent = { id: match._id, type: match.type };
+      }
+
+      let files = [];
+      if (isAudiobook) {
+        const audioContent = await Content.findOne({
+          status: 'published',
+          type: 'audiobook',
+          title: { $regex: new RegExp(escapeRegExp(baseTitle), 'i') },
+        }).lean();
+        if (audioContent?.files?.length) {
+          files = audioContent.files;
+        }
+      } else if (book.readerUrl) {
+        files = [{ format: 'html', url: book.readerUrl }];
+      }
+
+      item = {
+        _id: book._id,
+        id: book._id,
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        cover_image: book.coverUrl,
+        source: isAudiobook ? 'LibriVox' : (book.sourceEtextNumber ? 'Gutenberg' : 'BookWorm'),
+        type: isAudiobook ? 'audiobook' : 'ebook',
+        files,
+        categories: [book.category, ...(book.subjects || [])],
+        language: book.language || 'en',
+        pairedContent,
+        downloadCount: book.views || 0,
+        views: book.views || 0,
+        status: book.status,
+      };
+      return success(res, 200, 'Content detail fetched.', item);
+    }
+    return fail(res, 404, 'Content not found.');
+  }
+
   let pairedContent = null;
   const normalizedTitle = normalizeTitle(item.title);
   if (normalizedTitle.length > 3) {
@@ -135,59 +182,157 @@ const getPublicContentDetail = asyncHandler(async (req, res) => {
 });
 
 // @route GET /api/content/:id/text
-// @desc  Public - powers the in-app margin-notes reader (see
-//        ContentReaderPage.jsx). Fetched server-side (the browser can't
-//        reach gutenberg.org directly from this app due to CORS) and split
-//        into paragraphs, the same unit a margin note anchors to (see
-//        models/MarginNote.js). Not cached in Mongo - same reasoning as
-//        the audiobook chapter list below: parsing is cheap, and it keeps
-//        the Content documents themselves small.
+// @desc  Public - powers the in-app margin-notes reader (see ContentReaderPage.jsx).
+//        Supports both Content documents and Book documents from the catalog.
 const getContentText = asyncHandler(async (req, res) => {
-  const item = await Content.findOne({ _id: req.params.id, status: 'published', type: 'ebook' }).lean();
-  if (!item) return fail(res, 404, 'Content not found.');
+  let item = await Content.findOne({ _id: req.params.id, status: 'published', type: 'ebook' }).lean();
+  let book = null;
 
-  const htmlFile = (item.files || []).find((file) => file.format === 'html');
-  const txtFile = (item.files || []).find((file) => file.format === 'txt');
-  if (!htmlFile && !txtFile) return fail(res, 404, 'No readable text file recorded for this book.');
+  if (!item) {
+    book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    if (!book) return fail(res, 404, 'Content not found.');
+  }
+
+  // If Book has explicit chapters with content
+  if (book && Array.isArray(book.chapters) && book.chapters.some((ch) => ch.content)) {
+    const paragraphs = [];
+    book.chapters.forEach((ch, chIdx) => {
+      paragraphs.push(ch.title || `Chapter ${chIdx + 1}`);
+      if (ch.content) {
+        const parts = ch.content.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+        paragraphs.push(...parts);
+      }
+    });
+    return success(res, 200, 'Text fetched.', { paragraphs });
+  }
+
+  let readOnlineUrl = null;
+  let plainTextUtf8Url = null;
+
+  if (item) {
+    const htmlFile = (item.files || []).find((file) => file.format === 'html');
+    const txtFile = (item.files || []).find((file) => file.format === 'txt');
+    readOnlineUrl = htmlFile?.url;
+    plainTextUtf8Url = txtFile?.url;
+  } else if (book) {
+    readOnlineUrl = book.readerUrl;
+    if (book.sourceEtextNumber) {
+      if (!readOnlineUrl) {
+        readOnlineUrl = `https://www.gutenberg.org/ebooks/${book.sourceEtextNumber}.html.images`;
+      }
+      plainTextUtf8Url = `https://www.gutenberg.org/cache/epub/${book.sourceEtextNumber}/pg${book.sourceEtextNumber}.txt`;
+    }
+
+    if (!readOnlineUrl && !plainTextUtf8Url) {
+      const match = await Content.findOne({
+        title: { $regex: new RegExp(escapeRegExp(book.title), 'i') },
+        type: 'ebook',
+        status: 'published',
+      }).lean();
+      if (match) {
+        const htmlFile = (match.files || []).find((file) => file.format === 'html');
+        const txtFile = (match.files || []).find((file) => file.format === 'txt');
+        readOnlineUrl = htmlFile?.url;
+        plainTextUtf8Url = txtFile?.url;
+      }
+    }
+  }
+
+  if (!readOnlineUrl && !plainTextUtf8Url) {
+    return fail(res, 404, 'No readable text file recorded for this book.');
+  }
 
   try {
-    const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl: htmlFile?.url, plainTextUtf8Url: txtFile?.url });
+    const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl, plainTextUtf8Url });
     return success(res, 200, 'Text fetched.', { paragraphs });
   } catch (error) {
     return fail(res, 502, `Could not load book text: ${error.message}`);
   }
 });
 
-// Public, no auth - backs the in-app audiobook player's chapter list.
-// Fetches the item's own RSS file live (LibriVox doesn't hand back
-// per-chapter mp3 URLs anywhere in the cached Content document - the
-// ingestion pipeline only keeps the whole-book zip + the RSS URL itself,
-// see contentIngestion.js) and parses it on the spot rather than caching
-// the chapter list in Mongo, since RSS parsing is cheap and this keeps the
-// Content documents themselves small.
+// @route GET /api/content/:id/chapters
+// @desc  Public - backs in-app audiobook player chapter list & ebook chapter list.
+//        Supports both Content documents and Book documents from the catalog.
 const getAudiobookChapters = asyncHandler(async (req, res) => {
-  const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
-  if (!item) return fail(res, 404, 'Content not found.');
+  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  let book = null;
 
-  if (item.type === 'ebook') {
-    const htmlFile = (item.files || []).find((file) => file.format === 'html');
-    const txtFile = (item.files || []).find((file) => file.format === 'txt');
-    if (!htmlFile && !txtFile) return fail(res, 404, 'No readable text file recorded for this book.');
+  if (!item) {
+    book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    if (!book) return fail(res, 404, 'Content not found.');
+  }
+
+  const isAudiobook = item
+    ? item.type === 'audiobook'
+    : (book.category === 'Audiobook' || book.title.toLowerCase().includes('(audiobook)'));
+
+  if (!isAudiobook) {
+    let readOnlineUrl = null;
+    let plainTextUtf8Url = null;
+    const bookTitle = item?.title || book?.title || 'Untitled';
+
+    if (book && Array.isArray(book.chapters) && book.chapters.some((ch) => ch.content)) {
+      const chapters = book.chapters.map((ch, idx) => ({
+        order: ch.number || idx + 1,
+        title: ch.title || `Chapter ${idx + 1}`,
+        startParagraph: 0,
+        excerpt: (ch.content || '').slice(0, 100),
+      }));
+      return success(res, 200, 'Chapters fetched.', { chapters, totalParagraphs: chapters.length });
+    }
+
+    if (item) {
+      const htmlFile = (item.files || []).find((file) => file.format === 'html');
+      const txtFile = (item.files || []).find((file) => file.format === 'txt');
+      readOnlineUrl = htmlFile?.url;
+      plainTextUtf8Url = txtFile?.url;
+    } else if (book) {
+      readOnlineUrl = book.readerUrl;
+      if (book.sourceEtextNumber) {
+        if (!readOnlineUrl) readOnlineUrl = `https://www.gutenberg.org/ebooks/${book.sourceEtextNumber}.html.images`;
+        plainTextUtf8Url = `https://www.gutenberg.org/cache/epub/${book.sourceEtextNumber}/pg${book.sourceEtextNumber}.txt`;
+      }
+    }
+
+    if (!readOnlineUrl && !plainTextUtf8Url) {
+      return fail(res, 404, 'No readable text file recorded for this book.');
+    }
 
     try {
-      const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl: htmlFile?.url, plainTextUtf8Url: txtFile?.url });
-      const chapters = splitParagraphsIntoChapters(paragraphs, item.title);
+      const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl, plainTextUtf8Url });
+      const chapters = splitParagraphsIntoChapters(paragraphs, bookTitle);
       return success(res, 200, 'Chapters fetched.', { chapters, totalParagraphs: paragraphs.length });
     } catch (error) {
       return fail(res, 502, `Could not load chapters: ${error.message}`);
     }
   }
 
-  const rssFile = (item.files || []).find((file) => file.format === 'rss');
-  if (!rssFile) return fail(res, 404, 'No RSS feed recorded for this audiobook.');
+  let rssUrl = (item?.files || []).find((file) => file.format === 'rss')?.url;
+  if (!rssUrl && item?.externalId) {
+    rssUrl = `https://librivox.org/rss/${item.externalId}`;
+  }
+
+  if (!rssUrl && book) {
+    const baseTitle = book.title.replace(/\s*\(Audiobook\)\s*/i, '').trim();
+    const audioContent = await Content.findOne({
+      type: 'audiobook',
+      status: 'published',
+      title: { $regex: new RegExp(escapeRegExp(baseTitle), 'i') },
+    }).lean();
+    if (audioContent) {
+      rssUrl = (audioContent.files || []).find((file) => file.format === 'rss')?.url;
+      if (!rssUrl && audioContent.externalId) {
+        rssUrl = `https://librivox.org/rss/${audioContent.externalId}`;
+      }
+    }
+  }
+
+  if (!rssUrl) return fail(res, 404, 'No RSS feed recorded for this audiobook.');
 
   try {
-    const response = await fetch(rssFile.url);
+    const response = await fetch(rssUrl, {
+      headers: { 'User-Agent': 'BookWorm-v2/1.0' },
+    });
     if (!response.ok) throw new Error(`RSS request failed with status ${response.status}`);
     const xml = await response.text();
     const chapters = parseLibrivoxChapters(xml);

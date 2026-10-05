@@ -36,7 +36,7 @@ function BookCarousel({ books, favorites, onDetail, onFavorite, onRead, viewCoun
 
       <div className="book-carousel-track" ref={trackRef}>
         {books.map((book) => (
-          <div className="book-carousel-item" key={book.id}>
+          <div className="book-carousel-item" key={book._id || book.id}>
             <BookCard
               book={book}
               favorites={favorites}

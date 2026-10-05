@@ -37,9 +37,9 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progress
           <i className="bi bi-journal-text" />
           {hasProgress ? 'Continue' : 'Read'}
         </button>
-        <button className="ghost-button" onClick={() => onFavorite(book.id)} type="button">
-          <i className={`bi ${favorites.includes(book.id) ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
-          {favorites.includes(book.id) ? 'Saved' : 'Save'}
+        <button className="ghost-button" onClick={() => onFavorite(book._id || book.id)} type="button">
+          <i className={`bi ${favorites.includes(book._id || book.id) ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
+          {favorites.includes(book._id || book.id) ? 'Saved' : 'Save'}
         </button>
       </div>
     </article>

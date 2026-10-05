@@ -1680,44 +1680,41 @@ progress {
 
 .main-nav button {
   justify-content: center;
-  min-height: 40px;
-  padding: 0 13px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid transparent;
   border-radius: 8px;
   color: var(--app-muted);
-  transition:
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease,
-    box-shadow 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.18s ease;
 }
 
 .main-nav button:hover {
   background: var(--app-surface-soft);
   color: var(--app-text);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+  border-color: var(--app-line);
 }
 
 .main-nav button.active {
-  background: #111111;
-  color: #ffffff;
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-color: var(--app-line);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .main-nav button.active:hover {
-  background: #111111;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  background: var(--app-surface-soft);
+  border-color: var(--app-text);
 }
 
 .main-nav button:active {
-  transform: translateY(0);
-  box-shadow: none;
+  transform: translateY(1px);
 }
 
 /* Wraps .main-nav + the header search box together so both can be
-   collapsed into one mobile dropdown panel below 900px - see the
-   .mobile-nav-toggle / .main-nav-group.open rules further down. On
-   desktop this is just a plain flex item, not a visible container. */
+   collapsed into one mobile dropdown panel below 900px */
 .main-nav-group {
   display: contents;
 }
@@ -1726,12 +1723,18 @@ progress {
   display: none;
   width: 40px;
   height: 40px;
-  margin-left: auto;
   border: 1px solid var(--app-line);
   border-radius: 8px;
   background: var(--app-surface);
   color: var(--app-text);
-  font-size: 18px;
+  font-size: 19px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mobile-nav-toggle:hover {
+  background: var(--app-surface-soft);
+  border-color: var(--app-text);
 }
 
 .mobile-nav-backdrop {
@@ -1739,17 +1742,24 @@ progress {
 }
 
 @media (max-width: 900px) {
-  .mobile-nav-toggle {
-    display: grid;
-    place-items: center;
+  .site-header {
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px clamp(12px, 3vw, 22px);
   }
 
-  /* .header-account comes after this in the DOM and would otherwise still
-     claim its usual spot in the flex row once the toggle button appears -
-     margin-left: auto on the toggle already pushes it right, so drop
-     .header-account's own margin-left: auto to avoid the two fighting
-     over the same remaining space. */
   .header-account {
+    order: 2;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-nav-toggle {
+    order: 3;
+    display: grid;
+    place-items: center;
     margin-left: 0;
   }
 
@@ -1761,31 +1771,62 @@ progress {
     right: 0;
     z-index: 30;
     flex-direction: column;
-    gap: 14px;
-    max-height: calc(100svh - 100%);
+    gap: 12px;
+    max-height: calc(100svh - 60px);
     overflow-y: auto;
-    padding: 16px clamp(16px, 4vw, 42px) 24px;
+    padding: 16px clamp(14px, 4vw, 24px) 20px;
     border-bottom: 1px solid var(--app-line);
-    background: var(--app-bg);
-    box-shadow: 0 18px 30px rgba(0, 0, 0, 0.16);
+    border-top: 1px solid var(--app-line);
+    background: var(--app-surface);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
   }
 
   .main-nav-group.open {
     display: flex;
+    animation: navSlideDown 0.2s ease-out;
   }
 
   .main-nav {
     flex-direction: column;
     width: 100%;
+    gap: 6px;
   }
 
   .main-nav button {
+    display: flex;
+    align-items: center;
     justify-content: flex-start;
     width: 100%;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 15px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+  }
+
+  .main-nav button:hover {
+    background: var(--app-surface-soft);
+    border-color: var(--app-line);
+  }
+
+  .main-nav button.active {
+    background: var(--app-surface-soft);
+    border-color: var(--app-line);
+    color: var(--app-accent, #16a09a);
+    font-weight: 700;
   }
 
   .header-search {
     max-width: none;
+    width: 100%;
+  }
+
+  .header-search form {
+    height: 44px;
+  }
+
+  .header-search input {
+    font-size: 16px; /* R8: prevent mobile auto-zoom */
   }
 
   .header-search-dropdown {
@@ -1795,11 +1836,24 @@ progress {
   }
 
   .mobile-nav-backdrop {
+    display: block;
     position: fixed;
     inset: 0;
     z-index: 25;
     border: 0;
-    background: rgba(0, 0, 0, 0.32);
+    background: rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@keyframes navSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -1974,16 +2028,21 @@ progress {
   }
 
   .brand-button {
-    font-size: 18px;
+    font-size: 17px;
+    gap: 6px;
   }
 
   .brand-button img {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .guest-preview-button {
+    display: none;
   }
 
   .header-account {
-    gap: 5px;
+    gap: 6px;
   }
 
   .quick-theme-toggle button,
@@ -1995,16 +2054,22 @@ progress {
   .primary-button {
     min-height: 38px;
     padding: 0 10px;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 390px) {
-  .brand-button > span {
-    display: none;
+  .brand-button {
+    font-size: 15px;
   }
 
-  .guest-preview-button {
-    display: none;
+  .avatar-chip {
+    padding: 2px;
+  }
+
+  .avatar-chip span {
+    width: 30px;
+    height: 30px;
   }
 }
 
@@ -2437,20 +2502,33 @@ progress {
 }
 
 .book-card {
-  grid-template-rows: 260px 1fr auto;
-  border-radius: 8px;
-  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  overflow: hidden;
   animation: cardIn 0.32s ease both;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.book-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--app-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
 .book-cover-button {
   position: relative;
   width: 100%;
-  height: 100%;
+  aspect-ratio: 2 / 3;
   overflow: hidden;
   border: 0;
-  background: #dfdfdc;
+  background: var(--app-surface-soft, #dfdfdc);
   padding: 0;
+  display: block;
+  cursor: pointer;
 }
 
 .book-cover-button img {
@@ -2462,7 +2540,7 @@ progress {
 
 .book-cover-button:hover img,
 .book-cover-button:focus-visible img {
-  transform: scale(1.045);
+  transform: scale(1.04);
 }
 
 /* WAKA-style hover reveal: title/author/short blurb slide up over the
@@ -2551,19 +2629,21 @@ progress {
   text-align: left;
 }
 
-/* Horizontal "sach moi / sach hot" carousel rows on Home. */
+/* Horizontal "sach moi / sach hot" carousel rows on Home */
 .book-carousel {
   position: relative;
+  width: 100%;
 }
 
 .book-carousel-track {
   display: flex;
-  gap: 18px;
+  gap: 16px;
   overflow-x: auto;
   scroll-behavior: smooth;
-  scroll-snap-type: x proximity;
-  scroll-padding-left: 4px;
-  padding: 4px 4px 10px;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 4px;
+  padding: 6px 4px 14px;
+  -webkit-overflow-scrolling: touch;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -2573,52 +2653,78 @@ progress {
 }
 
 .book-carousel-item {
-  flex: 0 0 clamp(190px, 22vw, 240px);
+  flex: 0 0 clamp(190px, 20vw, 220px);
   scroll-snap-align: start;
+  min-width: 0;
 }
 
 .book-carousel-item .book-card {
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .book-carousel-arrow {
   position: absolute;
-  top: 40%;
+  top: 38%;
   z-index: 5;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--app-line, #d8d8d3);
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--app-line);
   border-radius: 50%;
-  background: var(--app-surface, #ffffff);
-  color: var(--app-text, #111111);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
   transform: translateY(-50%);
-  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  transition: all 0.18s ease;
 }
 
 .book-carousel-arrow:hover {
   border-color: var(--app-accent, #16a09a);
   color: var(--app-accent, #16a09a);
-  transform: translateY(-50%) scale(1.08);
+  background: var(--app-surface-soft);
+  transform: translateY(-50%) scale(1.06);
 }
 
 .book-carousel-arrow:active {
-  transform: translateY(-50%) scale(0.92);
+  transform: translateY(-50%) scale(0.94);
 }
 
 .book-carousel-arrow-prev {
-  left: -8px;
+  left: 6px;
 }
 
 .book-carousel-arrow-next {
-  right: -8px;
+  right: 6px;
+}
+
+@media (max-width: 900px) {
+  .book-carousel-item {
+    flex: 0 0 180px;
+  }
 }
 
 @media (max-width: 640px) {
   .book-carousel-arrow {
     display: none;
+  }
+
+  .book-carousel-track {
+    gap: 12px;
+    padding: 4px 2px 10px;
+  }
+
+  .book-carousel-item {
+    flex: 0 0 clamp(150px, 45vw, 170px);
+  }
+}
+
+@media (max-width: 380px) {
+  .book-carousel-item {
+    flex: 0 0 144px;
   }
 }
 
