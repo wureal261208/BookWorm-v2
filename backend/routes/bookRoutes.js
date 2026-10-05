@@ -14,6 +14,8 @@ const {
   listCategories,
   listHotBooks,
   listRecommendedBooks,
+  summarizeBook,
+  splitChapters,
 } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
 const { identify, protect, authorize } = require('../middleware/auth');
@@ -28,6 +30,12 @@ router.get('/hot', identify, listHotBooks);
 
 // Personalized recommendations based on reader preferences.
 router.get('/recommended', identify, listRecommendedBooks);
+
+// Universal AI book summary generator (used by DetailPage, Admin, WritePage)
+router.post('/ai-summary', identify, summarizeBook);
+
+// Smart chapter splitter (used by Reader and WritePage)
+router.post('/split-chapters', identify, splitChapters);
 
 // Staff-only full catalog (with chapters) for the Admin panel. Must come
 // before GET /:id, or Express would match "mine" as an :id and 400 on the

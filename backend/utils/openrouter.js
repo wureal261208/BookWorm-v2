@@ -237,4 +237,84 @@ async function generateHelpReply({ messages }) {
   return raw.trim();
 }
 
-module.exports = { generateBookMetadataSuggestion, generateChatSuggestion, generateHelpReply, OpenRouterConfigError };
+// Generates an engaging 2-4 sentence AI summary for any book.
+// Used by readers on the Detail Page, creators adding books in Admin,
+// and writers in WritePage.
+async function generateBookSummary({ title, author, category, textExcerpt, existingDescription, chapters }) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    if (existingDescription) return { summary: existingDescription };
+    if (textExcerpt) return { summary: textExcerpt.slice(0, 240) + '...' };
+    return { summary: `A compelling ${category || 'classic'} work by ${author || 'the author'}. Explore its rich narrative and timeless themes in this complete edition.` };
+  }
+
+  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+
+  let chapterContext = '';
+  if (Array.isArray(chapters) && chapters.length) {
+    chapterContext = chapters
+      .slice(0, 5)
+      .map((c, i) => `Chapter ${i + 1} (${c.title || 'Untitled'}): ${(c.content || '').slice(0, 200)}`)
+      .join('\n');
+  }
+
+  const contextLines = [
+    title ? `Title: ${title}` : null,
+    author ? `Author: ${author}` : null,
+    category ? `Category / Genre: ${category}` : null,
+    existingDescription ? `Existing notes/description: ${existingDescription}` : null,
+  ].filter(Boolean).join('\n');
+
+  const contentBlock = textExcerpt
+    ? `\n\nExcerpt from book:\n"""\n${textExcerpt.slice(0, 1500)}\n"""`
+    : chapterContext
+    ? `\n\nExcerpts from chapters:\n"""\n${chapterContext}\n"""`
+    : '';
+
+  const prompt = `You are a thoughtful literary curator and catalog editor.
+Write an engaging, clear 2-4 sentence summary of the following book for readers.
+Capture the central premise, atmosphere, and appeal without giving away spoilers or using cliché marketing buzzwords.
+
+${contextLines}${contentBlock}
+
+Respond with ONLY the summary text (no quotes, no intro, no markdown).`;
+
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: buildHeaders(apiKey),
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a professional book editor and cataloguer. Write concise, engaging book summaries.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.6,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`OpenRouter failed (${response.status}): ${errText.slice(0, 200)}`);
+    }
+
+    const payload = await response.json();
+    const raw = payload.choices?.[0]?.message?.content;
+    if (!raw) throw new Error('No summary returned');
+    return { summary: raw.trim().replace(/^["']|["']$/g, '') };
+  } catch (error) {
+    console.warn('[AI Summary fallback]', error.message);
+    if (existingDescription) return { summary: existingDescription };
+    if (textExcerpt) return { summary: textExcerpt.slice(0, 260) + '...' };
+    return { summary: `A notable work by ${author || 'the author'} in ${category || 'literature'}, offering deep insight and captivating storytelling.` };
+  }
+}
+
+module.exports = {
+  generateBookMetadataSuggestion,
+  generateChatSuggestion,
+  generateHelpReply,
+  generateBookSummary,
+  OpenRouterConfigError,
+};
+

@@ -6,7 +6,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { fetchGutenbergReaderText } = require('../utils/gutenbergReader');
 const { getBookAiContext } = require('../utils/bookAiContext');
-const { generateBookMetadataSuggestion, OpenRouterConfigError } = require('../utils/openrouter');
+const { generateBookMetadataSuggestion, generateBookSummary, OpenRouterConfigError } = require('../utils/openrouter');
+const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const maskEmail = require('../utils/maskEmail');
 const escapeRegExp = require('../utils/escapeRegExp');
 
@@ -595,6 +596,84 @@ const getBookStats = asyncHandler(async (req, res) => {
   });
 });
 
+// @route POST /api/books/ai-summary
+// @desc  Universal AI book summary generator for readers, creators, and authors
+const summarizeBook = asyncHandler(async (req, res) => {
+  const { id, title, author, category, textExcerpt, existingDescription, chapters } = req.body;
+
+  let resolvedTitle = (title || '').trim();
+  let resolvedAuthor = (author || '').trim();
+  let resolvedCategory = (category || '').trim();
+  let resolvedDescription = (existingDescription || '').trim();
+  let resolvedExcerpt = (textExcerpt || '').trim();
+  let resolvedChapters = Array.isArray(chapters) ? chapters : [];
+
+  if (id) {
+    const book = await Book.findById(id).select('title author category subjects description readerUrl chapters sourceEtextNumber');
+    if (book) {
+      resolvedTitle = resolvedTitle || book.title;
+      resolvedAuthor = resolvedAuthor || book.author;
+      resolvedCategory = resolvedCategory || book.category;
+      resolvedDescription = resolvedDescription || book.description;
+      resolvedChapters = resolvedChapters.length ? resolvedChapters : (book.chapters || []);
+      if (!resolvedExcerpt) {
+        try {
+          const { textExcerpt: bookExcerpt } = await getBookAiContext(book);
+          resolvedExcerpt = bookExcerpt || '';
+        } catch (_) {}
+      }
+    } else {
+      const Content = require('../models/Content');
+      const content = await Content.findById(id);
+      if (content) {
+        resolvedTitle = resolvedTitle || content.title;
+        resolvedAuthor = resolvedAuthor || content.author;
+        resolvedCategory = resolvedCategory || (content.categories?.[0] || content.type);
+        resolvedDescription = resolvedDescription || content.description;
+      }
+    }
+  }
+
+  if (!resolvedTitle && !resolvedExcerpt && !resolvedChapters.length) {
+    return fail(res, 400, 'Title, chapters, or text excerpt is required to generate a summary.');
+  }
+
+  try {
+    const result = await generateBookSummary({
+      title: resolvedTitle,
+      author: resolvedAuthor,
+      category: resolvedCategory,
+      textExcerpt: resolvedExcerpt,
+      existingDescription: resolvedDescription,
+      chapters: resolvedChapters,
+    });
+
+    return success(res, 200, 'Summary generated successfully.', result);
+  } catch (error) {
+    return fail(res, 502, `Failed to generate summary: ${error.message}`);
+  }
+});
+
+// @route POST /api/books/split-chapters
+// @desc  Splits unstructured text or Gutenberg paragraphs into structured chapters
+const splitChapters = asyncHandler(async (req, res) => {
+  const { text, paragraphs, title } = req.body;
+
+  let paragraphArray = [];
+  if (Array.isArray(paragraphs) && paragraphs.length) {
+    paragraphArray = paragraphs;
+  } else if (typeof text === 'string' && text.trim()) {
+    paragraphArray = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  }
+
+  if (!paragraphArray.length) {
+    return fail(res, 400, 'Text or paragraphs array is required.');
+  }
+
+  const chapters = splitParagraphsIntoChapters(paragraphArray, title || 'Book');
+  return success(res, 200, 'Chapters split successfully.', { chapters, totalChapters: chapters.length });
+});
+
 module.exports = {
   createBook,
   listBooks,
@@ -610,4 +689,6 @@ module.exports = {
   getBookStats,
   listHotBooks,
   listRecommendedBooks,
+  summarizeBook,
+  splitChapters,
 };

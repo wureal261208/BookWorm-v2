@@ -3307,14 +3307,29 @@ function BookFormModal({
   // it only fills the form fields here, nothing is saved until the admin
   // reviews it and clicks Update book like any other edit.
   async function generateWithAi() {
-    if (!adminBook.id) return
     setAiSuggestLoading(true)
     setAiSuggestError('')
     try {
-      const data = await apiFetch(`/api/books/${adminBook.id}/ai-fill`, { method: 'POST' })
-      if (data.description) updateAdminBook('description', data.description)
-      if (data.subjects?.length) updateAdminBook('subjects', data.subjects.join(', '))
-      if (data.readerUrl) updateAdminBook('readerUrl', data.readerUrl)
+      if (adminBook.id) {
+        const data = await apiFetch(`/api/books/${adminBook.id}/ai-fill`, { method: 'POST' })
+        if (data.description) updateAdminBook('description', data.description)
+        if (data.subjects?.length) updateAdminBook('subjects', data.subjects.join(', '))
+        if (data.readerUrl) updateAdminBook('readerUrl', data.readerUrl)
+      } else {
+        const data = await apiFetch('/api/books/ai-summary', {
+          method: 'POST',
+          body: {
+            title: adminBook.title,
+            author: adminBook.author,
+            category: adminBook.category,
+            existingDescription: adminBook.description,
+            chapters: adminBook.chapters,
+          },
+        })
+        if (data?.summary) {
+          updateAdminBook('description', data.summary)
+        }
+      }
     } catch (error) {
       setAiSuggestError(error.message)
     } finally {
@@ -3586,24 +3601,22 @@ function BookFormModal({
               <label className="wide-field">
                 <span className="admin-field-label-row">
                   Description
-                  {isEditing && (
-                    <button
-                      className="ghost-button admin-ai-fill-button"
-                      disabled={aiSuggestLoading}
-                      onClick={generateWithAi}
-                      type="button"
-                    >
-                      {aiSuggestLoading ? (
-                        <>
-                          <span className="admin-spin-small" /> Generating...
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-stars" /> Generate with AI
-                        </>
-                      )}
-                    </button>
-                  )}
+                  <button
+                    className="ghost-button admin-ai-fill-button"
+                    disabled={aiSuggestLoading}
+                    onClick={generateWithAi}
+                    type="button"
+                  >
+                    {aiSuggestLoading ? (
+                      <>
+                        <span className="admin-spin-small" /> Generating...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-stars" /> Generate with AI
+                      </>
+                    )}
+                  </button>
                 </span>
                 <textarea
                   value={adminBook.description}

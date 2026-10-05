@@ -9,16 +9,25 @@ function DetailChapters({ account, chapters, onChapterClick }) {
         {account?.role === 'guest' && <span>Guest preview includes chapters 1-3</span>}
       </div>
       <div className="detail-chapter-grid">
-        {chapters.map((chapter) => (
-          <button key={chapter.id} onClick={() => onChapterClick(chapter)} type="button">
-            <span>{chapter.number}</span>
-            <div>
-              <strong>{chapter.title}</strong>
-              <small>{chapter.pages} pages - starts page {chapter.startPage}</small>
-            </div>
-            <i className={`bi ${account?.role === 'guest' && chapter.number > 3 ? 'bi-lock-fill' : 'bi-arrow-right'}`} />
-          </button>
-        ))}
+        {chapters.map((chapter, index) => {
+          const num = chapter.number || chapter.order || index + 1
+          const metaText = chapter.duration
+            ? chapter.duration
+            : chapter.pages
+            ? `${chapter.pages} pages - starts page ${chapter.startPage || 1}`
+            : 'Complete chapter'
+
+          return (
+            <button key={chapter.id || chapter.order || index} onClick={() => onChapterClick(chapter)} type="button">
+              <span>{num}</span>
+              <div>
+                <strong>{chapter.title || `Chapter ${num}`}</strong>
+                <small>{metaText}</small>
+              </div>
+              <i className={`bi ${account?.role === 'guest' && num > 3 ? 'bi-lock-fill' : 'bi-arrow-right'}`} />
+            </button>
+          )
+        })}
       </div>
     </section>
   )

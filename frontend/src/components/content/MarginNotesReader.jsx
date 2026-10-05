@@ -1,22 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const EXCERPT_LENGTH = 80
 
-// Renders the book's own paragraphs directly in our DOM (fetched
-// server-side via backend/utils/gutenbergReader.js's paragraph extractor)
-// instead of an iframe pointing at Gutenberg's page - the iframe approach
-// this reader used before couldn't support margin notes at all, since a
-// cross-origin iframe's content is invisible to our own JS (same-origin
-// policy), so there was nothing to attach a note UI to.
-//
-// Notes anchor to a paragraph INDEX, not a character range - a real,
-// buildable slice of "Genius for classic books" rather than word-level
-// highlight anchoring, which would need a much more complex (and fragile)
-// range-anchoring scheme. See backend/models/MarginNote.js for the same
-// note on that trade-off.
-function MarginNotesReader({ contentId }) {
+function MarginNotesReader({ contentId, chapters = [] }) {
   const isGuest = !auth.currentUser
   const [paragraphs, setParagraphs] = useState([])
   const [notesByParagraph, setNotesByParagraph] = useState({})
@@ -25,6 +13,16 @@ function MarginNotesReader({ contentId }) {
   const [activeParagraph, setActiveParagraph] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [posting, setPosting] = useState(false)
+
+  const chapterByStartParagraph = useMemo(() => {
+    const map = new Map()
+    for (const ch of chapters) {
+      if (typeof ch.startParagraph === 'number') {
+        map.set(ch.startParagraph, ch)
+      }
+    }
+    return map
+  }, [chapters])
 
   useEffect(() => {
     let ignore = false
@@ -85,17 +83,25 @@ function MarginNotesReader({ contentId }) {
       {paragraphs.map((paragraph, index) => {
         const notes = notesByParagraph[index] || []
         const isActive = activeParagraph === index
+        const chapterAtThisIndex = chapterByStartParagraph.get(index)
 
         return (
-          <div className="margin-notes-paragraph" key={index}>
-            <p>{paragraph}</p>
-            <button
-              className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}
-              onClick={() => toggleParagraph(index)}
-              type="button"
-            >
-              <i className="bi bi-chat-square-text" /> {notes.length > 0 ? notes.length : ''}
-            </button>
+          <div key={index} className="margin-notes-paragraph-wrapper">
+            {chapterAtThisIndex && (
+              <div className="reader-chapter-divider" id={`chapter-start-${chapterAtThisIndex.order}`}>
+                <span className="mono-eyebrow">Chapter {chapterAtThisIndex.order}</span>
+                <h2>{chapterAtThisIndex.title}</h2>
+              </div>
+            )}
+            <div className="margin-notes-paragraph" id={`paragraph-${index}`}>
+              <p>{paragraph}</p>
+              <button
+                className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}
+                onClick={() => toggleParagraph(index)}
+                type="button"
+              >
+                <i className="bi bi-chat-square-text" /> {notes.length > 0 ? notes.length : ''}
+              </button>
 
             {isActive && (
               <div className="margin-notes-panel">
@@ -122,8 +128,9 @@ function MarginNotesReader({ contentId }) {
               </div>
             )}
           </div>
-        )
-      })}
+        </div>
+      )
+    })}
     </div>
   )
 }

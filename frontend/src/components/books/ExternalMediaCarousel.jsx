@@ -3,11 +3,9 @@ import { useNavigation } from '../../context/NavigationContext'
 
 // "Hot ebooks"/"Hot audiobooks" on Home show Content documents synced from
 // Gutendex/LibriVox (see backend/utils/contentIngestion.js). Clicking one
-// opens BookWorm's own in-app reader/player (ContentReaderPage.jsx /
-// ContentPlayerPage.jsx) rather than the external Gutenberg/LibriVox page -
-// reuses BookCard's own class names so it matches the rest of Home's rows
-// without a separate stylesheet.
-function ExternalMediaCard({ item }) {
+// opens BookWorm's BookDetailPage (mainPage -> detailPage -> read/audioPage)
+// per the design specification.
+function ExternalMediaCard({ item, onDetail }) {
   const { navigateTo } = useNavigation()
   const isEbook = item.type === 'ebook'
   const title = item.title || 'Untitled'
@@ -15,13 +13,17 @@ function ExternalMediaCard({ item }) {
   const cover = item.cover_image || ''
   const meta = isEbook ? `${(item.downloadCount || 0).toLocaleString()} downloads on Gutenberg` : 'LibriVox audiobook'
 
-  function open() {
-    navigateTo(isEbook ? 'read' : 'listen', { query: `id=${item._id}` })
+  function openDetail() {
+    if (onDetail) {
+      onDetail(item)
+    } else {
+      navigateTo('detail', { query: `id=${item._id || item.id}` })
+    }
   }
 
   return (
     <article className="book-card">
-      <button className="book-cover-button" onClick={open} style={{ display: 'block', width: '100%', border: 0, padding: 0 }} type="button">
+      <button className="book-cover-button" onClick={openDetail} style={{ display: 'block', width: '100%', border: 0, padding: 0 }} type="button">
         {cover ? (
           <img alt={`${title} cover`} loading="lazy" src={cover} />
         ) : (
@@ -32,7 +34,7 @@ function ExternalMediaCard({ item }) {
       </button>
       <div className="book-card-body">
         <span className="category">{item.source}</span>
-        <h2>{title}</h2>
+        <h2 onClick={openDetail} style={{ cursor: 'pointer' }}>{title}</h2>
         <p>{author}</p>
       </div>
       <div className="book-card-meta">
@@ -40,20 +42,18 @@ function ExternalMediaCard({ item }) {
         <small>{meta}</small>
       </div>
       <div className="card-actions">
-        <button className="primary-button" onClick={open} type="button">
-          <i className={`bi ${isEbook ? 'bi-book-half' : 'bi-play-circle'}`} />
-          {isEbook ? 'Read' : 'Listen'}
+        <button className="primary-button" onClick={openDetail} type="button">
+          <i className="bi bi-info-circle" />
+          Details
         </button>
       </div>
     </article>
   )
 }
 
-// Same scroll-by-page track/arrows behavior as BookCarousel, just rendering
-// ExternalMediaCard instead - kept separate rather than making BookCarousel
-// take a render prop, since BookCarousel's favorites/onFavorite plumbing
-// doesn't apply to items that aren't in BookWorm's own catalog.
-function ExternalMediaCarousel({ items }) {
+// Same scroll-by-page track/arrows behavior as BookCarousel, rendering
+// ExternalMediaCard with onDetail routing.
+function ExternalMediaCarousel({ items, onDetail }) {
   const trackRef = useRef(null)
 
   function scrollByPage(direction) {
@@ -81,8 +81,8 @@ function ExternalMediaCarousel({ items }) {
 
       <div className="book-carousel-track" ref={trackRef}>
         {items.map((item) => (
-          <div className="book-carousel-item" key={item._id}>
-            <ExternalMediaCard item={item} />
+          <div className="book-carousel-item" key={item._id || item.id}>
+            <ExternalMediaCard item={item} onDetail={onDetail} />
           </div>
         ))}
       </div>

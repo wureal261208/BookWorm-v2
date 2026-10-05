@@ -922,7 +922,7 @@ function App() {
 
   function openDetail(book) {
     setSelectedBook(book)
-    navigateTo('detail')
+    navigateTo('detail', { query: `id=${book._id || book.id}` })
   }
 
   function openBook(book, startPage = null) {
@@ -1243,8 +1243,18 @@ function App() {
         onFavorite={toggleFavorite}
         onHome={() => navigateTo('home')}
         onAuth={goAuth}
-        onRead={openBook}
-        onListen={(book) => navigateTo('listen', { query: `id=${book.pairedContent?.id || book.audiobookId || book._id || book.id}` })}
+        onRead={(targetBook) => {
+          const b = targetBook || selectedBook
+          if (b && (b.files?.some((f) => f.format === 'html' || f.format === 'txt') || b.type === 'ebook')) {
+            navigateTo('read', { query: `id=${b._id || b.id}` })
+          } else if (b) {
+            openBook(b)
+          }
+        }}
+        onListen={(targetBook) => {
+          const b = targetBook || selectedBook
+          navigateTo('listen', { query: `id=${b?.pairedContent?.id || b?.audiobookId || b?._id || b?.id}` })
+        }}
         viewCount={selectedBook ? viewCounts[selectedBook.id] || 0 : 0}
         viewCounts={viewCounts}
         viewerCount={selectedBook ? bookReaders[selectedBook.id]?.length || 0 : 0}

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bookUtils'
+import { publicApiFetch } from '../../utils/apiClient'
 
 function DetailHero({
   book,
@@ -17,13 +19,60 @@ function DetailHero({
   totalPages,
   totalReads,
 }) {
+  const [aiSummary, setAiSummary] = useState('')
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [summaryError, setSummaryError] = useState('')
+
   const numericId = typeof book.id === 'number'
     ? book.id
     : (book.id ? String(book.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) : 42)
   const ratingScore = (4.6 + ((numericId % 4) * 0.1)).toFixed(1)
   const reviewCount = Math.max(18, ((numericId * 13) % 240) + 38)
-  const isSaved = favorites.includes(book.id)
-  const hasAudioOption = Boolean(onListen && (book.pairedContent || book.hasAudio || book.type === 'audio' || book.audiobookId || book.formats?.audio))
+  const isSaved = favorites.includes(book.id || book._id)
+
+  const isAudiobook = book.type === 'audiobook' || book.source === 'LibriVox'
+  const hasTextOption = Boolean(
+    onRead && (
+      !isAudiobook ||
+      book.files?.some((f) => f.format === 'html' || f.format === 'txt') ||
+      book.readerUrl ||
+      book.chapters?.length > 0
+    )
+  )
+  const hasAudioOption = Boolean(
+    onListen && (
+      isAudiobook ||
+      book.pairedContent ||
+      book.hasAudio ||
+      book.type === 'audio' ||
+      book.audiobookId ||
+      book.formats?.audio
+    )
+  )
+
+  async function handleGenerateAiSummary() {
+    setIsSummarizing(true)
+    setSummaryError('')
+    try {
+      const data = await publicApiFetch('/api/books/ai-summary', {
+        method: 'POST',
+        body: {
+          id: book._id || book.id,
+          title: book.title,
+          author: getAuthor(book),
+          category: getCategory(book),
+          existingDescription: book.description,
+        },
+      })
+      if (data?.summary) {
+        setAiSummary(data.summary)
+      }
+    } catch (err) {
+      setSummaryError(err.message || 'Could not generate summary')
+    } finally {
+      setIsSummarizing(false)
+    }
+  }
 
   return (
     <div className="detail-layout">
@@ -76,7 +125,40 @@ function DetailHero({
           </article>
         </div>
 
-        <p className="book-description">{getDescription(book)}</p>
+        {/* Description & AI Summary Section */}
+        <div className="detail-description-section">
+          <div className="detail-desc-header">
+            <h3 className="detail-desc-title">About this book</h3>
+            <button
+              className="ghost-button detail-ai-summary-btn"
+              disabled={isSummarizing}
+              onClick={handleGenerateAiSummary}
+              title="Generate a 2-4 sentence AI summary for this title"
+              type="button"
+            >
+              <i className={`bi ${isSummarizing ? 'bi-arrow-repeat spin' : 'bi-stars'}`} />
+              <span>{isSummarizing ? 'Summarizing...' : aiSummary ? 'Regenerate Summary' : 'AI Summary'}</span>
+            </button>
+          </div>
+
+          {aiSummary ? (
+            <div className="detail-ai-summary-box">
+              <div className="detail-ai-summary-badge">
+                <i className="bi bi-stars" /> AI Summary
+              </div>
+              <p className="detail-ai-summary-text">{aiSummary}</p>
+            </div>
+          ) : (
+            <p className="book-description">
+              {getDescription(book) || 'No description recorded for this title. Tap "AI Summary" above to generate one.'}
+            </p>
+          )}
+          {summaryError && (
+            <p className="admin-validation-error" style={{ marginTop: '8px' }}>
+              <i className="bi bi-exclamation-circle" /> {summaryError}
+            </p>
+          )}
+        </div>
 
         {checkpoint && (
           <div className="checkpoint-chip">
@@ -86,12 +168,18 @@ function DetailHero({
         )}
 
         <div className="hero-actions">
-          <button className="primary-button" onClick={() => onRead(book)} type="button">
-            <i className="bi bi-journal-text" />
-            Read now
-          </button>
+          {hasTextOption && (
+            <button className="primary-button" onClick={() => onRead(book)} type="button">
+              <i className="bi bi-journal-text" />
+              Read now
+            </button>
+          )}
           {hasAudioOption && (
-            <button className="secondary-button detail-listen-btn" onClick={() => onListen(book)} type="button">
+            <button
+              className={`${isAudiobook ? 'primary-button' : 'secondary-button'} detail-listen-btn`}
+              onClick={() => onListen(book)}
+              type="button"
+            >
               <i className="bi bi-headphones" />
               Listen audio
             </button>

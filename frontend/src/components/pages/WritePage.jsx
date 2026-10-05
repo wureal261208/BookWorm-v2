@@ -53,9 +53,35 @@ function WritePage({ account, onDetail }) {
   const [loadingMine, setLoadingMine] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [draftPrompt, setDraftPrompt] = useState(null) // { form, savedAt } | null
+  const [aiSummarizing, setAiSummarizing] = useState(false)
+  const [aiSummaryError, setAiSummaryError] = useState('')
   const textareaRefs = useRef({})
   const autosaveTimer = useRef(null)
   const skipNextAutosave = useRef(true) // don't autosave the very first render
+
+  async function generateAiSummary() {
+    setAiSummarizing(true)
+    setAiSummaryError('')
+    try {
+      const data = await apiFetch('/api/books/ai-summary', {
+        method: 'POST',
+        body: {
+          title: form.title,
+          author: form.author,
+          category: form.category,
+          existingDescription: form.description,
+          chapters: form.chapters,
+        },
+      })
+      if (data?.summary) {
+        updateField('description', data.summary)
+      }
+    } catch (err) {
+      setAiSummaryError(err.message || 'Could not generate summary')
+    } finally {
+      setAiSummarizing(false)
+    }
+  }
 
   const draftKey = editingBook ? `bookworm_write_draft_edit_${editingBook.id}` : 'bookworm_write_draft_new'
 
@@ -350,8 +376,31 @@ function WritePage({ account, onDetail }) {
                   </label>
                 </div>
                 <label>
-                  Description
-                  <textarea onChange={(event) => updateField('description', event.target.value)} value={form.description} />
+                  <span className="admin-field-label-row">
+                    Description
+                    <button
+                      className="ghost-button admin-ai-fill-button"
+                      disabled={aiSummarizing}
+                      onClick={generateAiSummary}
+                      type="button"
+                    >
+                      {aiSummarizing ? (
+                        <>
+                          <span className="admin-spin-small" /> Summarizing...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-stars" /> Summarize with AI
+                        </>
+                      )}
+                    </button>
+                  </span>
+                  <textarea
+                    onChange={(event) => updateField('description', event.target.value)}
+                    placeholder="Write a synopsis or click 'Summarize with AI' after adding your chapters."
+                    value={form.description}
+                  />
+                  {aiSummaryError && <small className="admin-validation-error">{aiSummaryError}</small>}
                 </label>
                 <div className="community-form-row">
                   <label>

@@ -4,6 +4,7 @@ const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
 const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
+const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 
 // Public reads - only ever published content, straight from Mongo. User
 // uploads sit as status:'draft' until an admin publishes or hides them
@@ -167,7 +168,20 @@ const getContentText = asyncHandler(async (req, res) => {
 const getAudiobookChapters = asyncHandler(async (req, res) => {
   const item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
   if (!item) return fail(res, 404, 'Content not found.');
-  if (item.type !== 'audiobook') return fail(res, 400, 'Chapters are only available for audiobooks.');
+
+  if (item.type === 'ebook') {
+    const htmlFile = (item.files || []).find((file) => file.format === 'html');
+    const txtFile = (item.files || []).find((file) => file.format === 'txt');
+    if (!htmlFile && !txtFile) return fail(res, 404, 'No readable text file recorded for this book.');
+
+    try {
+      const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl: htmlFile?.url, plainTextUtf8Url: txtFile?.url });
+      const chapters = splitParagraphsIntoChapters(paragraphs, item.title);
+      return success(res, 200, 'Chapters fetched.', { chapters, totalParagraphs: paragraphs.length });
+    } catch (error) {
+      return fail(res, 502, `Could not load chapters: ${error.message}`);
+    }
+  }
 
   const rssFile = (item.files || []).find((file) => file.format === 'rss');
   if (!rssFile) return fail(res, 404, 'No RSS feed recorded for this audiobook.');

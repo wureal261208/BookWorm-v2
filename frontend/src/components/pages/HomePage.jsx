@@ -222,6 +222,7 @@ function HomePage({
           icon="bi-person-heart"
           items={forYou}
           loading={forYouLoading}
+          onDetail={onDetail}
           title="For You"
         />
       )}
@@ -277,6 +278,7 @@ function HomePage({
         icon="bi-journal-bookmark"
         items={hotEbooks}
         loading={hotEbooksLoading}
+        onDetail={onDetail}
         title="Hot ebooks"
       />
 
@@ -286,6 +288,7 @@ function HomePage({
         icon="bi-headphones"
         items={hotAudiobooks}
         loading={hotAudiobooksLoading}
+        onDetail={onDetail}
         title="Hot audiobooks"
       />
     </div>
@@ -340,7 +343,7 @@ function BookRowSection({
   )
 }
 
-function ExternalRowSection({ eyebrow, icon, items, loading, title }) {
+function ExternalRowSection({ eyebrow, icon, items, loading, onDetail, title }) {
   return (
     <section className="section-block">
       <div className="section-heading">
@@ -352,7 +355,7 @@ function ExternalRowSection({ eyebrow, icon, items, loading, title }) {
           </h2>
         </div>
       </div>
-      {loading ? <CarouselSkeleton /> : <ExternalMediaCarousel items={items} />}
+      {loading ? <CarouselSkeleton /> : <ExternalMediaCarousel items={items} onDetail={onDetail} />}
     </section>
   )
 }

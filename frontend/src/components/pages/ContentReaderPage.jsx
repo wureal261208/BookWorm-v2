@@ -31,6 +31,43 @@ function ContentReaderPage() {
   const [showResumeBanner, setShowResumeBanner] = useState(false)
   const scrollTimeoutRef = useRef(null)
 
+  // Smart Chapter splitting & Table of contents
+  const [chapters, setChapters] = useState([])
+  const [chaptersLoading, setChaptersLoading] = useState(false)
+  const [showToc, setShowToc] = useState(false)
+  const [activeChapterIndex, setActiveChapterIndex] = useState(0)
+
+  useEffect(() => {
+    if (!id) return
+    let ignore = false
+    setChaptersLoading(true)
+    publicApiFetch(`/api/content/${id}/chapters`)
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.chapters)) {
+          setChapters(data.chapters)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setChaptersLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [id])
+
+  function jumpToChapter(index) {
+    if (index < 0 || index >= chapters.length) return
+    setActiveChapterIndex(index)
+    setShowToc(false)
+    const target = chapters[index]
+    if (!target) return
+    const el = document.getElementById(`chapter-start-${target.order}`) || document.getElementById(`paragraph-${target.startParagraph}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   useEffect(() => {
     localStorage.setItem('bookworm_reader_theme', theme)
   }, [theme])
@@ -151,6 +188,20 @@ function ContentReaderPage() {
           </span>
 
           <div className="reader-bar-controls">
+            {/* Table of Contents trigger button */}
+            <button
+              aria-label="Table of contents"
+              className={`ghost-button reader-toc-trigger ${showToc ? 'active' : ''}`}
+              onClick={() => setShowToc((v) => !v)}
+              title="Table of contents"
+              type="button"
+            >
+              <i className="bi bi-list-ul" />
+              <span className="reader-toc-trigger-text">
+                {chapters.length ? `Chapters (${chapters.length})` : 'Chapters'}
+              </span>
+            </button>
+
             {/* Reading progress indicator */}
             <span className="reader-progress-indicator" title={`${readPercent}% read`}>
               <i className="bi bi-bookmark-check-fill" /> {readPercent}%
@@ -280,10 +331,56 @@ function ContentReaderPage() {
           )}
         </section>
 
+        {/* Table of Contents Drawer */}
+        {showToc && (
+          <div className="reader-toc-overlay" onClick={() => setShowToc(false)}>
+            <aside aria-label="Table of contents" className="reader-toc-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="reader-toc-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="bi bi-list-ul" style={{ color: 'var(--app-accent)', fontSize: '1.2rem' }} />
+                  <h3>Chapters</h3>
+                </div>
+                <button
+                  aria-label="Close table of contents"
+                  className="ghost-button"
+                  onClick={() => setShowToc(false)}
+                  type="button"
+                >
+                  <i className="bi bi-x-lg" />
+                </button>
+              </div>
+
+              <div className="reader-toc-list">
+                {chaptersLoading ? (
+                  <p className="settings-copy"><span className="admin-spin-small" /> Splitting into chapters...</p>
+                ) : chapters.length > 0 ? (
+                  chapters.map((ch, idx) => (
+                    <button
+                      className={`reader-toc-item ${activeChapterIndex === idx ? 'active' : ''}`}
+                      key={ch.order || idx}
+                      onClick={() => jumpToChapter(idx)}
+                      type="button"
+                    >
+                      <span className="toc-item-order">{ch.order || idx + 1}</span>
+                      <div className="toc-item-info">
+                        <strong>{ch.title || `Chapter ${idx + 1}`}</strong>
+                        {ch.excerpt && <small>{ch.excerpt}</small>}
+                      </div>
+                      <i className="bi bi-chevron-right" />
+                    </button>
+                  ))
+                ) : (
+                  <p className="empty-state">Single-stream book text. Enjoy reading!</p>
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
+
         {/* Reading Body Column */}
         <article className="content-reader-body-wrap" style={{ fontSize: `${fontSize}px` }}>
           {hasHtmlEdition ? (
-            <MarginNotesReader contentId={item._id} />
+            <MarginNotesReader chapters={chapters} contentId={item._id} />
           ) : (
             <p className="empty-state">No readable HTML edition on file for this book - try one of the download links above.</p>
           )}
@@ -291,6 +388,16 @@ function ContentReaderPage() {
 
         {/* Bottom Reader Utilities */}
         <div className="reader-bottom-nav">
+          {chapters.length > 1 && (
+            <button
+              className="ghost-button"
+              disabled={activeChapterIndex <= 0}
+              onClick={() => jumpToChapter(activeChapterIndex - 1)}
+              type="button"
+            >
+              <i className="bi bi-chevron-left" /> Prev chapter
+            </button>
+          )}
           <button
             className="ghost-button"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
@@ -298,6 +405,16 @@ function ContentReaderPage() {
           >
             <i className="bi bi-arrow-up" /> Back to top
           </button>
+          {chapters.length > 1 && (
+            <button
+              className="ghost-button"
+              disabled={activeChapterIndex >= chapters.length - 1}
+              onClick={() => jumpToChapter(activeChapterIndex + 1)}
+              type="button"
+            >
+              Next chapter <i className="bi bi-chevron-right" />
+            </button>
+          )}
           {item.pairedContent && (
             <button
               className="secondary-button"
