@@ -11534,10 +11534,20 @@ progress {
   color: #e2e2dc;
 }
 
-.content-reader-page.reader-theme-dark .reader-resume-banner {
-  background: #1c2c2a;
+.content-reader-page.reader-theme-dark .reader-resume-banner,
+.content-reader-page.reader-theme-dark .audio-resume-banner {
+  background: #192726;
   border-color: #16a09a;
+  border-left-color: #16a09a;
   color: #d2edea;
+}
+
+.content-reader-page.reader-theme-dark .resume-text-details strong {
+  color: #ffffff;
+}
+
+.content-reader-page.reader-theme-dark .resume-text-details p {
+  color: #a0b5b3;
 }
 
 .content-reader-page.reader-theme-dark .reader-paired-callout {
@@ -11758,30 +11768,127 @@ progress {
   margin-bottom: 1.4em;
 }
 
-/* Resume Alert Banner */
+/* ==========================================================================
+   RESUME BANNERS (READ & AUDIO - OPTION A DESIGN)
+   ========================================================================== */
+
+.audio-resume-banner,
 .reader-resume-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 18px;
-  background: color-mix(in srgb, var(--app-accent, #16a09a) 12%, var(--app-surface, #ffffff));
-  border: 1px solid var(--app-accent, #16a09a);
-  border-radius: 10px;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 10%, var(--app-surface, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--app-accent, #16a09a) 40%, var(--app-line, #d8d8d3));
+  border-left: 4px solid var(--app-accent, #16a09a);
+  border-radius: 12px;
   margin-bottom: 24px;
-  animation: fadeInPop 0.2s ease-out;
+  animation: fadeInPop 0.22s ease-out;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.audio-resume-banner-info,
+.reader-resume-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.resume-icon-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 18%, transparent);
+  color: var(--app-accent, #16a09a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+.resume-text-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.resume-text-details strong {
+  font-size: 14px;
+  color: var(--app-text, #111111);
+  font-weight: 700;
+}
+
+.resume-text-details p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--app-text-muted, #555550);
+  line-height: 1.4;
 }
 
 .resume-banner-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .resume-banner-actions button {
   font-size: 13px;
-  padding: 6px 14px;
+  padding: 8px 16px;
 }
+
+.resume-dismiss-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* Hairline reading progress indicator line on sticky bar */
+.reader-progress-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--app-line, #d8d8d3) 50%, transparent);
+  overflow: hidden;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.reader-progress-fill {
+  height: 100%;
+  background: var(--app-accent, #16a09a);
+  transition: width 0.15s ease-out;
+}
+
+@media (max-width: 640px) {
+  .audio-resume-banner,
+  .reader-resume-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 12px 14px;
+  }
+
+  .resume-banner-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .resume-banner-actions .primary-button {
+    flex: 1;
+  }
+}
+
 
 /* Bottom Reader Utilities */
 .reader-bottom-nav {

@@ -303,31 +303,46 @@ function ContentReaderPage() {
             </div>
           </div>
         </div>
+        <div className="reader-progress-line" aria-hidden="true">
+          <div className="reader-progress-fill" style={{ width: `${readPercent}%` }} />
+        </div>
       </header>
 
       {/* Reader Column Container */}
       <main className="content-reader-column">
         {/* Resume Banner */}
         {showResumeBanner && savedResume && (
-          <div className="reader-resume-banner">
-            <span>
-              <i className="bi bi-clock-history" style={{ marginRight: '6px' }} />
-              You were reading <strong>{savedResume.chapterTitle || `Chapter ${savedResume.chapterOrder || (savedResume.chapterIndex != null ? savedResume.chapterIndex + 1 : '')}`}</strong> last time.
-            </span>
+          <aside aria-label="Tiếp tục đọc sách" className="reader-resume-banner">
+            <div className="reader-resume-banner-info">
+              <div className="resume-icon-badge">
+                <i className="bi bi-bookmark-check-fill" />
+              </div>
+              <div className="resume-text-details">
+                <strong>Tiếp tục đọc từ lần trước (Continue Reading)</strong>
+                <p>
+                  Bạn đang đọc dở{' '}
+                  <strong>
+                    {savedResume.chapterTitle ||
+                      `Chương ${savedResume.chapterOrder || (savedResume.chapterIndex != null ? savedResume.chapterIndex + 1 : '')}`}
+                  </strong>
+                  {savedResume.percent ? ` (${savedResume.percent}% tiến độ)` : ''}
+                </p>
+              </div>
+            </div>
             <div className="resume-banner-actions">
               <button className="primary-button" onClick={handleResume} type="button">
-                Continue reading
+                <i className="bi bi-book-half" /> Tiếp tục đọc
               </button>
               <button
-                aria-label="Dismiss"
-                className="ghost-button"
+                aria-label="Đóng thông báo"
+                className="ghost-button resume-dismiss-btn"
                 onClick={() => setShowResumeBanner(false)}
                 type="button"
               >
                 <i className="bi bi-x-lg" />
               </button>
             </div>
-          </div>
+          </aside>
         )}
 
         {/* Book Metadata Header */}
@@ -343,8 +358,8 @@ function ContentReaderPage() {
               <div className="reader-paired-callout-text">
                 <i className="bi bi-headphones" />
                 <div>
-                  <strong>Audiobook edition available</strong>
-                  <p>Listen with narration and synchronized audio chapters.</p>
+                  <strong>Có bản Sách nói (Audiobook)</strong>
+                  <p>Nghe diễn đọc trọn vẹn với giọng đọc chuẩn và các chương đồng bộ.</p>
                 </div>
               </div>
               <button
@@ -352,7 +367,7 @@ function ContentReaderPage() {
                 onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
                 type="button"
               >
-                <i className="bi bi-play-circle-fill" /> Listen now
+                <i className="bi bi-play-circle-fill" /> Nghe ngay &rarr;
               </button>
             </div>
           )}

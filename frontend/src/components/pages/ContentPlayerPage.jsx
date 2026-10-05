@@ -57,6 +57,36 @@ function ContentPlayerPage() {
     setSleepTimer,
   } = useAudioPlayer()
 
+  const [savedResume, setSavedResume] = useState(null)
+  const [showResumeBanner, setShowResumeBanner] = useState(false)
+
+  // Restore saved audio progress for Continue Listening banner
+  useEffect(() => {
+    if (!id) return
+    try {
+      const raw = localStorage.getItem(`bookworm_audio_progress_${id}`)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && (parsed.currentTime > 5 || parsed.chapterIndex > 0)) {
+          setSavedResume(parsed)
+          setShowResumeBanner(true)
+        }
+      }
+    } catch (_) {}
+  }, [id])
+
+  function handleResumeListening() {
+    if (!savedResume || !item) return
+    const chList = pageChapters.length > 0 ? pageChapters : activeChapters
+    const targetCh = typeof savedResume.chapterIndex === 'number' && chList[savedResume.chapterIndex]
+      ? savedResume.chapterIndex
+      : 0
+    const targetTime = typeof savedResume.currentTime === 'number' ? savedResume.currentTime : 0
+
+    loadAudiobook(item, chList, targetCh, targetTime, true)
+    setShowResumeBanner(false)
+  }
+
   const isCurrentTrackLoaded = audioItem && (audioItem._id === id || audioItem.id === id)
 
   useEffect(() => {
@@ -185,6 +215,42 @@ function ContentPlayerPage() {
           <i className="bi bi-arrow-left" style={{ marginRight: '6px' }} /> Back to details
         </button>
       </nav>
+
+      {/* Continue Listening / Resume Audio Banner */}
+      {showResumeBanner && savedResume && (
+        <aside aria-label="Tiếp tục nghe sách" className="audio-resume-banner">
+          <div className="audio-resume-banner-info">
+            <div className="resume-icon-badge">
+              <i className="bi bi-soundwave" />
+            </div>
+            <div className="resume-text-details">
+              <strong>Tiếp tục nghe từ lần trước (Continue Listening)</strong>
+              <p>
+                Bạn đang nghe dở{' '}
+                <strong>
+                  {pageChapters[savedResume.chapterIndex]?.title
+                    ? `Chương ${savedResume.chapterIndex + 1}: ${pageChapters[savedResume.chapterIndex].title}`
+                    : `Chương ${savedResume.chapterIndex + 1}`}
+                </strong>{' '}
+                tại <strong>{formatTime(savedResume.currentTime)}</strong>
+              </p>
+            </div>
+          </div>
+          <div className="resume-banner-actions">
+            <button className="primary-button" onClick={handleResumeListening} type="button">
+              <i className="bi bi-play-circle-fill" /> Tiếp tục nghe ({formatTime(savedResume.currentTime)})
+            </button>
+            <button
+              aria-label="Đóng thông báo"
+              className="ghost-button resume-dismiss-btn"
+              onClick={() => setShowResumeBanner(false)}
+              type="button"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+          </div>
+        </aside>
+      )}
 
       <section className="content-player-hero">
         <div className="player-hero-cover-wrap">
