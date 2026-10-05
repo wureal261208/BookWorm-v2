@@ -64,21 +64,40 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
     }
   }
 
-  const currentChapter = chapters[activeChapterIndex] || chapters[0]
-  const nextChapter = chapters[activeChapterIndex + 1]
-  const prevChapter = activeChapterIndex > 0 ? chapters[activeChapterIndex - 1] : null
+  // If chapters are not loaded or empty, split paragraphs into virtual reading sections so we never flood the DOM
+  const virtualChapters = useMemo(() => {
+    if (chapters && chapters.length > 0) return chapters
+    if (!paragraphs.length) return []
+    const CHUNK_SIZE = 35
+    const totalChunks = Math.ceil(paragraphs.length / CHUNK_SIZE)
+    return Array.from({ length: totalChunks }, (_, i) => ({
+      order: i + 1,
+      title: `Section ${i + 1}`,
+      startParagraph: i * CHUNK_SIZE,
+      excerpt: paragraphs[i * CHUNK_SIZE]?.slice(0, 100) || '',
+    }))
+  }, [chapters, paragraphs])
+
+  const effectiveChapters = chapters.length > 0 ? chapters : virtualChapters
+  const currentChapter = effectiveChapters[activeChapterIndex] || effectiveChapters[0]
+  const nextChapter = effectiveChapters[activeChapterIndex + 1]
+  const prevChapter = activeChapterIndex > 0 ? effectiveChapters[activeChapterIndex - 1] : null
 
   const startParagraph = typeof currentChapter?.startParagraph === 'number' ? currentChapter.startParagraph : 0
   const endParagraph =
     nextChapter && typeof nextChapter.startParagraph === 'number' && nextChapter.startParagraph > startParagraph
       ? nextChapter.startParagraph
-      : paragraphs.length
+      : Math.min(startParagraph + 35, paragraphs.length)
 
+  // Strictly bound paragraphs rendered in DOM to at most 45 to prevent browser freezes
   const chapterParagraphs = useMemo(() => {
-    if (!chapters.length || !paragraphs.length) return paragraphs
+    if (!paragraphs.length) return []
     const slice = paragraphs.slice(startParagraph, endParagraph)
-    return slice.length > 0 ? slice : paragraphs.slice(startParagraph, startParagraph + 40)
-  }, [paragraphs, chapters, startParagraph, endParagraph])
+    if (slice.length > 0) {
+      return slice.slice(0, 45)
+    }
+    return paragraphs.slice(startParagraph, Math.min(startParagraph + 35, paragraphs.length))
+  }, [paragraphs, startParagraph, endParagraph])
 
   if (loading) {
     return (
@@ -101,10 +120,10 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
   return (
     <div className="margin-notes-reader">
       {/* Chapter Title & Header */}
-      {currentChapter && chapters.length > 0 && (
+      {currentChapter && effectiveChapters.length > 0 && (
         <header className="reader-chapter-header">
           <div className="reader-chapter-badge">
-            <span>Chapter {currentChapter.order || activeChapterIndex + 1} of {chapters.length}</span>
+            <span>Chapter {currentChapter.order || activeChapterIndex + 1} of {effectiveChapters.length}</span>
           </div>
           <h2 className="reader-chapter-title">{currentChapter.title}</h2>
           {currentChapter.excerpt && <p className="reader-chapter-excerpt">{currentChapter.excerpt}</p>}
@@ -113,7 +132,7 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
 
       {/* Render Current Chapter Paragraphs */}
       {chapterParagraphs.map((paragraph, localIndex) => {
-        const globalIndex = chapters.length > 0 ? startParagraph + localIndex : localIndex
+        const globalIndex = startParagraph + localIndex
         const notes = notesByParagraph[globalIndex] || []
         const isActive = activeParagraph === globalIndex
 
@@ -161,7 +180,7 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
       })}
 
       {/* Chapter Navigation Footer */}
-      {chapters.length > 0 && (
+      {effectiveChapters.length > 0 && (
         <nav aria-label="Chapter navigation" className="reader-chapter-nav">
           <button
             className="ghost-button reader-nav-prev-btn"
@@ -177,10 +196,10 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
           </button>
 
           <span className="reader-nav-indicator">
-            Chapter {activeChapterIndex + 1} / {chapters.length}
+            Chapter {activeChapterIndex + 1} / {effectiveChapters.length}
           </span>
 
-          {activeChapterIndex < chapters.length - 1 ? (
+          {activeChapterIndex < effectiveChapters.length - 1 ? (
             <button
               className="primary-button reader-nav-next-btn"
               onClick={() => {

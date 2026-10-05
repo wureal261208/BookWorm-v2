@@ -9,7 +9,35 @@ const cheerio = require('cheerio');
 const START_MARKER = /\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[^*]*\*\*\*/i;
 const END_MARKER = /\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[^*]*\*\*\*/i;
 
-const FETCH_TIMEOUT_MS = 15000;
+const FETCH_TIMEOUT_MS = 7500;
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
+const MAX_CACHE_ENTRIES = 120;
+
+// In-memory cache & in-flight deduplication to prevent Gutenberg rate-limiting & eliminate reader lag
+const paragraphCache = new Map();
+const textCache = new Map();
+const inFlightParagraphs = new Map();
+const inFlightText = new Map();
+
+function setCache(map, key, value) {
+  if (!key || !value) return;
+  if (map.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = map.keys().next().value;
+    map.delete(oldestKey);
+  }
+  map.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+function getFromCache(map, key) {
+  if (!key) return null;
+  const entry = map.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    map.delete(key);
+    return null;
+  }
+  return entry.value;
+}
 
 async function fetchWithTimeout(url) {
   const controller = new AbortController();
@@ -18,7 +46,11 @@ async function fetchWithTimeout(url) {
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'BookWorm-v2/1.0 (+https://github.com)' },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 BookWorm-v2/1.0',
+        Accept: 'text/html,text/plain,*/*',
+      },
     });
     if (!response.ok) {
       throw new Error(`Gutenberg responded with status ${response.status}`);
@@ -81,23 +113,50 @@ function extractReadableTextFromPlainText(raw) {
 // Tries the HTML "read online" page first, falls back to the plain-text
 // mirror if that fails or comes back too short to be real book content.
 async function fetchGutenbergReaderText({ readOnlineUrl, plainTextUtf8Url }) {
-  if (readOnlineUrl) {
-    try {
-      const html = await fetchWithTimeout(readOnlineUrl);
-      const text = extractReadableTextFromHtml(html);
-      if (text.length > 200) return text;
-    } catch (error) {
-      // fall through to the plain-text mirror below
+  const cacheKey = readOnlineUrl || plainTextUtf8Url;
+  if (!cacheKey) {
+    throw new Error('No valid URL provided for Gutenberg text.');
+  }
+
+  const cached = getFromCache(textCache, cacheKey);
+  if (cached) return cached;
+
+  if (inFlightText.has(cacheKey)) {
+    return inFlightText.get(cacheKey);
+  }
+
+  const fetchPromise = (async () => {
+    if (readOnlineUrl) {
+      try {
+        const html = await fetchWithTimeout(readOnlineUrl);
+        const text = extractReadableTextFromHtml(html);
+        if (text.length > 200) {
+          setCache(textCache, cacheKey, text);
+          return text;
+        }
+      } catch (error) {
+        // fall through to the plain-text mirror below
+      }
     }
-  }
 
-  if (plainTextUtf8Url) {
-    const raw = await fetchWithTimeout(plainTextUtf8Url);
-    const text = extractReadableTextFromPlainText(raw);
-    if (text.length > 200) return text;
-  }
+    if (plainTextUtf8Url) {
+      const raw = await fetchWithTimeout(plainTextUtf8Url);
+      const text = extractReadableTextFromPlainText(raw);
+      if (text.length > 200) {
+        setCache(textCache, cacheKey, text);
+        return text;
+      }
+    }
 
-  throw new Error('Could not extract readable text from any available Gutenberg source.');
+    throw new Error('Could not extract readable text from any available Gutenberg source.');
+  })();
+
+  inFlightText.set(cacheKey, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    inFlightText.delete(cacheKey);
+  }
 }
 
 // Same cropped text as above, but as an array of paragraphs instead of one
@@ -123,23 +182,50 @@ function extractParagraphsFromPlainText(raw) {
 }
 
 async function fetchGutenbergParagraphs({ readOnlineUrl, plainTextUtf8Url }) {
-  if (readOnlineUrl) {
-    try {
-      const html = await fetchWithTimeout(readOnlineUrl);
-      const paragraphs = extractParagraphsFromHtml(html);
-      if (paragraphs.length > 3) return paragraphs;
-    } catch (error) {
-      // fall through to the plain-text mirror below
+  const cacheKey = readOnlineUrl || plainTextUtf8Url;
+  if (!cacheKey) {
+    throw new Error('No valid URL provided for Gutenberg paragraphs.');
+  }
+
+  const cached = getFromCache(paragraphCache, cacheKey);
+  if (cached) return cached;
+
+  if (inFlightParagraphs.has(cacheKey)) {
+    return inFlightParagraphs.get(cacheKey);
+  }
+
+  const fetchPromise = (async () => {
+    if (readOnlineUrl) {
+      try {
+        const html = await fetchWithTimeout(readOnlineUrl);
+        const paragraphs = extractParagraphsFromHtml(html);
+        if (paragraphs.length > 3) {
+          setCache(paragraphCache, cacheKey, paragraphs);
+          return paragraphs;
+        }
+      } catch (error) {
+        // fall through to the plain-text mirror below
+      }
     }
-  }
 
-  if (plainTextUtf8Url) {
-    const raw = await fetchWithTimeout(plainTextUtf8Url);
-    const paragraphs = extractParagraphsFromPlainText(raw);
-    if (paragraphs.length > 3) return paragraphs;
-  }
+    if (plainTextUtf8Url) {
+      const raw = await fetchWithTimeout(plainTextUtf8Url);
+      const paragraphs = extractParagraphsFromPlainText(raw);
+      if (paragraphs.length > 3) {
+        setCache(paragraphCache, cacheKey, paragraphs);
+        return paragraphs;
+      }
+    }
 
-  throw new Error('Could not extract readable paragraphs from any available Gutenberg source.');
+    throw new Error('Could not extract readable paragraphs from any available Gutenberg source.');
+  })();
+
+  inFlightParagraphs.set(cacheKey, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    inFlightParagraphs.delete(cacheKey);
+  }
 }
 
 module.exports = {

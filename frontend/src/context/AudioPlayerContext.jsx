@@ -23,8 +23,9 @@ export function AudioPlayerProvider({ children }) {
 
   const currentChapter = chapters[currentChapterIndex] || null
 
-  // Save progress throttle ref
+  // Save progress throttle ref & pending seek time ref
   const lastSavedTimeRef = useRef(0)
+  const pendingSeekTimeRef = useRef(0)
 
   // Sleep timer interval
   useEffect(() => {
@@ -120,10 +121,18 @@ export function AudioPlayerProvider({ children }) {
     setCurrentChapterIndex(targetChapter)
     setCurrentTime(targetTime)
 
+    pendingSeekTimeRef.current = targetTime
+
     const ch = validChapters[targetChapter]
     if (audioRef.current && ch?.url) {
-      audioRef.current.src = ch.url
-      audioRef.current.currentTime = targetTime
+      if (audioRef.current.src !== ch.url) {
+        audioRef.current.src = ch.url
+      }
+      if (audioRef.current.readyState >= 1 && targetTime > 0) {
+        try {
+          audioRef.current.currentTime = targetTime
+        } catch (_) {}
+      }
       if (autoPlay) {
         safePlay(audioRef.current, () => setIsPlaying(false))
       }
@@ -189,10 +198,17 @@ export function AudioPlayerProvider({ children }) {
     if (index < 0 || index >= chapters.length) return
     setCurrentChapterIndex(index)
     setCurrentTime(0)
+    pendingSeekTimeRef.current = 0
     const ch = chapters[index]
     if (audioRef.current && ch?.url) {
-      audioRef.current.src = ch.url
-      audioRef.current.currentTime = 0
+      if (audioRef.current.src !== ch.url) {
+        audioRef.current.src = ch.url
+      }
+      if (audioRef.current.readyState >= 1) {
+        try {
+          audioRef.current.currentTime = 0
+        } catch (_) {}
+      }
       safePlay(audioRef.current, () => setIsPlaying(false))
       if (audioItem) {
         saveProgress(audioItem._id || audioItem.id, index, 0)
@@ -283,6 +299,14 @@ export function AudioPlayerProvider({ children }) {
     if (!audioRef.current) return
     setDuration(audioRef.current.duration || 0)
     audioRef.current.playbackRate = playbackRate
+    if (pendingSeekTimeRef.current > 0) {
+      const target = pendingSeekTimeRef.current
+      pendingSeekTimeRef.current = 0
+      try {
+        audioRef.current.currentTime = target
+      } catch (_) {}
+    }
+    setIsBuffering(false)
   }
 
   function handleEnded() {
@@ -337,6 +361,8 @@ export function AudioPlayerProvider({ children }) {
     <AudioPlayerContext.Provider value={value}>
       {children}
       <audio
+        onCanPlay={() => setIsBuffering(false)}
+        onCanPlayThrough={() => setIsBuffering(false)}
         onEnded={handleEnded}
         onError={() => {
           setIsBuffering(false)

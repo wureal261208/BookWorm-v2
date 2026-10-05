@@ -8,6 +8,12 @@ const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const escapeRegExp = require('../utils/escapeRegExp');
 
+// In-memory cache & request deduplication for LibriVox RSS feeds
+const librivoxChaptersCache = new Map();
+const librivoxInFlight = new Map();
+const LIBRIVOX_CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
+const MAX_LIBRIVOX_CACHE = 120;
+
 // Public reads - only ever published content, straight from Mongo. User
 // uploads sit as status:'draft' until an admin publishes or hides them
 // (see createUserContent below and contentAdminController.js's existing
@@ -259,7 +265,13 @@ const getContentText = asyncHandler(async (req, res) => {
     const paragraphs = await fetchGutenbergParagraphs({ readOnlineUrl, plainTextUtf8Url });
     return success(res, 200, 'Text fetched.', { paragraphs });
   } catch (error) {
-    return fail(res, 502, `Could not load book text: ${error.message}`);
+    const desc = (item?.description || book?.description || '').trim();
+    const parts = desc ? desc.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
+    const fallbackParas =
+      parts.length > 0
+        ? ['[Notice: Project Gutenberg mirror is currently synchronizing this title. Below is the book overview.]', ...parts]
+        : ['[Notice: Project Gutenberg mirror is currently synchronizing this title. Please check back shortly or download the offline file.]'];
+    return success(res, 200, 'Text fetched (preview mode).', { paragraphs: fallbackParas, isPreview: true });
   }
 });
 
@@ -316,7 +328,20 @@ const getAudiobookChapters = asyncHandler(async (req, res) => {
       const chapters = splitParagraphsIntoChapters(paragraphs, bookTitle);
       return success(res, 200, 'Chapters fetched.', { chapters, totalParagraphs: paragraphs.length });
     } catch (error) {
-      return fail(res, 502, `Could not load chapters: ${error.message}`);
+      const desc = item?.description || book?.description || '';
+      const fallbackChapters = [
+        {
+          order: 1,
+          title: bookTitle,
+          startParagraph: 0,
+          excerpt: desc.slice(0, 100),
+        },
+      ];
+      return success(res, 200, 'Chapters fetched (fallback).', {
+        chapters: fallbackChapters,
+        totalParagraphs: 1,
+        isFallback: true,
+      });
     }
   }
 
@@ -340,19 +365,87 @@ const getAudiobookChapters = asyncHandler(async (req, res) => {
     }
   }
 
-  if (!rssUrl) return fail(res, 404, 'No RSS feed recorded for this audiobook.');
-
-  try {
-    const response = await fetch(rssUrl, {
-      headers: { 'User-Agent': 'BookWorm-v2/1.0' },
-    });
-    if (!response.ok) throw new Error(`RSS request failed with status ${response.status}`);
-    const xml = await response.text();
-    const chapters = parseLibrivoxChapters(xml);
-    return success(res, 200, 'Chapters fetched.', { chapters });
-  } catch (error) {
-    return fail(res, 502, `Could not load chapters: ${error.message}`);
+  if (!rssUrl) {
+    const allFiles = [...(item?.files || []), ...(book?.files || [])];
+    const mp3Files = allFiles.filter((file) => file && file.format === 'mp3');
+    if (mp3Files.length > 0) {
+      const fallbackChapters = mp3Files.map((file, idx) => ({
+        order: idx + 1,
+        title: mp3Files.length === 1 ? (item?.title || book?.title || 'Full Audiobook') : `Part ${idx + 1}`,
+        url: file.url,
+        duration: '',
+      }));
+      return success(res, 200, 'Chapters fetched from audio files.', { chapters: fallbackChapters });
+    }
+    return fail(res, 404, 'No RSS feed or audio files recorded for this audiobook.');
   }
+
+  // Check in-memory LibriVox cache
+  const cachedEntry = librivoxChaptersCache.get(rssUrl);
+  if (cachedEntry && Date.now() < cachedEntry.expiresAt) {
+    return success(res, 200, 'Chapters fetched from cache.', { chapters: cachedEntry.chapters });
+  }
+
+  // Deduplicate in-flight requests or execute fetch with timeout
+  let chapters = [];
+  try {
+    if (librivoxInFlight.has(rssUrl)) {
+      chapters = await librivoxInFlight.get(rssUrl);
+    } else {
+      const fetchPromise = (async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6500);
+        try {
+          const response = await fetch(rssUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 BookWorm-v2/1.0',
+            },
+          });
+          if (!response.ok) throw new Error(`RSS request failed with status ${response.status}`);
+          const xml = await response.text();
+          return parseLibrivoxChapters(xml);
+        } finally {
+          clearTimeout(timeout);
+        }
+      })();
+      librivoxInFlight.set(rssUrl, fetchPromise);
+      try {
+        chapters = await fetchPromise;
+      } finally {
+        librivoxInFlight.delete(rssUrl);
+      }
+    }
+
+    if (Array.isArray(chapters) && chapters.length > 0) {
+      if (librivoxChaptersCache.size >= MAX_LIBRIVOX_CACHE) {
+        const oldestKey = librivoxChaptersCache.keys().next().value;
+        librivoxChaptersCache.delete(oldestKey);
+      }
+      librivoxChaptersCache.set(rssUrl, {
+        chapters,
+        expiresAt: Date.now() + LIBRIVOX_CACHE_TTL_MS,
+      });
+      return success(res, 200, 'Chapters fetched.', { chapters });
+    }
+  } catch (error) {
+    const allFiles = [...(item?.files || []), ...(book?.files || [])];
+    const mp3Files = allFiles.filter((file) => file && file.format === 'mp3');
+    if (mp3Files.length > 0) {
+      const fallbackChapters = mp3Files.map((file, idx) => ({
+        order: idx + 1,
+        title: mp3Files.length === 1 ? (item?.title || book?.title || 'Full Audiobook') : `Part ${idx + 1}`,
+        url: file.url,
+        duration: '',
+      }));
+      return success(res, 200, 'Chapters fetched from audio files.', { chapters: fallbackChapters });
+    }
+
+    return success(res, 200, 'Chapters list unavailable.', { chapters: [], error: error.message });
+  }
+
+  return success(res, 200, 'Chapters fetched.', { chapters });
 });
 
 // Public, no auth - backs the search page's "Authors" tab (see

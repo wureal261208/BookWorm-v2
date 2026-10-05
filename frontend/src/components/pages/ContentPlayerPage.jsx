@@ -65,30 +65,59 @@ function ContentPlayerPage() {
     setLoading(true)
     setError('')
 
-    Promise.all([publicApiFetch(`/api/content/${id}`), publicApiFetch(`/api/content/${id}/chapters`)])
-      .then(([itemData, chaptersData]) => {
+    // 1. Fetch item details immediately (renders within milliseconds)
+    publicApiFetch(`/api/content/${id}`)
+      .then((itemData) => {
         if (ignore) return
         setItem(itemData)
-        const chList = Array.isArray(chaptersData?.chapters) ? chaptersData.chapters : []
-        setPageChapters(chList)
+        setLoading(false)
 
         if (auth.currentUser && itemData.categories?.length) {
           apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: itemData.categories } }).catch(() => {})
         }
 
-        // Prepare track in persistent player without forcing unauthorized autoplay
-        if (!isCurrentTrackLoaded && chList.length > 0) {
-          loadAudiobook(itemData, chList, 0, 0, false)
+        // If itemData already has direct mp3 files, construct immediate provisional chapters
+        const directMp3s = (itemData.files || []).filter((f) => f && f.format === 'mp3')
+        if (directMp3s.length > 0) {
+          const provisional = directMp3s.map((f, i) => ({
+            order: i + 1,
+            title: directMp3s.length === 1 ? (itemData.title || 'Full Audiobook') : `Part ${i + 1}`,
+            url: f.url,
+            duration: '',
+          }))
+          setPageChapters((prev) => (prev.length === 0 ? provisional : prev))
+          if (!isCurrentTrackLoaded) {
+            loadAudiobook(itemData, provisional, 0, 0, false)
+          }
         }
       })
       .catch((err) => {
-        if (!ignore) setError(err.message)
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false)
+        if (!ignore) {
+          setError(err.message)
+          setLoading(false)
+        }
       })
 
-    // Fetch synchronized story text for Read-Along
+    // 2. Fetch full chapter list independently without blocking hero render
+    publicApiFetch(`/api/content/${id}/chapters`)
+      .then((chaptersData) => {
+        if (ignore) return
+        const chList = Array.isArray(chaptersData?.chapters) ? chaptersData.chapters : []
+        if (chList.length > 0) {
+          setPageChapters(chList)
+          if (!isCurrentTrackLoaded) {
+            setItem((current) => {
+              if (current) {
+                loadAudiobook(current, chList, 0, 0, false)
+              }
+              return current
+            })
+          }
+        }
+      })
+      .catch(() => {})
+
+    // 3. Fetch synchronized story text for Read-Along progressively
     setReadAlongLoading(true)
     publicApiFetch(`/api/content/${id}/text`)
       .then((tData) => {
@@ -127,18 +156,18 @@ function ContentPlayerPage() {
       const start = currentCh.startParagraph
       const end = typeof nextCh?.startParagraph === 'number' && nextCh.startParagraph > start
         ? nextCh.startParagraph
-        : readAlongText.length
-      return readAlongText.slice(start, end)
+        : Math.min(start + 35, readAlongText.length)
+      return readAlongText.slice(start, end).slice(0, 45)
     }
 
     if (activeChapters.length > 1) {
       const perCh = Math.max(15, Math.floor(readAlongText.length / activeChapters.length))
       const start = safeIdx * perCh
       const end = safeIdx === activeChapters.length - 1 ? readAlongText.length : (safeIdx + 1) * perCh
-      return readAlongText.slice(start, end)
+      return readAlongText.slice(start, end).slice(0, 45)
     }
 
-    return readAlongText
+    return readAlongText.slice(0, 40)
   }, [readAlongText, activeChapters, currentChapterIndex])
 
   if (!id) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> No audiobook selected.</p>
