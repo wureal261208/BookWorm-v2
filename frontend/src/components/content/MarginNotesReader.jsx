@@ -4,7 +4,15 @@ import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const EXCERPT_LENGTH = 80
 
-function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, onChapterChange }) {
+function MarginNotesReader({
+  contentId,
+  chapters = [],
+  activeChapterIndex = 0,
+  onChapterChange,
+  ttsActiveIndex = null,
+  textAlign = 'justify',
+  onParagraphsLoaded,
+}) {
   const isGuest = !auth.currentUser
   const [paragraphs, setParagraphs] = useState([])
   const [notesByParagraph, setNotesByParagraph] = useState({})
@@ -112,6 +120,17 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
     return paragraphs.slice(startParagraph, Math.min(startParagraph + 60, paragraphs.length))
   }, [paragraphs, startParagraph, endParagraph])
 
+  useEffect(() => {
+    if (chapterParagraphs.length > 0 && onParagraphsLoaded) {
+      onParagraphsLoaded(chapterParagraphs, startParagraph)
+    }
+  }, [chapterParagraphs, startParagraph, onParagraphsLoaded])
+
+  const totalWords = useMemo(() => {
+    return chapterParagraphs.join(' ').trim().split(/\s+/).filter(Boolean).length
+  }, [chapterParagraphs])
+  const estimatedReadingMinutes = Math.max(1, Math.round(totalWords / 190))
+
   if (loading) {
     return (
       <div className="reader-skeleton-paragraphs" aria-busy="true" aria-label="Loading chapter text">
@@ -137,12 +156,19 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
       {/* Chapter Title & Header */}
       {currentChapter && effectiveChapters.length > 0 && (
         <header className="reader-chapter-header">
-          <div className="reader-chapter-badge">
-            <span>
-              {currentChapter.isIntro || currentChapter.order === 0
-                ? 'Phần mở đầu (Introduction)'
-                : `Chương ${currentChapter.order || activeChapterIndex} / ${totalRegularChapters}`}
-            </span>
+          <div className="reader-chapter-meta-row">
+            <div className="reader-chapter-badge">
+              <span>
+                {currentChapter.isIntro || currentChapter.order === 0
+                  ? 'Phần mở đầu (Introduction)'
+                  : `Chương ${currentChapter.order || activeChapterIndex} / ${totalRegularChapters}`}
+              </span>
+            </div>
+            {totalWords > 0 && (
+              <span className="reading-time-badge">
+                <i className="bi bi-clock-history" /> ~{estimatedReadingMinutes} phút đọc ({totalWords.toLocaleString()} từ)
+              </span>
+            )}
           </div>
           <h2 className="reader-chapter-title">{currentChapter.title}</h2>
           {currentChapter.excerpt && <p className="reader-chapter-excerpt">{currentChapter.excerpt}</p>}
@@ -154,11 +180,16 @@ function MarginNotesReader({ contentId, chapters = [], activeChapterIndex = 0, o
         const globalIndex = startParagraph + localIndex
         const notes = notesByParagraph[globalIndex] || []
         const isActive = activeParagraph === globalIndex
+        const isTtsReading = ttsActiveIndex === globalIndex
 
         return (
-          <div key={globalIndex} className="margin-notes-paragraph-wrapper">
+          <div
+            key={globalIndex}
+            className={`margin-notes-paragraph-wrapper ${isTtsReading ? 'tts-highlight-active' : ''}`}
+            style={{ textAlign: textAlign || 'justify' }}
+          >
             <div className="margin-notes-paragraph" id={`paragraph-${globalIndex}`}>
-              <p>{paragraph}</p>
+              <p className={localIndex === 0 ? 'drop-cap' : ''}>{paragraph}</p>
               <button
                 aria-label={`Ghi chú cho đoạn ${globalIndex + 1}`}
                 className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}

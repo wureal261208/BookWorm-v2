@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
@@ -17,13 +17,30 @@ function ContentReaderPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Reader customization states (strictly Light & Dark only per design system)
+  // Reader customization states (Light, Sepia Warm Paper, Dark)
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('bookworm_reader_theme')
-    return saved === 'dark' ? 'dark' : 'light'
+    return saved === 'dark' || saved === 'sepia' ? saved : 'light'
   })
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('bookworm_reader_fontsize')) || 18)
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('bookworm_reader_font') || 'serif')
+  const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('bookworm_reader_lineheight')) || 1.85)
+  const [pageWidth, setPageWidth] = useState(() => Number(localStorage.getItem('bookworm_reader_width')) || 760)
+  const [textAlign, setTextAlign] = useState(() => localStorage.getItem('bookworm_reader_align') || 'justify')
+  const [showAaPopover, setShowAaPopover] = useState(false)
+  const [zenMode, setZenMode] = useState(false)
+
+  // Web Speech API Text-to-Speech (AI TTS)
+  const [isTtsActive, setIsTtsActive] = useState(false)
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false)
+  const [ttsSpeed, setTtsSpeed] = useState(1.0)
+  const [currentChapterParagraphs, setCurrentChapterParagraphs] = useState([])
+  const [chapterStartParagraphIndex, setChapterStartParagraphIndex] = useState(0)
+  const [ttsLocalIndex, setTtsLocalIndex] = useState(0)
+  const ttsUtteranceRef = useRef(null)
+
+  // Text selection floating quick-actions
+  const [selectionMenu, setSelectionMenu] = useState(null)
 
   // Reading progress and resume
   const [readPercent, setReadPercent] = useState(0)
@@ -195,6 +212,256 @@ function ContentReaderPage() {
     localStorage.setItem('bookworm_reader_font', fontFamily)
   }, [fontFamily])
 
+  useEffect(() => {
+    localStorage.setItem('bookworm_reader_lineheight', String(lineHeight))
+  }, [lineHeight])
+
+  useEffect(() => {
+    localStorage.setItem('bookworm_reader_width', String(pageWidth))
+  }, [pageWidth])
+
+  useEffect(() => {
+    localStorage.setItem('bookworm_reader_align', textAlign)
+  }, [textAlign])
+
+  // Dismiss popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (showAaPopover && !e.target.closest('.reader-aa-popover') && !e.target.closest('.reader-aa-trigger')) {
+        setShowAaPopover(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAaPopover])
+
+  // Keyboard shortcut: Escape exits Zen mode, closes drawers and selection popovers
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        if (showAaPopover) setShowAaPopover(false)
+        if (showToc) setShowToc(false)
+        if (zenMode) setZenMode(false)
+        if (selectionMenu) setSelectionMenu(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAaPopover, showToc, zenMode, selectionMenu])
+
+  // Web Speech API Text-to-Speech logic
+  const stopTts = useCallback(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+    setIsTtsPlaying(false)
+    setIsTtsActive(false)
+  }, [])
+
+  const playParagraphTts = useCallback(
+    (index, paragraphs = currentChapterParagraphs, speed = ttsSpeed) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setToastMsg('Trình duyệt không hỗ trợ Web Speech API đọc to.')
+        return
+      }
+      if (!paragraphs || index >= paragraphs.length || index < 0) {
+        stopTts()
+        return
+      }
+
+      window.speechSynthesis.cancel()
+      const text = paragraphs[index]
+      if (!text || !text.trim()) {
+        if (index + 1 < paragraphs.length) {
+          setTtsLocalIndex(index + 1)
+          playParagraphTts(index + 1, paragraphs, speed)
+        } else {
+          stopTts()
+        }
+        return
+      }
+
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = speed
+      const voices = window.speechSynthesis.getVoices()
+      const viVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
+      if (viVoice) {
+        utterance.voice = viVoice
+      }
+
+      utterance.onend = () => {
+        if (index + 1 < paragraphs.length) {
+          setTtsLocalIndex(index + 1)
+          playParagraphTts(index + 1, paragraphs, speed)
+        } else {
+          stopTts()
+          setToastMsg('Đã hoàn thành đọc to chương này.')
+        }
+      }
+
+      utterance.onerror = (e) => {
+        if (e.error !== 'canceled' && e.error !== 'interrupted') {
+          setIsTtsPlaying(false)
+        }
+      }
+
+      ttsUtteranceRef.current = utterance
+      window.speechSynthesis.speak(utterance)
+      setIsTtsPlaying(true)
+      setIsTtsActive(true)
+
+      const targetEl = document.getElementById(`paragraph-${chapterStartParagraphIndex + index}`)
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    },
+    [currentChapterParagraphs, ttsSpeed, chapterStartParagraphIndex, stopTts]
+  )
+
+  function handleStartTts() {
+    if (!currentChapterParagraphs.length) {
+      setToastMsg('Đang chuẩn bị nội dung đọc...')
+      return
+    }
+    if (isTtsActive && isTtsPlaying) {
+      window.speechSynthesis.pause()
+      setIsTtsPlaying(false)
+      return
+    }
+    if (isTtsActive && !isTtsPlaying) {
+      window.speechSynthesis.resume()
+      setIsTtsPlaying(true)
+      return
+    }
+    setTtsLocalIndex(0)
+    playParagraphTts(0, currentChapterParagraphs, ttsSpeed)
+    setToastMsg('Bắt đầu đọc to chương này bằng giọng AI...')
+  }
+
+  function handleTtsTogglePlay() {
+    if (isTtsPlaying) {
+      window.speechSynthesis.pause()
+      setIsTtsPlaying(false)
+    } else {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+        setIsTtsPlaying(true)
+      } else {
+        playParagraphTts(ttsLocalIndex, currentChapterParagraphs, ttsSpeed)
+      }
+    }
+  }
+
+  function handleTtsPrev() {
+    if (ttsLocalIndex > 0) {
+      const prev = ttsLocalIndex - 1
+      setTtsLocalIndex(prev)
+      playParagraphTts(prev, currentChapterParagraphs, ttsSpeed)
+    }
+  }
+
+  function handleTtsNext() {
+    if (ttsLocalIndex < currentChapterParagraphs.length - 1) {
+      const next = ttsLocalIndex + 1
+      setTtsLocalIndex(next)
+      playParagraphTts(next, currentChapterParagraphs, ttsSpeed)
+    }
+  }
+
+  function handleTtsCycleSpeed() {
+    const speeds = [0.8, 1.0, 1.2, 1.5]
+    const curIdx = speeds.indexOf(ttsSpeed)
+    const nextSpeed = speeds[(curIdx + 1) % speeds.length]
+    setTtsSpeed(nextSpeed)
+    if (isTtsActive && isTtsPlaying) {
+      playParagraphTts(ttsLocalIndex, currentChapterParagraphs, nextSpeed)
+    }
+  }
+
+  function handleTtsStop() {
+    stopTts()
+    setToastMsg('Đã dừng đọc to.')
+  }
+
+  // Stop TTS on chapter change or unmount
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [activeChapterIndex])
+
+  const handleParagraphsLoaded = useCallback((paras, startIdx) => {
+    setCurrentChapterParagraphs(paras)
+    setChapterStartParagraphIndex(startIdx)
+  }, [])
+
+  // Floating text selection quick-actions
+  function handleTextSelection() {
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed) {
+      setSelectionMenu(null)
+      return
+    }
+    const text = sel.toString().trim()
+    if (text.length < 2) {
+      setSelectionMenu(null)
+      return
+    }
+    try {
+      const range = sel.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        setSelectionMenu({
+          text,
+          top: Math.max(10, rect.top - 52 + window.scrollY),
+          left: Math.max(16, rect.left + rect.width / 2),
+        })
+      }
+    } catch (_) {
+      setSelectionMenu(null)
+    }
+  }
+
+  function handleSelHighlight() {
+    setToastMsg('Đã làm nổi bật đoạn trích!')
+    setSelectionMenu(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  function handleSelNote() {
+    setToastMsg('Bấm biểu tượng ghi chú 💬 bên cạnh đoạn văn để lưu ghi chú.')
+    setSelectionMenu(null)
+  }
+
+  function handleSelSpeak() {
+    if (!selectionMenu?.text) return
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const utt = new SpeechSynthesisUtterance(selectionMenu.text)
+      utt.rate = ttsSpeed
+      const voices = window.speechSynthesis.getVoices()
+      const viVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
+      if (viVoice) utt.voice = viVoice
+      window.speechSynthesis.speak(utt)
+      setToastMsg('Đang đọc câu vừa chọn...')
+    }
+    setSelectionMenu(null)
+  }
+
+  function handleSelCopy() {
+    if (!selectionMenu?.text) return
+    navigator.clipboard
+      ?.writeText(selectionMenu.text)
+      .then(() => {
+        setToastMsg('Đã sao chép đoạn trích vào bộ nhớ tạm!')
+      })
+      .catch(() => {})
+    setSelectionMenu(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
   // Fetch book details
   useEffect(() => {
     if (!id) return
@@ -307,7 +574,40 @@ function ContentReaderPage() {
     : chapters
 
   return (
-    <div className={`content-reader-page reader-theme-${theme} reader-font-${fontFamily}`}>
+    <div className={`content-reader-page reader-theme-${theme} reader-font-${fontFamily} ${zenMode ? 'reader-zen-active' : ''}`}>
+      {/* Floating Zen Pill when in Zen distraction-free mode */}
+      {zenMode && (
+        <aside aria-label="Điều khiển chế độ tập trung" className="reader-zen-floating-pill">
+          <button
+            className="ghost-button zen-pill-exit"
+            onClick={() => setZenMode(false)}
+            title="Thoát chế độ tập trung (Esc)"
+            type="button"
+          >
+            <i className="bi bi-x-lg" />
+            <span>Thoát Zen (Esc)</span>
+          </button>
+          <div className="zen-pill-divider" />
+          <button
+            className="ghost-button zen-pill-btn"
+            onClick={() => setShowAaPopover((v) => !v)}
+            title="Tuỳ chỉnh giao diện"
+            type="button"
+          >
+            <i className="bi bi-fonts" />
+          </button>
+          <button
+            className="ghost-button zen-pill-btn"
+            onClick={() => setShowToc((v) => !v)}
+            title="Mục lục chương"
+            type="button"
+          >
+            <i className="bi bi-list-ul" />
+          </button>
+          <span className="zen-pill-progress">{readPercent}%</span>
+        </aside>
+      )}
+
       {/* Sticky Top Reading Control Bar */}
       <header className="content-reader-sticky-bar">
         <div className="reader-bar-inner">
@@ -370,63 +670,251 @@ function ContentReaderPage() {
                 : `${readPercent}%`}
             </span>
 
-            {/* Font size adjustments */}
-            <div className="reader-btn-group" role="group" aria-label="Font size controls">
-              <button
-                className="ghost-button"
-                disabled={fontSize <= 14}
-                onClick={() => setFontSize((s) => Math.max(14, s - 2))}
-                title="Giảm cỡ chữ"
-                type="button"
-              >
-                A-
-              </button>
-              <button
-                className="ghost-button"
-                disabled={fontSize >= 26}
-                onClick={() => setFontSize((s) => Math.min(26, s + 2))}
-                title="Tăng cỡ chữ"
-                type="button"
-              >
-                A+
-              </button>
-            </div>
-
-            {/* Font family toggle */}
+            {/* Text-to-Speech (AI TTS) trigger */}
             <button
-              className="ghost-button reader-font-btn"
-              onClick={() => setFontFamily((f) => (f === 'serif' ? 'sans' : 'serif'))}
-              title="Đổi kiểu chữ Serif / Sans-serif"
+              aria-label={isTtsPlaying ? 'Tạm dừng đọc to' : 'Đọc to bằng giọng AI'}
+              className={`ghost-button reader-bar-icon-btn reader-tts-trigger ${isTtsActive ? 'active' : ''}`}
+              onClick={handleStartTts}
+              title={isTtsActive ? (isTtsPlaying ? 'Đang đọc to... Bấm để tạm dừng' : 'Đang tạm dừng đọc to') : 'Đọc to toàn bộ chương bằng giọng đọc AI (Web Speech)'}
               type="button"
             >
-              {fontFamily === 'serif' ? 'Serif' : 'Sans'}
+              <i className={`bi ${isTtsPlaying ? 'bi-volume-up-fill' : 'bi-volume-up'}`} />
+              <span className="reader-btn-label">Đọc to</span>
             </button>
 
-            {/* Theme Toggle: Strictly Light & Dark modes only */}
-            <div className="reader-theme-toggle" role="group" aria-label="Reader color mode">
+            {/* Appearance (Aa) Popover Trigger & Popover Menu */}
+            <div className="reader-aa-wrap">
               <button
-                aria-label="Chế độ sáng"
-                aria-pressed={theme === 'light'}
-                className={`theme-toggle-btn ${theme === 'light' ? 'active' : ''}`}
-                onClick={() => setTheme('light')}
-                title="Chế độ sáng"
+                aria-expanded={showAaPopover}
+                aria-label="Cài đặt giao diện đọc"
+                className={`ghost-button reader-bar-icon-btn reader-aa-trigger ${showAaPopover ? 'active' : ''}`}
+                onClick={() => setShowAaPopover((v) => !v)}
+                title="Tuỳ chỉnh giao diện, phông chữ, cỡ chữ, màu nền & giãn dòng"
                 type="button"
               >
-                <i className="bi bi-sun-fill" />
-                <span className="theme-label">Sáng</span>
+                <i className="bi bi-fonts" />
+                <span className="reader-btn-label">Aa</span>
               </button>
-              <button
-                aria-label="Chế độ tối"
-                aria-pressed={theme === 'dark'}
-                className={`theme-toggle-btn ${theme === 'dark' ? 'active' : ''}`}
-                onClick={() => setTheme('dark')}
-                title="Chế độ tối"
-                type="button"
-              >
-                <i className="bi bi-moon-fill" />
-                <span className="theme-label">Tối</span>
-              </button>
+
+              {showAaPopover && (
+                <div className="reader-aa-popover" role="dialog" aria-label="Tuỳ chỉnh giao diện đọc">
+                  <div className="aa-popover-header">
+                    <h4>Giao diện đọc sách</h4>
+                    <button
+                      aria-label="Đóng bảng giao diện"
+                      className="ghost-button aa-close-btn"
+                      onClick={() => setShowAaPopover(false)}
+                      type="button"
+                    >
+                      <i className="bi bi-x-lg" />
+                    </button>
+                  </div>
+
+                  {/* 1. Theme Color Swatches (Light, Sepia Warm Paper, Dark) */}
+                  <div className="aa-section">
+                    <label className="aa-section-label">Chủ đề màu (Theme)</label>
+                    <div className="aa-theme-swatches" role="radiogroup" aria-label="Chủ đề màu">
+                      <button
+                        aria-checked={theme === 'light'}
+                        className={`aa-swatch aa-swatch-light ${theme === 'light' ? 'active' : ''}`}
+                        onClick={() => setTheme('light')}
+                        role="radio"
+                        type="button"
+                      >
+                        <span className="swatch-circle" />
+                        <span className="swatch-name">Sáng</span>
+                      </button>
+                      <button
+                        aria-checked={theme === 'sepia'}
+                        className={`aa-swatch aa-swatch-sepia ${theme === 'sepia' ? 'active' : ''}`}
+                        onClick={() => setTheme('sepia')}
+                        role="radio"
+                        type="button"
+                      >
+                        <span className="swatch-circle" />
+                        <span className="swatch-name">Giấy ngà</span>
+                      </button>
+                      <button
+                        aria-checked={theme === 'dark'}
+                        className={`aa-swatch aa-swatch-dark ${theme === 'dark' ? 'active' : ''}`}
+                        onClick={() => setTheme('dark')}
+                        role="radio"
+                        type="button"
+                      >
+                        <span className="swatch-circle" />
+                        <span className="swatch-name">Đêm</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Font Family */}
+                  <div className="aa-section">
+                    <label className="aa-section-label">Kiểu chữ (Font)</label>
+                    <div className="aa-segmented-group">
+                      <button
+                        className={`aa-segment-btn ${fontFamily === 'serif' ? 'active' : ''}`}
+                        onClick={() => setFontFamily('serif')}
+                        type="button"
+                        style={{ fontFamily: "'Lora', Georgia, serif" }}
+                      >
+                        Có chân (Serif)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${fontFamily === 'sans' ? 'active' : ''}`}
+                        onClick={() => setFontFamily('sans')}
+                        type="button"
+                        style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+                      >
+                        Không chân (Sans)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3. Font Size Slider */}
+                  <div className="aa-section">
+                    <div className="aa-section-row">
+                      <label className="aa-section-label">Cỡ chữ</label>
+                      <span className="aa-value-badge">{fontSize}px</span>
+                    </div>
+                    <div className="aa-slider-row">
+                      <button
+                        aria-label="Giảm cỡ chữ"
+                        className="ghost-button aa-step-btn"
+                        disabled={fontSize <= 14}
+                        onClick={() => setFontSize((s) => Math.max(14, s - 1))}
+                        type="button"
+                      >
+                        A-
+                      </button>
+                      <input
+                        aria-label="Thanh trượt cỡ chữ"
+                        className="aa-range-slider"
+                        max="26"
+                        min="14"
+                        onChange={(e) => setFontSize(Number(e.target.value))}
+                        step="1"
+                        type="range"
+                        value={fontSize}
+                      />
+                      <button
+                        aria-label="Tăng cỡ chữ"
+                        className="ghost-button aa-step-btn"
+                        disabled={fontSize >= 26}
+                        onClick={() => setFontSize((s) => Math.min(26, s + 1))}
+                        type="button"
+                      >
+                        A+
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Line Spacing */}
+                  <div className="aa-section">
+                    <label className="aa-section-label">Giãn dòng</label>
+                    <div className="aa-segmented-group">
+                      <button
+                        className={`aa-segment-btn ${lineHeight === 1.6 ? 'active' : ''}`}
+                        onClick={() => setLineHeight(1.6)}
+                        type="button"
+                      >
+                        Gọn (1.6x)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${lineHeight === 1.85 ? 'active' : ''}`}
+                        onClick={() => setLineHeight(1.85)}
+                        type="button"
+                      >
+                        Chuẩn (1.85x)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${lineHeight === 2.1 ? 'active' : ''}`}
+                        onClick={() => setLineHeight(2.1)}
+                        type="button"
+                      >
+                        Thoáng (2.1x)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 5. Column Width */}
+                  <div className="aa-section">
+                    <label className="aa-section-label">Độ rộng trang</label>
+                    <div className="aa-segmented-group">
+                      <button
+                        className={`aa-segment-btn ${pageWidth === 640 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(640)}
+                        type="button"
+                      >
+                        Hẹp (640px)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${pageWidth === 760 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(760)}
+                        type="button"
+                      >
+                        Vừa (760px)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${pageWidth === 880 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(880)}
+                        type="button"
+                      >
+                        Rộng (880px)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 6. Text Alignment */}
+                  <div className="aa-section">
+                    <label className="aa-section-label">Căn lề</label>
+                    <div className="aa-segmented-group">
+                      <button
+                        className={`aa-segment-btn ${textAlign === 'justify' ? 'active' : ''}`}
+                        onClick={() => setTextAlign('justify')}
+                        type="button"
+                      >
+                        <i className="bi bi-justify" /> Căn đều
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${textAlign === 'left' ? 'active' : ''}`}
+                        onClick={() => setTextAlign('left')}
+                        type="button"
+                      >
+                        <i className="bi bi-text-left" /> Căn trái
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Zen Mode Button */}
+                  <div className="aa-section aa-zen-action">
+                    <button
+                      className="primary-button"
+                      onClick={() => {
+                        setZenMode((z) => !z)
+                        setShowAaPopover(false)
+                      }}
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      type="button"
+                    >
+                      <i className={`bi ${zenMode ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`} />
+                      <span>{zenMode ? 'Thoát Zen Mode' : 'Đọc tập trung (Zen Mode)'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Zen Mode Toggle Button */}
+            <button
+              aria-label={zenMode ? 'Thoát chế độ tập trung' : 'Chế độ đọc tập trung (Zen Mode)'}
+              className={`ghost-button reader-bar-icon-btn reader-zen-trigger ${zenMode ? 'active' : ''}`}
+              onClick={() => setZenMode((v) => !v)}
+              title={zenMode ? 'Thoát Zen Mode (Esc)' : 'Đọc tập trung không xao nhãng (Zen Mode)'}
+              type="button"
+            >
+              <i className={`bi ${zenMode ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`} />
+              <span className="reader-btn-label">Zen</span>
+            </button>
           </div>
         </div>
         <div className="reader-progress-line" aria-hidden="true">
@@ -435,7 +923,7 @@ function ContentReaderPage() {
       </header>
 
       {/* Reader Column Container */}
-      <main className="content-reader-column">
+      <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px` }}>
         {/* Resume Banner */}
         {showResumeBanner && savedResume && (
           <aside aria-label="Tiếp tục đọc sách" className="reader-resume-banner">
@@ -700,14 +1188,140 @@ function ContentReaderPage() {
         )}
 
         {/* Reading Body Column */}
-        <article className="content-reader-body-wrap" style={{ fontSize: `${fontSize}px` }}>
+        <article
+          className="content-reader-body-wrap"
+          onMouseUp={handleTextSelection}
+          onTouchEnd={handleTextSelection}
+          style={{
+            fontSize: `${fontSize}px`,
+            lineHeight: lineHeight,
+            textAlign: textAlign,
+          }}
+        >
           <MarginNotesReader
             activeChapterIndex={activeChapterIndex}
             chapters={chapters}
             contentId={item._id || id}
             onChapterChange={setActiveChapterIndex}
+            onParagraphsLoaded={handleParagraphsLoaded}
+            textAlign={textAlign}
+            ttsActiveIndex={isTtsActive ? chapterStartParagraphIndex + ttsLocalIndex : null}
           />
         </article>
+
+        {/* Floating Text Selection Quick Actions */}
+        {selectionMenu && (
+          <aside
+            aria-label="Thao tác nhanh cho đoạn trích"
+            className="selection-action-tooltip"
+            style={{ top: `${selectionMenu.top}px`, left: `${selectionMenu.left}px` }}
+          >
+            <button
+              className="sel-tool-btn"
+              onClick={handleSelHighlight}
+              title="Tô màu làm nổi bật"
+              type="button"
+            >
+              <i className="bi bi-brush-fill" style={{ color: '#eab308' }} />
+              <span>Nổi bật</span>
+            </button>
+            <button
+              className="sel-tool-btn"
+              onClick={handleSelNote}
+              title="Ghi chú đoạn này"
+              type="button"
+            >
+              <i className="bi bi-chat-quote-fill" style={{ color: 'var(--app-accent, #16a09a)' }} />
+              <span>Ghi chú</span>
+            </button>
+            <button
+              className="sel-tool-btn"
+              onClick={handleSelSpeak}
+              title="Đọc to câu này"
+              type="button"
+            >
+              <i className="bi bi-volume-up-fill" style={{ color: '#3b82f6' }} />
+              <span>Đọc to</span>
+            </button>
+            <button
+              className="sel-tool-btn"
+              onClick={handleSelCopy}
+              title="Sao chép đoạn trích"
+              type="button"
+            >
+              <i className="bi bi-clipboard-check" />
+              <span>Sao chép</span>
+            </button>
+          </aside>
+        )}
+
+        {/* Floating TTS Player Dock */}
+        {isTtsActive && (
+          <aside aria-label="Trình đọc sách AI TTS" className="tts-player-dock">
+            <div className="tts-dock-soundwave">
+              <span className={`tts-wave-bar ${isTtsPlaying ? 'animating' : ''}`} />
+              <span className={`tts-wave-bar ${isTtsPlaying ? 'animating' : ''}`} />
+              <span className={`tts-wave-bar ${isTtsPlaying ? 'animating' : ''}`} />
+            </div>
+            <div className="tts-dock-info">
+              <span className="tts-dock-title">
+                {isTtsPlaying ? 'Đang đọc to (AI TTS)...' : 'Đã tạm dừng'}
+              </span>
+              <small className="tts-dock-sub">
+                Đoạn {ttsLocalIndex + 1} / {currentChapterParagraphs.length || 1} • {currentChapterObj?.isIntro ? 'Mở đầu' : `Chương ${currentChapterObj?.order || activeChapterIndex}`}
+              </small>
+            </div>
+            <div className="tts-dock-controls">
+              <button
+                aria-label="Đoạn trước"
+                className="ghost-button tts-dock-btn"
+                disabled={ttsLocalIndex <= 0}
+                onClick={handleTtsPrev}
+                title="Đoạn trước"
+                type="button"
+              >
+                <i className="bi bi-skip-start-fill" />
+              </button>
+              <button
+                aria-label={isTtsPlaying ? 'Tạm dừng đọc' : 'Tiếp tục đọc'}
+                className="primary-button tts-dock-play-btn"
+                onClick={handleTtsTogglePlay}
+                title={isTtsPlaying ? 'Tạm dừng đọc to' : 'Tiếp tục đọc to'}
+                type="button"
+              >
+                <i className={`bi ${isTtsPlaying ? 'bi-pause-fill' : 'bi-play-fill'}`} />
+              </button>
+              <button
+                aria-label="Đoạn sau"
+                className="ghost-button tts-dock-btn"
+                disabled={ttsLocalIndex >= currentChapterParagraphs.length - 1}
+                onClick={handleTtsNext}
+                title="Đoạn sau"
+                type="button"
+              >
+                <i className="bi bi-skip-end-fill" />
+              </button>
+              <button
+                aria-label="Tốc độ đọc"
+                className="ghost-button tts-dock-speed-btn"
+                onClick={handleTtsCycleSpeed}
+                title="Chỉnh tốc độ đọc"
+                type="button"
+              >
+                {ttsSpeed}x
+              </button>
+              <button
+                aria-label="Dừng và đóng trình đọc"
+                className="ghost-button tts-dock-close-btn"
+                onClick={handleTtsStop}
+                title="Đóng trình đọc"
+                type="button"
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </div>
+          </aside>
+        )}
 
         {/* Bottom Reader Utilities */}
         <div className="reader-bottom-nav">
@@ -788,10 +1402,12 @@ function ContentReaderPage() {
           )}
         </div>
 
-        {/* Comments Section */}
-        <section style={{ marginTop: '48px' }}>
-          <ContentComments contentId={item._id || item.id || id} />
-        </section>
+        {/* Comments Section (discrete in zen mode) */}
+        {!zenMode && (
+          <section style={{ marginTop: '48px' }}>
+            <ContentComments contentId={item._id || item.id || id} />
+          </section>
+        )}
       </main>
 
       {/* Floating Bookmark Feedback Toast */}
