@@ -22,6 +22,7 @@ function BookDetailPage({
   onFavorite,
   onHome,
   onAuth,
+  onListen,
   onRead,
   viewCount = 0,
   viewCounts = {},
@@ -107,6 +108,7 @@ function BookDetailPage({
         hasChapters={hasChapters}
         language={language}
         onAuth={onAuth}
+        onListen={onListen}
         onRead={onRead}
         onSaveBook={handleSaveBook}
         onToggleSavePrompt={setShowSavePrompt}

@@ -38,12 +38,17 @@ function ContentPlayerPage() {
     duration,
     playbackRate,
     isBuffering,
+    sleepTimerRemaining,
+    sleepTimerOption,
     loadAudiobook,
     togglePlay,
     seek,
     skip,
     setChapter,
+    nextChapter,
+    prevChapter,
     setPlaybackRate,
+    setSleepTimer,
   } = useAudioPlayer()
 
   const isCurrentTrackLoaded = audioItem && (audioItem._id === id || audioItem.id === id)
@@ -93,14 +98,16 @@ function ContentPlayerPage() {
 
   return (
     <div className="content-player-page">
-      <button className="ghost-button" onClick={() => navigateTo('books')} type="button" style={{ marginBottom: '16px' }}>
-        <i className="bi bi-arrow-left" style={{ marginRight: '6px' }} /> Back to catalog
-      </button>
+      <nav aria-label="Audiobook navigation" style={{ marginBottom: '16px' }}>
+        <button className="ghost-button" onClick={() => navigateTo('books')} type="button">
+          <i className="bi bi-arrow-left" style={{ marginRight: '6px' }} /> Back to catalog
+        </button>
+      </nav>
 
-      <div className="content-player-hero">
+      <section className="content-player-hero">
         <div className="player-hero-cover-wrap">
           {item.cover_image ? (
-            <img alt={item.title} className="player-hero-cover" src={item.cover_image} />
+            <img alt={`${item.title} audiobook cover`} className="player-hero-cover" src={item.cover_image} />
           ) : (
             <div className="player-hero-cover-placeholder">
               <i className="bi bi-headphones" />
@@ -114,14 +121,22 @@ function ContentPlayerPage() {
           <p className="player-hero-author">By <strong>{item.author || 'Unknown'}</strong></p>
 
           {item.pairedContent && (
-            <button
-              className="ghost-button"
-              onClick={() => navigateTo('read', { query: `id=${item.pairedContent.id}` })}
-              style={{ marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              type="button"
-            >
-              <i className="bi bi-book" /> Also available as an ebook &rarr; Read
-            </button>
+            <div className="player-paired-ebook-banner">
+              <div className="player-paired-ebook-info">
+                <i className="bi bi-book-half" />
+                <div>
+                  <strong>Prefer reading text?</strong>
+                  <p>Ebook edition with adjustable typography and margin notes is available.</p>
+                </div>
+              </div>
+              <button
+                className="ghost-button player-paired-read-btn"
+                onClick={() => navigateTo('read', { query: `id=${item.pairedContent.id}` })}
+                type="button"
+              >
+                <i className="bi bi-journal-text" /> Read Ebook &rarr;
+              </button>
+            </div>
           )}
 
           {item.description && (
@@ -132,22 +147,51 @@ function ContentPlayerPage() {
           {currentChapter ? (
             <div className="player-main-controls-card">
               <div className="player-active-chapter-header">
-                <div>
+                <div className="player-chapter-title-box">
                   <span className="mono-eyebrow">Now playing</span>
                   <h3>{currentChapter.title}</h3>
                 </div>
-                <div className="player-speed-pill-group">
-                  {SPEED_OPTIONS.map((rate) => (
-                    <button
-                      className={`ghost-button ${playbackRate === rate ? 'active' : ''}`}
-                      key={rate}
-                      onClick={() => setPlaybackRate(rate)}
-                      style={{ padding: '3px 8px', fontSize: '12px' }}
-                      type="button"
+
+                <div className="player-header-aux-controls">
+                  {/* Speed pills */}
+                  <div className="player-speed-pill-group" role="group" aria-label="Playback speed">
+                    {SPEED_OPTIONS.map((rate) => (
+                      <button
+                        className={`player-speed-pill ${playbackRate === rate ? 'active' : ''}`}
+                        key={rate}
+                        onClick={() => setPlaybackRate(rate)}
+                        type="button"
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Sleep Timer */}
+                  <div className="player-sleep-timer-wrap">
+                    <label className="player-sleep-label" htmlFor="sleep-timer-select">
+                      <i className="bi bi-moon-stars" />
+                    </label>
+                    <select
+                      id="sleep-timer-select"
+                      aria-label="Sleep timer"
+                      className="player-sleep-select"
+                      onChange={(e) => setSleepTimer(e.target.value || null)}
+                      value={sleepTimerOption || ''}
                     >
-                      {rate}x
-                    </button>
-                  ))}
+                      <option value="">Timer: Off</option>
+                      <option value="15">15 mins</option>
+                      <option value="30">30 mins</option>
+                      <option value="45">45 mins</option>
+                      <option value="60">60 mins</option>
+                      <option value="end_chapter">End of chapter</option>
+                    </select>
+                    {sleepTimerRemaining !== null && (
+                      <span className="player-sleep-countdown" title="Sleep timer active">
+                        {formatTime(sleepTimerRemaining)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -155,7 +199,7 @@ function ContentPlayerPage() {
               <div className="player-scrubber-row">
                 <span className="scrubber-time">{formatTime(currentTime)}</span>
                 <input
-                  aria-label="Seek track position"
+                  aria-label="Seek audio track position"
                   className="mini-player-slider"
                   max={duration || 100}
                   min="0"
@@ -167,8 +211,19 @@ function ContentPlayerPage() {
                 <span className="scrubber-time">{formatTime(duration)}</span>
               </div>
 
-              {/* Main buttons */}
+              {/* Main buttons: Prev, Rewind 15s, Play 56px, Forward 15s, Next */}
               <div className="player-controls-row">
+                <button
+                  aria-label="Previous chapter"
+                  className="ghost-button player-btn-ch"
+                  disabled={!isCurrentTrackLoaded || currentChapterIndex <= 0}
+                  onClick={prevChapter}
+                  title="Previous chapter"
+                  type="button"
+                >
+                  <i className="bi bi-skip-backward-fill" />
+                </button>
+
                 <button
                   aria-label="Rewind 15 seconds"
                   className="ghost-button player-btn-skip"
@@ -180,21 +235,17 @@ function ContentPlayerPage() {
                 </button>
 
                 <button
-                  aria-label={isPlaying ? 'Pause' : 'Play'}
-                  className="primary-button player-btn-primary"
+                  aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
+                  className="player-btn-play-round"
                   onClick={togglePlay}
                   type="button"
                 >
                   {isBuffering ? (
                     <span className="spinner-border spinner-border-sm" role="status" />
                   ) : isPlaying ? (
-                    <>
-                      <i className="bi bi-pause-fill" style={{ fontSize: '1.4rem' }} /> Pause
-                    </>
+                    <i className="bi bi-pause-fill" />
                   ) : (
-                    <>
-                      <i className="bi bi-play-fill" style={{ fontSize: '1.4rem' }} /> Play
-                    </>
+                    <i className="bi bi-play-fill" />
                   )}
                 </button>
 
@@ -207,17 +258,28 @@ function ContentPlayerPage() {
                 >
                   <i className="bi bi-arrow-clockwise" /> +15s
                 </button>
+
+                <button
+                  aria-label="Next chapter"
+                  className="ghost-button player-btn-ch"
+                  disabled={!isCurrentTrackLoaded || currentChapterIndex >= activeChapters.length - 1}
+                  onClick={nextChapter}
+                  title="Next chapter"
+                  type="button"
+                >
+                  <i className="bi bi-skip-forward-fill" />
+                </button>
               </div>
             </div>
           ) : (
             <p className="empty-state">No playable chapters found for this audiobook yet.</p>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Chapter List */}
       {activeChapters.length > 0 && (
-        <div className="player-chapters-section">
+        <section className="player-chapters-section">
           <div className="section-heading">
             <div>
               <p className="mono-eyebrow">Playlist</p>
@@ -244,7 +306,7 @@ function ContentPlayerPage() {
                   >
                     <span className="chapter-item-left">
                       <span className="chapter-item-index">{index + 1}</span>
-                      <i className={`bi ${isSelected && isPlaying ? 'bi-volume-up-fill' : isSelected ? 'bi-play-fill' : 'bi-music-note'}`} />
+                      <i className={`bi ${isSelected && isPlaying ? 'bi-volume-up-fill soundwave-icon' : isSelected ? 'bi-play-fill' : 'bi-music-note'}`} />
                       <span className="chapter-item-title">{chapter.title}</span>
                     </span>
                     {isSelected && (
@@ -257,12 +319,12 @@ function ContentPlayerPage() {
               )
             })}
           </ol>
-        </div>
+        </section>
       )}
 
-      <div style={{ marginTop: '32px' }}>
+      <section style={{ marginTop: '36px' }}>
         <ContentComments contentId={item._id} />
-      </div>
+      </section>
     </div>
   )
 }

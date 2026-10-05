@@ -3015,21 +3015,29 @@ progress {
 
 .detail-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 360px) minmax(0, 1fr);
-  gap: clamp(24px, 5vw, 56px);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 48px);
   align-items: start;
-  padding: clamp(18px, 4vw, 34px);
-  border: 1px solid #d8d8d3;
-  border-radius: 8px;
-  background: #ffffff;
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 14px;
+  background: var(--app-surface, #ffffff);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
 
-.detail-layout > img {
+.detail-cover-wrapper {
+  position: sticky;
+  top: 84px;
+}
+
+.detail-layout > img,
+.detail-hero-cover {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
-  aspect-ratio: 3 / 4.2;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
   background: #ddddda;
 }
 
@@ -3038,22 +3046,66 @@ progress {
   gap: 16px;
 }
 
+.detail-title {
+  margin: 0;
+  font-size: clamp(24px, 3.2vw, 36px);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--app-text, #111111);
+}
+
 .detail-author {
   margin: 0;
-  color: #555550;
-  font-size: 20px;
-  font-weight: 800;
+  color: var(--app-text-muted, #555550);
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.rating-row {
+.rating-row,
+.detail-rating-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  color: #111111;
-  font-weight: 900;
+  font-size: 14px;
+  color: var(--app-text, #111111);
 }
 
+.detail-rating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, #f59e0b 16%, var(--app-surface, #ffffff));
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 20px;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.detail-rating-pill i {
+  color: #f59e0b;
+}
+
+.detail-rating-count {
+  color: var(--app-text-muted, #70706a);
+  font-weight: 600;
+}
+
+.detail-meta-dot {
+  color: var(--app-line, #bbb);
+}
+
+.detail-reads-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-muted, #70706a);
+  font-weight: 600;
+}
+
+.detail-reads-count i,
 .rating-row i {
   color: var(--app-accent, #16a09a);
 }
@@ -3066,30 +3118,53 @@ progress {
 
 .detail-meta-grid article {
   display: grid;
-  gap: 5px;
-  min-height: 94px;
+  gap: 4px;
+  min-height: 84px;
   align-content: center;
-  padding: 12px;
-  border: 1px solid #d8d8d3;
-  border-radius: 8px;
-  background: #fbfbf8;
+  padding: 12px 14px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 10px;
+  background: var(--app-surface-soft, #fbfbf8);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-meta-grid article:hover {
+  border-color: var(--app-accent, #16a09a);
+  transform: translateY(-2px);
 }
 
 .detail-meta-grid i {
-  color: #16a09a;
-  font-size: 20px;
+  color: var(--app-accent, #16a09a);
+  font-size: 18px;
 }
 
 .detail-meta-grid strong {
-  color: #111111;
-  font-size: 22px;
-  line-height: 1;
+  color: var(--app-text, #111111);
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 800;
 }
 
 .detail-meta-grid span {
-  color: #666660;
-  font-size: 12px;
-  font-weight: 900;
+  color: var(--app-text-muted, #666660);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.detail-listen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 12%, var(--app-surface, #ffffff));
+  color: var(--app-accent, #16a09a);
+  border: 1px solid var(--app-accent, #16a09a);
+}
+
+.hero-actions .ghost-button.is-saved {
+  color: var(--app-accent, #16a09a);
+  border-color: var(--app-accent, #16a09a);
 }
 
 .book-description {
@@ -10873,7 +10948,7 @@ progress {
 }
 
 /* ==========================================================================
-   CONTENT PLAYER HERO & PLAYLIST SECTION
+   CONTENT PLAYER HERO & PLAYLIST SECTION (OPTION A - AUDIBLE STYLE)
    ========================================================================== */
 
 .content-player-page {
@@ -10884,13 +10959,13 @@ progress {
 
 .content-player-hero {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 32px;
   align-items: start;
   margin-bottom: 36px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .content-player-hero {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -10904,35 +10979,35 @@ progress {
 
 .player-hero-cover {
   width: 100%;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--app-line, #d8d8d3);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 .player-hero-cover-placeholder {
   width: 100%;
-  aspect-ratio: 2 / 3;
-  border-radius: 12px;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--app-accent, #16a09a) 12%, transparent);
   color: var(--app-accent, #16a09a);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 3.5rem;
+  font-size: 3.8rem;
   border: 1px solid var(--app-line, #d8d8d3);
 }
 
 .player-hero-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .player-hero-title {
   margin: 0;
-  font-size: 26px;
+  font-size: clamp(24px, 3.2vw, 34px);
   font-weight: 800;
   color: var(--app-text, #111111);
   line-height: 1.25;
@@ -10940,24 +11015,67 @@ progress {
 
 .player-hero-author {
   margin: 0;
-  font-size: 15px;
-  color: #666660;
+  font-size: 16px;
+  color: var(--app-text-muted, #666660);
 }
 
 .player-hero-desc {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   line-height: 1.65;
-  color: #444440;
+  color: var(--app-text, #444440);
 }
 
+/* Paired Ebook Banner in Player */
+.player-paired-ebook-banner {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 8%, var(--app-surface, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--app-accent, #16a09a) 25%, transparent);
+}
+
+.player-paired-ebook-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-paired-ebook-info i {
+  font-size: 20px;
+  color: var(--app-accent, #16a09a);
+}
+
+.player-paired-ebook-info strong {
+  display: block;
+  font-size: 13px;
+  color: var(--app-text, #111);
+}
+
+.player-paired-ebook-info p {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--app-text-muted, #666);
+}
+
+.player-paired-read-btn {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  white-space: nowrap;
+}
+
+/* Active Chapter Card */
 .player-main-controls-card {
-  margin-top: 18px;
-  padding: 20px;
+  margin-top: 14px;
+  padding: 22px;
   border-radius: 14px;
   background: var(--app-surface, #ffffff);
   border: 1px solid var(--app-line, #d8d8d3);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -10968,30 +11086,84 @@ progress {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 520px) {
-  .player-active-chapter-header {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .content-player-page {
-    padding: 16px 14px 60px;
-  }
-}
-
-.player-active-chapter-header h3 {
+.player-chapter-title-box h3 {
   margin: 2px 0 0;
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--app-text, #111111);
+}
+
+.player-header-aux-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .player-speed-pill-group {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.player-speed-pill {
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface-soft, #f7f7f4);
+  color: var(--app-text, #333);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.player-speed-pill.active {
+  background: var(--app-accent, #16a09a);
+  border-color: var(--app-accent, #16a09a);
+  color: #ffffff;
+}
+
+.player-sleep-timer-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface-soft, #f7f7f4);
+}
+
+.player-sleep-label {
+  color: var(--app-accent, #16a09a);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.player-sleep-select {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text, #333);
+  cursor: pointer;
+  outline: none;
+  padding: 2px 0;
+}
+
+.player-sleep-countdown {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--app-accent, #16a09a);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 15%, transparent);
+  border-radius: 4px;
 }
 
 .player-scrubber-row {
@@ -11003,15 +11175,16 @@ progress {
 .scrubber-time {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: #74746f;
+  color: var(--app-text-muted, #74746f);
   font-weight: 600;
+  min-width: 44px;
 }
 
 .player-controls-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
@@ -11021,14 +11194,41 @@ progress {
   font-weight: 600;
 }
 
-.player-btn-primary {
-  padding: 10px 24px;
-  font-size: 15px;
-  font-weight: 700;
+.player-btn-ch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 30px;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+}
+
+/* 56px circular Play button */
+.player-btn-play-round {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--app-accent, #16a09a);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(22, 160, 154, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.player-btn-play-round:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 18px rgba(22, 160, 154, 0.5);
+}
+
+.player-btn-play-round:active {
+  transform: scale(0.96);
 }
 
 /* Playlist */
@@ -11103,52 +11303,114 @@ progress {
   background: color-mix(in srgb, var(--app-accent, #16a09a) 15%, transparent);
 }
 
+.soundwave-icon {
+  color: var(--app-accent, #16a09a);
+  animation: pulseSoundwave 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseSoundwave {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
 /* ==========================================================================
-   CONTENT READER TOOLBAR, THEMES & RESUME BANNER
+   CONTENT READER (OPTION A - STRICTLY LIGHT & DARK MODES ONLY)
    ========================================================================== */
 
 .content-reader-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 20px 80px;
+  width: 100%;
   min-height: 100vh;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Reader Color Themes */
-.content-reader-page.reader-theme-sepia {
-  background-color: #fbf0d9;
-  color: #524230;
+/* Light Mode: Strictly light, high contrast */
+.content-reader-page.reader-theme-light {
+  background-color: #ffffff;
+  color: #1a1a1a;
 }
 
-.content-reader-page.reader-theme-sepia .content-reader-sticky-bar {
-  background: rgba(251, 240, 217, 0.92);
-  border-bottom-color: #e5d7bd;
+.content-reader-page.reader-theme-light .content-reader-sticky-bar {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom-color: #e5e5e0;
+  color: #111111;
 }
 
+.content-reader-page.reader-theme-light .content-reader-header {
+  border-bottom-color: #ededeb;
+}
+
+/* Dark Mode: Clean, true deep dark */
 .content-reader-page.reader-theme-dark {
-  background-color: #161616;
-  color: #d6d6d2;
+  background-color: #141414;
+  color: #e2e2dc;
 }
 
 .content-reader-page.reader-theme-dark .content-reader-sticky-bar {
-  background: rgba(22, 22, 22, 0.92);
-  border-bottom-color: #2c2c2c;
+  background: rgba(20, 20, 20, 0.94);
+  border-bottom-color: #2a2a2a;
+  color: #f3f3f0;
+}
+
+.content-reader-page.reader-theme-dark .reader-bar-title {
+  color: #ffffff;
+}
+
+.content-reader-page.reader-theme-dark .reader-book-title {
+  color: #ffffff;
+}
+
+.content-reader-page.reader-theme-dark .reader-author-line {
+  color: #9e9e98;
+}
+
+.content-reader-page.reader-theme-dark .reader-desc-line {
+  color: #c4c4be;
+}
+
+.content-reader-page.reader-theme-dark .content-reader-header {
+  border-bottom-color: #282828;
+}
+
+.content-reader-page.reader-theme-dark .content-reader-body-wrap p {
+  color: #e2e2dc;
 }
 
 .content-reader-page.reader-theme-dark .margin-notes-paragraph p {
+  color: #e2e2dc;
+}
+
+.content-reader-page.reader-theme-dark .reader-resume-banner {
+  background: #1c2c2a;
+  border-color: #16a09a;
+  color: #d2edea;
+}
+
+.content-reader-page.reader-theme-dark .reader-paired-callout {
+  background: #1e2625;
+  border-color: #2c4442;
+  color: #e2e2dc;
+}
+
+.content-reader-page.reader-theme-dark .ghost-button {
   color: #d6d6d2;
+  border-color: #383838;
+  background: #1f1f1f;
+}
+
+.content-reader-page.reader-theme-dark .ghost-button:hover {
+  background: #2a2a2a;
+  color: #ffffff;
 }
 
 /* Reader Typography */
 .content-reader-page.reader-font-serif .content-reader-body-wrap {
-  font-family: 'Merriweather', 'Lora', Georgia, serif;
+  font-family: 'Lora', 'Merriweather', Georgia, serif;
   line-height: 1.85;
 }
 
 .content-reader-page.reader-font-sans .content-reader-body-wrap {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.7;
+  line-height: 1.72;
 }
 
 /* Sticky Toolbar */
@@ -11156,11 +11418,9 @@ progress {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: color-mix(in srgb, var(--app-surface, #ffffff) 92%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--app-line, #d8d8d3);
-  margin: 0 -20px 24px;
   padding: 10px 20px;
 }
 
@@ -11195,7 +11455,7 @@ progress {
   color: var(--app-accent, #16a09a);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .reader-btn-group {
@@ -11217,41 +11477,130 @@ progress {
   min-height: auto;
 }
 
-/* Swatches */
-.reader-theme-swatches {
+/* Reader Theme Toggle (Segmented Light / Dark) */
+.reader-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: var(--app-surface-soft, #f0f0ed);
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.content-reader-page.reader-theme-dark .reader-theme-toggle {
+  background: #242424;
+  border-color: #383838;
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-text-muted, #666);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.content-reader-page.reader-theme-dark .theme-toggle-btn {
+  color: #999;
+}
+
+.theme-toggle-btn.active {
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #111111);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+
+.content-reader-page.reader-theme-dark .theme-toggle-btn.active {
+  background: #363636;
+  color: #ffffff;
+}
+
+/* Centered Reading Column */
+.content-reader-column {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+.content-reader-header {
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--app-line, #d8d8d3);
+}
+
+.reader-book-title {
+  margin: 4px 0 8px;
+  font-size: clamp(24px, 3.5vw, 36px);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.reader-author-line {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--app-text-muted, #666660);
+}
+
+.reader-desc-line {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Paired Audiobook Callout Banner in Reader */
+.reader-paired-callout {
+  margin-top: 18px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 10%, var(--app-surface, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--app-accent, #16a09a) 35%, transparent);
 }
 
-.theme-swatch {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid #c8c8c0;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+.reader-paired-callout-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.theme-swatch:hover {
-  transform: scale(1.15);
+.reader-paired-callout-text i {
+  font-size: 24px;
+  color: var(--app-accent, #16a09a);
 }
 
-.theme-swatch.active {
-  box-shadow: 0 0 0 2px var(--app-accent, #16a09a);
+.reader-paired-callout-text strong {
+  display: block;
+  font-size: 14px;
 }
 
-.swatch-light {
-  background: #ffffff;
+.reader-paired-callout-text p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--app-text-muted, #666);
 }
 
-.swatch-sepia {
-  background: #fbf0d9;
+/* Reading Body */
+.content-reader-body-wrap {
+  margin-top: 24px;
+  line-height: 1.85;
+  letter-spacing: -0.003em;
+  word-break: break-word;
 }
 
-.swatch-dark {
-  background: #1e1e1e;
-  border-color: #444;
+.content-reader-body-wrap p {
+  margin-bottom: 1.4em;
 }
 
 /* Resume Alert Banner */
@@ -11279,24 +11628,16 @@ progress {
   padding: 6px 14px;
 }
 
-.content-reader-header {
-  margin-bottom: 28px;
-}
-
-.reader-author-line {
-  margin: 4px 0 0;
-  font-size: 15px;
-  color: #666660;
-}
-
-.reader-desc-line {
-  margin: 10px 0 0;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.content-reader-body-wrap {
-  margin-top: 24px;
+/* Bottom Reader Utilities */
+.reader-bottom-nav {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--app-line, #d8d8d3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* ==========================================================================
@@ -11414,6 +11755,206 @@ progress {
     width: 44px;
     height: 60px;
   }
+}
+
+/* ==========================================================================
+   CUSTOMER PAGES RESPONSIVE & DARK/LIGHT HARMONY (DETAIL, READER, PLAYER)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 18px 14px;
+  }
+
+  .detail-cover-wrapper {
+    position: static;
+    max-width: 200px;
+    margin: 0 auto;
+  }
+
+  .detail-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .detail-meta-grid article {
+    min-height: 74px;
+    padding: 10px 12px;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .hero-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .reader-bar-title {
+    display: none;
+  }
+
+  .content-reader-column {
+    padding: 16px 14px 60px;
+  }
+
+  .content-reader-sticky-bar {
+    padding: 8px 12px;
+  }
+
+  .reader-paired-callout {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .reader-paired-callout button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .content-player-hero {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .player-hero-cover-wrap {
+    position: static;
+    max-width: 220px;
+    margin: 0 auto;
+  }
+
+  .player-header-aux-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .player-paired-ebook-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .player-paired-ebook-banner button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .detail-rating-row {
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .detail-meta-dot {
+    display: none;
+  }
+
+  .detail-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+
+  .reader-bar-controls {
+    gap: 6px;
+  }
+
+  .theme-toggle-btn .theme-label {
+    display: none;
+  }
+
+  .player-controls-row {
+    gap: 8px;
+  }
+
+  .player-btn-skip {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .player-btn-play-round {
+    width: 50px;
+    height: 50px;
+    font-size: 1.4rem;
+  }
+}
+
+/* Dark Theme Overrides for Customer Pages */
+.app-theme-dark .detail-meta-grid strong {
+  color: var(--app-text);
+}
+
+.app-theme-dark .detail-author {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .book-description {
+  color: var(--app-text);
+}
+
+.app-theme-dark .detail-rating-pill {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.app-theme-dark .detail-rating-count,
+.app-theme-dark .detail-reads-count {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .player-hero-desc {
+  color: var(--app-text);
+}
+
+.app-theme-dark .player-hero-author {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .player-speed-pill {
+  background: var(--app-surface-soft);
+  border-color: var(--app-line);
+  color: var(--app-text);
+}
+
+.app-theme-dark .player-speed-pill.active {
+  background: var(--app-accent);
+  color: #ffffff;
+}
+
+.app-theme-dark .player-sleep-timer-wrap {
+  background: var(--app-surface-soft);
+  border-color: var(--app-line);
+}
+
+.app-theme-dark .player-sleep-select {
+  color: var(--app-text);
+}
+
+.app-theme-dark .player-sleep-select option {
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.app-theme-dark .player-paired-ebook-info strong {
+  color: var(--app-text);
+}
+
+.app-theme-dark .player-paired-ebook-info p {
+  color: var(--app-muted);
+}
+
+.app-theme-dark .checkpoint-chip {
+  background: rgba(22, 160, 154, 0.18);
+  border-color: rgba(22, 160, 154, 0.4);
+  color: #5eead4;
 }
 
 

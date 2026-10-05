@@ -1244,6 +1244,7 @@ function App() {
         onHome={() => navigateTo('home')}
         onAuth={goAuth}
         onRead={openBook}
+        onListen={(book) => navigateTo('listen', { query: `id=${book.pairedContent?.id || book.audiobookId || book._id || book.id}` })}
         viewCount={selectedBook ? viewCounts[selectedBook.id] || 0 : 0}
         viewCounts={viewCounts}
         viewerCount={selectedBook ? bookReaders[selectedBook.id]?.length || 0 : 0}
