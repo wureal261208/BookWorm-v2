@@ -11582,7 +11582,8 @@ progress {
   background: #b86a24;
 }
 
-.content-reader-page.reader-theme-sepia .reader-toc-drawer {
+.content-reader-page.reader-theme-sepia .reader-toc-drawer,
+.content-reader-page.reader-theme-sepia .reader-toc-adjacent-popover {
   background: #f8efe0;
   border-color: #ebd9ba;
   color: #433422;
@@ -12624,7 +12625,8 @@ progress {
     gap: 10px;
   }
 
-  .reader-bottom-nav button {
+  .reader-bottom-nav button,
+  .reader-bottom-nav .reader-bottom-toc-wrap {
     width: 100%;
     justify-content: center;
   }
@@ -13154,7 +13156,25 @@ progress {
   line-height: 1.3;
 }
 
-/* Reader Table of Contents Trigger */
+/* Reader Table of Contents Trigger & Adjacent Popover */
+.reader-toc-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.reader-bottom-toc-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.zen-toc-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .reader-toc-trigger {
   display: inline-flex;
   align-items: center;
@@ -13167,6 +13187,7 @@ progress {
   background: var(--app-surface);
   color: var(--app-text);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .reader-toc-trigger.active,
@@ -13175,7 +13196,64 @@ progress {
   color: var(--app-accent);
 }
 
-/* Table of Contents Drawer */
+/* Adjacent Quick Popover for Chapters */
+.reader-toc-adjacent-popover {
+  position: absolute;
+  width: 390px;
+  max-width: min(390px, calc(100vw - 24px));
+  max-height: min(560px, 78vh);
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 14px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.18), 0 4px 14px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 1050;
+  animation: popoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  text-align: left;
+}
+
+/* Placement top bar: under the button, aligned left */
+.reader-toc-adjacent-popover.placement-top {
+  top: calc(100% + 8px);
+  left: 0;
+}
+
+/* Placement bottom nav: above the button, centered */
+.reader-toc-adjacent-popover.placement-bottom {
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Placement zen pill: under the pill, centered */
+.reader-toc-adjacent-popover.placement-zen {
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 640px) {
+  .reader-toc-adjacent-popover.placement-top,
+  .reader-toc-adjacent-popover.placement-bottom,
+  .reader-toc-adjacent-popover.placement-zen {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    max-height: 82vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* Table of Contents Drawer (Legacy/Drawer compatibility) */
 .reader-toc-overlay {
   position: fixed;
   inset: 0;
@@ -13788,7 +13866,8 @@ progress {
 }
 
 /* Dark Theme Overrides for Reader TOC & Comments */
-.content-reader-page.reader-theme-dark .reader-toc-drawer {
+.content-reader-page.reader-theme-dark .reader-toc-drawer,
+.content-reader-page.reader-theme-dark .reader-toc-adjacent-popover {
   background: #14171a;
   border-color: rgba(255, 255, 255, 0.1);
 }
@@ -13895,7 +13974,8 @@ progress {
   border-color: rgba(22, 160, 154, 0.35);
 }
 
-.app-theme-dark .reader-toc-drawer {
+.app-theme-dark .reader-toc-drawer,
+.app-theme-dark .reader-toc-adjacent-popover {
   background: #141416;
   border-color: rgba(255, 255, 255, 0.1);
 }

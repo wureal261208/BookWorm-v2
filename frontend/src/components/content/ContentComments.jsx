@@ -14,12 +14,12 @@ function formatCommentDate(dateString) {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-    if (diffMins < 1) return 'Vừa xong'
-    if (diffMins < 60) return `${diffMins} phút trước`
-    if (diffHours < 24) return `${diffHours} giờ trước`
-    if (diffDays === 1) return 'Hôm qua'
-    if (diffDays < 7) return `${diffDays} ngày trước`
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   } catch (_) {
     return String(dateString).slice(0, 10)
   }
@@ -32,9 +32,9 @@ function getAuthorInitial(name) {
 }
 
 function formatRoleBadge(role) {
-  if (role === 'admin') return 'Quản trị viên'
-  if (role === 'staff') return 'Biên tập viên'
-  return 'Thành viên'
+  if (role === 'admin') return 'Admin'
+  if (role === 'staff') return 'Staff'
+  return 'Member'
 }
 
 function ContentComments({ contentId }) {
@@ -80,7 +80,7 @@ function ContentComments({ contentId }) {
       }
       setText('')
     } catch (err) {
-      setError(err.message || 'Không thể gửi bình luận. Vui lòng thử lại.')
+      setError(err.message || 'Could not post comment. Please try again.')
     } finally {
       setPosting(false)
     }
@@ -90,24 +90,24 @@ function ContentComments({ contentId }) {
   const isGuest = !auth.currentUser
 
   return (
-    <section className="section-block comments-section" aria-label="Bình luận độc giả">
+    <section className="section-block comments-section" aria-label="Reader comments">
       <div className="section-heading">
         <div>
           <p className="mono-eyebrow">
             <i className="bi bi-chat-heart" style={{ marginRight: '6px' }} />
-            Góc thảo luận &amp; cảm nhận
+            Community discussion
           </p>
-          <h2>Bình luận độc giả</h2>
+          <h2>Reader comments</h2>
         </div>
-        <span className="comments-count-pill">{comments.length} bình luận</span>
+        <span className="comments-count-pill">{comments.length} {comments.length === 1 ? 'comment' : 'comments'}</span>
       </div>
 
       {isGuest ? (
         <div className="comment-guest-prompt">
           <i className="bi bi-person-lock" style={{ fontSize: '1.4rem', color: 'var(--app-accent)' }} />
           <div>
-            <strong>Tham gia bình luận cùng bạn đọc</strong>
-            <p>Vui lòng đăng nhập để gửi cảm nhận, bình luận và ghi dấu ấn cùng cộng đồng BookWorm.</p>
+            <strong>Join the discussion</strong>
+            <p>Please sign in to share thoughts, reviews, and notes with the BookWorm community.</p>
           </div>
         </div>
       ) : (
@@ -123,7 +123,7 @@ function ContentComments({ contentId }) {
               {getAuthorInitial(auth.currentUser?.displayName || auth.currentUser?.email)}
             </span>
             <label htmlFor="content-comment-input">
-              Bình luận với tư cách <strong>{auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Bạn đọc'}</strong>
+              Commenting as <strong>{auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Reader'}</strong>
             </label>
           </div>
           <textarea
@@ -135,7 +135,7 @@ function ContentComments({ contentId }) {
                 submitComment()
               }
             }}
-            placeholder="Chia sẻ cảm nghĩ, góc nhìn hay đoạn tâm đắc của bạn về tác phẩm này... (Nhấn Ctrl+Enter để gửi nhanh)"
+            placeholder="Share your thoughts, perspectives, or favorite quotes about this title... (Ctrl+Enter to post)"
             rows={3}
             value={text}
           />
@@ -145,15 +145,15 @@ function ContentComments({ contentId }) {
             </p>
           )}
           <div className="comment-form-actions">
-            <small className="comment-shortcut-hint">Mẹo: Nhấn Ctrl + Enter để gửi</small>
+            <small className="comment-shortcut-hint">Tip: Press Ctrl + Enter to submit</small>
             <button className="primary-button" disabled={!text.trim() || posting} type="submit">
               {posting ? (
                 <>
-                  <span className="admin-spin-small" /> Đang gửi...
+                  <span className="admin-spin-small" /> Posting...
                 </>
               ) : (
                 <>
-                  <i className="bi bi-send-fill" /> Gửi bình luận
+                  <i className="bi bi-send-fill" /> Post comment
                 </>
               )}
             </button>
@@ -163,7 +163,7 @@ function ContentComments({ contentId }) {
 
       {loading ? (
         <div className="empty-state comment-loading-state">
-          <span className="admin-spin-small" /> Đang tải bình luận...
+          <span className="admin-spin-small" /> Loading comments...
         </div>
       ) : visibleComments.length > 0 ? (
         <div className="comment-list">
@@ -175,12 +175,12 @@ function ContentComments({ contentId }) {
               <div className="comment-item-content">
                 <div className="comment-item-header">
                   <div className="comment-item-author-wrap">
-                    <strong className="comment-item-author">{comment.author?.name || 'Độc giả'}</strong>
+                    <strong className="comment-item-author">{comment.author?.name || 'Reader'}</strong>
                     <span className="comment-role-badge">
                       {formatRoleBadge(comment.author?.role)}
                     </span>
                   </div>
-                  <time className="comment-item-time" dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString('vi-VN')}>
+                  <time className="comment-item-time" dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString('en-US')}>
                     {formatCommentDate(comment.createdAt)}
                   </time>
                 </div>
@@ -191,14 +191,14 @@ function ContentComments({ contentId }) {
           {comments.length > PREVIEW_LIMIT && (
             <button className="ghost-button comment-more-button" onClick={() => setShowAll((value) => !value)} type="button">
               <i className={`bi ${showAll ? 'bi-chevron-up' : 'bi-chat-dots'}`} />
-              {showAll ? 'Thu gọn bình luận' : `Xem thêm ${comments.length - PREVIEW_LIMIT} bình luận khác`}
+              {showAll ? 'Collapse comments' : `Show ${comments.length - PREVIEW_LIMIT} more comments`}
             </button>
           )}
         </div>
       ) : (
         <div className="empty-state comment-empty-state">
           <i className="bi bi-chat-square-quote" style={{ fontSize: '1.6rem', color: 'var(--app-muted)' }} />
-          <p>Chưa có bình luận nào cho tác phẩm này. Hãy là người đầu tiên chia sẻ cảm nghĩ!</p>
+          <p>No comments yet for this title. Be the first to share your thoughts!</p>
         </div>
       )}
     </section>

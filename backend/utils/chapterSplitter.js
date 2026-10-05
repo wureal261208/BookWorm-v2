@@ -110,7 +110,7 @@ function splitParagraphsIntoChapters(paragraphs, defaultBookTitle = 'Book') {
       chapters.push({
         order: 0,
         isIntro: true,
-        title: h0.title || 'Phần mở đầu (Introduction)',
+        title: h0.title || 'Introduction',
         startParagraph: h0.index,
         endParagraph: end,
         paragraphCount: Math.max(1, end - h0.index + 1),
@@ -123,7 +123,7 @@ function splitParagraphsIntoChapters(paragraphs, defaultBookTitle = 'Book') {
       chapters.push({
         order: 0,
         isIntro: true,
-        title: 'Phần mở đầu (Introduction)',
+        title: 'Introduction',
         startParagraph: 0,
         endParagraph: filteredHeadings[0].index - 1,
         paragraphCount: introCount,
@@ -163,7 +163,7 @@ function splitParagraphsIntoChapters(paragraphs, defaultBookTitle = 'Book') {
   fallbackChapters.push({
     order: 0,
     isIntro: true,
-    title: 'Phần mở đầu (Introduction)',
+    title: 'Introduction',
     startParagraph: 0,
     endParagraph: introEnd,
     paragraphCount: introEnd + 1,
@@ -179,7 +179,7 @@ function splitParagraphsIntoChapters(paragraphs, defaultBookTitle = 'Book') {
     fallbackChapters.push({
       order: c,
       isIntro: false,
-      title: `Chương ${c}`,
+      title: `Chapter ${c}`,
       startParagraph: start,
       endParagraph: end,
       paragraphCount: count,

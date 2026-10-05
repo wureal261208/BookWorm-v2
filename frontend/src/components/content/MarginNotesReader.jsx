@@ -82,7 +82,7 @@ function MarginNotesReader({
       {
         order: 0,
         isIntro: true,
-        title: 'Phần mở đầu (Introduction)',
+        title: 'Introduction',
         startParagraph: 0,
         excerpt: paragraphs[0]?.slice(0, 100) || '',
       },
@@ -91,7 +91,7 @@ function MarginNotesReader({
       list.push({
         order: i,
         isIntro: false,
-        title: `Chương ${i}`,
+        title: `Chapter ${i}`,
         startParagraph: i * CHUNK_SIZE,
         excerpt: paragraphs[i * CHUNK_SIZE]?.slice(0, 100) || '',
       })
@@ -147,7 +147,7 @@ function MarginNotesReader({
     )
   }
   if (error) return <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>
-  if (!paragraphs.length) return <p className="empty-state">Chưa có văn bản đọc cho cuốn sách này.</p>
+  if (!paragraphs.length) return <p className="empty-state">No reading text available for this book yet.</p>
 
   const totalRegularChapters = effectiveChapters.filter((c) => !c.isIntro && c.order !== 0).length || effectiveChapters.length
 
@@ -160,13 +160,13 @@ function MarginNotesReader({
             <div className="reader-chapter-badge">
               <span>
                 {currentChapter.isIntro || currentChapter.order === 0
-                  ? 'Phần mở đầu (Introduction)'
-                  : `Chương ${currentChapter.order || activeChapterIndex} / ${totalRegularChapters}`}
+                  ? 'Introduction'
+                  : `Chapter ${currentChapter.order || activeChapterIndex} / ${totalRegularChapters}`}
               </span>
             </div>
             {totalWords > 0 && (
               <span className="reading-time-badge">
-                <i className="bi bi-clock-history" /> ~{estimatedReadingMinutes} phút đọc ({totalWords.toLocaleString()} từ)
+                <i className="bi bi-clock-history" /> ~{estimatedReadingMinutes} min read ({totalWords.toLocaleString()} words)
               </span>
             )}
           </div>
@@ -191,10 +191,10 @@ function MarginNotesReader({
             <div className="margin-notes-paragraph" id={`paragraph-${globalIndex}`}>
               <p className={localIndex === 0 ? 'drop-cap' : ''}>{paragraph}</p>
               <button
-                aria-label={`Ghi chú cho đoạn ${globalIndex + 1}`}
+                aria-label={`Notes for paragraph ${globalIndex + 1}`}
                 className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}
                 onClick={() => toggleParagraph(globalIndex)}
-                title="Thêm hoặc xem ghi chú bên lề"
+                title="Add or view margin notes"
                 type="button"
               >
                 <i className="bi bi-chat-square-text" /> {notes.length > 0 ? notes.length : ''}
@@ -209,16 +209,16 @@ function MarginNotesReader({
                     </div>
                   ))}
                   {isGuest ? (
-                    <p className="empty-state">Đăng nhập để thêm ghi chú bên lề.</p>
+                    <p className="empty-state">Sign in to add margin notes.</p>
                   ) : (
                     <div className="margin-notes-form">
                       <textarea
                         onChange={(event) => setNoteText(event.target.value)}
-                        placeholder="Thêm ghi chú suy nghĩ cho đoạn văn này..."
+                        placeholder="Add your margin note or thoughts for this paragraph..."
                         value={noteText}
                       />
                       <button className="primary-button" disabled={!noteText.trim() || posting} onClick={() => submitNote(globalIndex)} type="button">
-                        {posting ? 'Đang lưu...' : 'Thêm ghi chú'}
+                        {posting ? 'Saving...' : 'Save note'}
                       </button>
                     </div>
                   )}
@@ -231,7 +231,7 @@ function MarginNotesReader({
 
       {/* Chapter Navigation Footer */}
       {effectiveChapters.length > 0 && (
-        <nav aria-label="Điều hướng chương" className="reader-chapter-nav">
+        <nav aria-label="Chapter navigation" className="reader-chapter-nav">
           <button
             className="ghost-button reader-nav-prev-btn"
             disabled={activeChapterIndex <= 0}
@@ -242,13 +242,13 @@ function MarginNotesReader({
             type="button"
           >
             <i className="bi bi-chevron-left" />
-            <span>{prevChapter ? prevChapter.title : 'Chương trước'}</span>
+            <span>{prevChapter ? prevChapter.title : 'Previous chapter'}</span>
           </button>
 
           <span className="reader-nav-indicator">
             {currentChapter?.isIntro || currentChapter?.order === 0
-              ? 'Phần mở đầu'
-              : `Chương ${currentChapter?.order || activeChapterIndex} / ${totalRegularChapters}`}
+              ? 'Introduction'
+              : `Chapter ${currentChapter?.order || activeChapterIndex} / ${totalRegularChapters}`}
           </span>
 
           {activeChapterIndex < effectiveChapters.length - 1 ? (
@@ -260,12 +260,12 @@ function MarginNotesReader({
               }}
               type="button"
             >
-              <span>{nextChapter ? nextChapter.title : 'Chương tiếp'}</span>
+              <span>{nextChapter ? nextChapter.title : 'Next chapter'}</span>
               <i className="bi bi-chevron-right" />
             </button>
           ) : (
             <div className="reader-nav-finished">
-              <i className="bi bi-check-circle-fill" /> Đã hoàn thành sách
+              <i className="bi bi-check-circle-fill" /> Book completed
             </div>
           )}
         </nav>

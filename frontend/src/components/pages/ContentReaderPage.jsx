@@ -52,9 +52,19 @@ function ContentReaderPage() {
   const [chapters, setChapters] = useState([])
   const [chaptersLoading, setChaptersLoading] = useState(false)
   const [showToc, setShowToc] = useState(false)
+  const [tocOrigin, setTocOrigin] = useState('top') // 'top' | 'bottom' | 'zen'
   const [tocTab, setTocTab] = useState('chapters') // 'chapters' | 'bookmarks'
   const [tocSearch, setTocSearch] = useState('')
   const [activeChapterIndex, setActiveChapterIndex] = useState(0)
+
+  function handleToggleToc(origin = 'top') {
+    if (showToc && tocOrigin === origin) {
+      setShowToc(false)
+    } else {
+      setTocOrigin(origin)
+      setShowToc(true)
+    }
+  }
 
   // Track recent previous chapter when jumping across chapters
   const [recentPreviousChapter, setRecentPreviousChapter] = useState(() => {
@@ -113,7 +123,7 @@ function ContentReaderPage() {
         id,
         chapterIndex: activeChapterIndex,
         chapterOrder: ch?.order ?? activeChapterIndex,
-        chapterTitle: ch?.title || (ch?.isIntro ? 'Phần mở đầu' : `Chương ${activeChapterIndex + 1}`),
+        chapterTitle: ch?.title || (ch?.isIntro ? 'Introduction' : `Chapter ${activeChapterIndex + 1}`),
         totalChapters: chapters.length,
         percent: Math.round(((activeChapterIndex + 1) / chapters.length) * 100),
         updatedAt: Date.now(),
@@ -150,7 +160,7 @@ function ContentReaderPage() {
           `bookworm_last_read_prev_${id}`,
           JSON.stringify({
             chapterIndex: activeChapterIndex,
-            chapterTitle: chapters[activeChapterIndex]?.title || `Chương ${activeChapterIndex}`,
+            chapterTitle: chapters[activeChapterIndex]?.title || `Chapter ${activeChapterIndex}`,
             timestamp: Date.now(),
           })
         )
@@ -168,17 +178,17 @@ function ContentReaderPage() {
     let updated = []
     if (exists) {
       updated = bookmarks.filter((b) => b.chapterIndex !== activeChapterIndex)
-      setToastMsg('Đã bỏ đánh dấu chương này.')
+      setToastMsg('Bookmark removed.')
     } else {
       const newBm = {
         id: `bm-${Date.now()}`,
         chapterIndex: activeChapterIndex,
         chapterOrder: ch?.order ?? activeChapterIndex,
-        chapterTitle: ch?.title || (ch?.isIntro ? 'Phần mở đầu' : `Chương ${activeChapterIndex}`),
+        chapterTitle: ch?.title || (ch?.isIntro ? 'Introduction' : `Chapter ${activeChapterIndex}`),
         timestamp: Date.now(),
       }
       updated = [newBm, ...bookmarks]
-      setToastMsg(`Đã đánh dấu ${ch?.isIntro ? 'Phần mở đầu' : `Chương ${ch?.order || activeChapterIndex}`}!`)
+      setToastMsg(`Bookmarked ${ch?.isIntro ? 'Introduction' : `Chapter ${ch?.order || activeChapterIndex}`}!`)
     }
     setBookmarks(updated)
     try {
@@ -193,7 +203,7 @@ function ContentReaderPage() {
     try {
       localStorage.setItem(`bookworm_bookmarks_${id}`, JSON.stringify(updated))
     } catch (_) {}
-    setToastMsg('Đã xoá dấu trang.')
+    setToastMsg('Bookmark deleted.')
   }
 
   const isCurrentBookmarked = bookmarks.some((b) => b.chapterIndex === activeChapterIndex)
@@ -227,13 +237,21 @@ function ContentReaderPage() {
   // Dismiss popover when clicking outside
   useEffect(() => {
     function handleClickOutside(e) {
-      if (showAaPopover && !e.target.closest('.reader-aa-popover') && !e.target.closest('.reader-aa-trigger')) {
+      if (showAaPopover && !e.target.closest('.reader-aa-popover') && !e.target.closest('.reader-aa-trigger') && !e.target.closest('.zen-pill-btn')) {
         setShowAaPopover(false)
+      }
+      if (
+        showToc &&
+        !e.target.closest('.reader-toc-wrap') &&
+        !e.target.closest('.reader-bottom-toc-wrap') &&
+        !e.target.closest('.zen-toc-wrap')
+      ) {
+        setShowToc(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showAaPopover])
+  }, [showAaPopover, showToc])
 
   // Keyboard shortcut: Escape exits Zen mode, closes drawers and selection popovers
   useEffect(() => {
@@ -261,7 +279,7 @@ function ContentReaderPage() {
   const playParagraphTts = useCallback(
     (index, paragraphs = currentChapterParagraphs, speed = ttsSpeed) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        setToastMsg('Trình duyệt không hỗ trợ Web Speech API đọc to.')
+        setToastMsg('Browser does not support Web Speech API for reading aloud.')
         return
       }
       if (!paragraphs || index >= paragraphs.length || index < 0) {
@@ -295,7 +313,7 @@ function ContentReaderPage() {
           playParagraphTts(index + 1, paragraphs, speed)
         } else {
           stopTts()
-          setToastMsg('Đã hoàn thành đọc to chương này.')
+          setToastMsg('Finished reading this chapter aloud.')
         }
       }
 
@@ -320,7 +338,7 @@ function ContentReaderPage() {
 
   function handleStartTts() {
     if (!currentChapterParagraphs.length) {
-      setToastMsg('Đang chuẩn bị nội dung đọc...')
+      setToastMsg('Preparing reading content...')
       return
     }
     if (isTtsActive && isTtsPlaying) {
@@ -335,7 +353,7 @@ function ContentReaderPage() {
     }
     setTtsLocalIndex(0)
     playParagraphTts(0, currentChapterParagraphs, ttsSpeed)
-    setToastMsg('Bắt đầu đọc to chương này bằng giọng AI...')
+    setToastMsg('Starting AI reading aloud for this chapter...')
   }
 
   function handleTtsTogglePlay() {
@@ -380,7 +398,7 @@ function ContentReaderPage() {
 
   function handleTtsStop() {
     stopTts()
-    setToastMsg('Đã dừng đọc to.')
+    setToastMsg('Reading aloud stopped.')
   }
 
   // Stop TTS on chapter change or unmount
@@ -425,13 +443,13 @@ function ContentReaderPage() {
   }
 
   function handleSelHighlight() {
-    setToastMsg('Đã làm nổi bật đoạn trích!')
+    setToastMsg('Snippet highlighted.')
     setSelectionMenu(null)
     window.getSelection()?.removeAllRanges()
   }
 
   function handleSelNote() {
-    setToastMsg('Bấm biểu tượng ghi chú 💬 bên cạnh đoạn văn để lưu ghi chú.')
+    setToastMsg('Click the note icon 💬 beside the paragraph to add a margin note.')
     setSelectionMenu(null)
   }
 
@@ -445,7 +463,7 @@ function ContentReaderPage() {
       const viVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
       if (viVoice) utt.voice = viVoice
       window.speechSynthesis.speak(utt)
-      setToastMsg('Đang đọc câu vừa chọn...')
+      setToastMsg('Reading selected text...')
     }
     setSelectionMenu(null)
   }
@@ -455,7 +473,7 @@ function ContentReaderPage() {
     navigator.clipboard
       ?.writeText(selectionMenu.text)
       .then(() => {
-        setToastMsg('Đã sao chép đoạn trích vào bộ nhớ tạm!')
+        setToastMsg('Snippet copied to clipboard.')
       })
       .catch(() => {})
     setSelectionMenu(null)
@@ -568,7 +586,7 @@ function ContentReaderPage() {
         return (
           (c.title && c.title.toLowerCase().includes(query)) ||
           String(c.order).includes(query) ||
-          (c.isIntro && 'mở đầu introduction'.includes(query))
+          (c.isIntro && 'introduction intro'.includes(query))
         )
       })
     : chapters
@@ -577,33 +595,54 @@ function ContentReaderPage() {
     <div className={`content-reader-page reader-theme-${theme} reader-font-${fontFamily} ${zenMode ? 'reader-zen-active' : ''}`}>
       {/* Floating Zen Pill when in Zen distraction-free mode */}
       {zenMode && (
-        <aside aria-label="Điều khiển chế độ tập trung" className="reader-zen-floating-pill">
+        <aside aria-label="Zen mode controls" className="reader-zen-floating-pill">
           <button
             className="ghost-button zen-pill-exit"
             onClick={() => setZenMode(false)}
-            title="Thoát chế độ tập trung (Esc)"
+            title="Exit Zen mode (Esc)"
             type="button"
           >
             <i className="bi bi-x-lg" />
-            <span>Thoát Zen (Esc)</span>
+            <span>Exit Zen (Esc)</span>
           </button>
           <div className="zen-pill-divider" />
           <button
             className="ghost-button zen-pill-btn"
             onClick={() => setShowAaPopover((v) => !v)}
-            title="Tuỳ chỉnh giao diện"
+            title="Reading appearance"
             type="button"
           >
             <i className="bi bi-fonts" />
           </button>
-          <button
-            className="ghost-button zen-pill-btn"
-            onClick={() => setShowToc((v) => !v)}
-            title="Mục lục chương"
-            type="button"
-          >
-            <i className="bi bi-list-ul" />
-          </button>
+          <div className="zen-toc-wrap">
+            <button
+              aria-expanded={showToc && tocOrigin === 'zen'}
+              className="ghost-button zen-pill-btn"
+              onClick={() => handleToggleToc('zen')}
+              title="Table of contents"
+              type="button"
+            >
+              <i className="bi bi-list-ul" />
+            </button>
+            {showToc && tocOrigin === 'zen' && (
+              <ChapterTocPopover
+                activeChapterIndex={activeChapterIndex}
+                bookmarks={bookmarks}
+                chapters={chapters}
+                chaptersLoading={chaptersLoading}
+                filteredChapters={filteredChapters}
+                handleRemoveBookmark={handleRemoveBookmark}
+                jumpToChapter={jumpToChapter}
+                onClose={() => setShowToc(false)}
+                placement="zen"
+                recentPreviousChapter={recentPreviousChapter}
+                setTocSearch={setTocSearch}
+                setTocTab={setTocTab}
+                tocSearch={tocSearch}
+                tocTab={tocTab}
+              />
+            )}
+          </div>
           <span className="zen-pill-progress">{readPercent}%</span>
         </aside>
       )}
@@ -612,7 +651,7 @@ function ContentReaderPage() {
       <header className="content-reader-sticky-bar">
         <div className="reader-bar-inner">
           <button className="ghost-button reader-bar-back" onClick={() => navigateTo('detail', { query: `id=${id}` })} type="button">
-            <i className="bi bi-arrow-left" /> Trở lại
+            <i className="bi bi-arrow-left" /> Back
           </button>
 
           <span className="reader-bar-title" title={item.title}>
@@ -620,35 +659,57 @@ function ContentReaderPage() {
           </span>
 
           <div className="reader-bar-controls">
-            {/* Table of Contents trigger button */}
-            <button
-              aria-label="Mục lục chương"
-              className={`ghost-button reader-toc-trigger ${showToc ? 'active' : ''}`}
-              onClick={() => setShowToc((v) => !v)}
-              title="Mục lục chương & Dấu trang"
-              type="button"
-            >
-              <i className="bi bi-list-ul" />
-              <span className="reader-toc-trigger-text">
-                {chapters.length
-                  ? currentChapterObj?.isIntro
-                    ? 'Mở đầu'
-                    : `Chương ${currentChapterObj?.order || activeChapterIndex}`
-                  : 'Mục lục'}
-              </span>
-            </button>
+            {/* Table of Contents Trigger & Adjacent Popover */}
+            <div className="reader-toc-wrap">
+              <button
+                aria-expanded={showToc && tocOrigin === 'top'}
+                aria-label="Table of contents"
+                className={`ghost-button reader-toc-trigger ${showToc && tocOrigin === 'top' ? 'active' : ''}`}
+                onClick={() => handleToggleToc('top')}
+                title="Table of contents & bookmarks"
+                type="button"
+              >
+                <i className="bi bi-list-ul" />
+                <span className="reader-toc-trigger-text">
+                  {chapters.length
+                    ? currentChapterObj?.isIntro
+                      ? 'Introduction'
+                      : `Chapter ${currentChapterObj?.order || activeChapterIndex}`
+                    : 'Contents'}
+                </span>
+              </button>
+
+              {showToc && tocOrigin === 'top' && (
+                <ChapterTocPopover
+                  activeChapterIndex={activeChapterIndex}
+                  bookmarks={bookmarks}
+                  chapters={chapters}
+                  chaptersLoading={chaptersLoading}
+                  filteredChapters={filteredChapters}
+                  handleRemoveBookmark={handleRemoveBookmark}
+                  jumpToChapter={jumpToChapter}
+                  onClose={() => setShowToc(false)}
+                  placement="top"
+                  recentPreviousChapter={recentPreviousChapter}
+                  setTocSearch={setTocSearch}
+                  setTocTab={setTocTab}
+                  tocSearch={tocSearch}
+                  tocTab={tocTab}
+                />
+              )}
+            </div>
 
             {/* Bookmark button */}
             <button
-              aria-label={isCurrentBookmarked ? 'Bỏ lưu dấu trang' : 'Đánh dấu chương này'}
+              aria-label={isCurrentBookmarked ? 'Remove bookmark' : 'Bookmark this chapter'}
               aria-pressed={isCurrentBookmarked}
               className={`ghost-button reader-bookmark-trigger ${isCurrentBookmarked ? 'active' : ''}`}
               onClick={handleToggleBookmark}
-              title={isCurrentBookmarked ? 'Bỏ lưu dấu trang' : 'Đánh dấu chương này để quay lại'}
+              title={isCurrentBookmarked ? 'Remove bookmark' : 'Bookmark this chapter to return later'}
               type="button"
             >
               <i className={`bi ${isCurrentBookmarked ? 'bi-bookmark-check-fill' : 'bi-bookmark-plus'}`} />
-              <span className="reader-bookmark-text">{isCurrentBookmarked ? 'Đã lưu' : 'Đánh dấu'}</span>
+              <span className="reader-bookmark-text">{isCurrentBookmarked ? 'Saved' : 'Bookmark'}</span>
             </button>
 
             {/* Reading progress indicator */}
@@ -657,39 +718,39 @@ function ContentReaderPage() {
               title={
                 chapters.length > 0
                   ? currentChapterObj?.isIntro
-                    ? 'Phần mở đầu (Introduction)'
-                    : `Chương ${currentChapterObj?.order || activeChapterIndex} / ${totalRegularChapters}`
-                  : `${readPercent}% tiến độ`
+                    ? 'Introduction'
+                    : `Chapter ${currentChapterObj?.order || activeChapterIndex} / ${totalRegularChapters}`
+                  : `${readPercent}% progress`
               }
             >
               <i className="bi bi-bookmark-check-fill" />{' '}
               {chapters.length > 0
                 ? currentChapterObj?.isIntro
-                  ? 'Mở đầu'
+                  ? 'Intro'
                   : `Ch. ${currentChapterObj?.order || activeChapterIndex}/${totalRegularChapters}`
                 : `${readPercent}%`}
             </span>
 
             {/* Text-to-Speech (AI TTS) trigger */}
             <button
-              aria-label={isTtsPlaying ? 'Tạm dừng đọc to' : 'Đọc to bằng giọng AI'}
+              aria-label={isTtsPlaying ? 'Pause reading aloud' : 'Read aloud with AI voice'}
               className={`ghost-button reader-bar-icon-btn reader-tts-trigger ${isTtsActive ? 'active' : ''}`}
               onClick={handleStartTts}
-              title={isTtsActive ? (isTtsPlaying ? 'Đang đọc to... Bấm để tạm dừng' : 'Đang tạm dừng đọc to') : 'Đọc to toàn bộ chương bằng giọng đọc AI (Web Speech)'}
+              title={isTtsActive ? (isTtsPlaying ? 'Reading aloud... Click to pause' : 'Reading aloud paused') : 'Read entire chapter aloud with AI voice (Web Speech)'}
               type="button"
             >
               <i className={`bi ${isTtsPlaying ? 'bi-volume-up-fill' : 'bi-volume-up'}`} />
-              <span className="reader-btn-label">Đọc to</span>
+              <span className="reader-btn-label">Read aloud</span>
             </button>
 
             {/* Appearance (Aa) Popover Trigger & Popover Menu */}
             <div className="reader-aa-wrap">
               <button
                 aria-expanded={showAaPopover}
-                aria-label="Cài đặt giao diện đọc"
+                aria-label="Reading appearance settings"
                 className={`ghost-button reader-bar-icon-btn reader-aa-trigger ${showAaPopover ? 'active' : ''}`}
                 onClick={() => setShowAaPopover((v) => !v)}
-                title="Tuỳ chỉnh giao diện, phông chữ, cỡ chữ, màu nền & giãn dòng"
+                title="Customize reading theme, font family, font size, and line spacing"
                 type="button"
               >
                 <i className="bi bi-fonts" />
@@ -697,11 +758,11 @@ function ContentReaderPage() {
               </button>
 
               {showAaPopover && (
-                <div className="reader-aa-popover" role="dialog" aria-label="Tuỳ chỉnh giao diện đọc">
+                <div className="reader-aa-popover" role="dialog" aria-label="Reading appearance">
                   <div className="aa-popover-header">
-                    <h4>Giao diện đọc sách</h4>
+                    <h4>Reading appearance</h4>
                     <button
-                      aria-label="Đóng bảng giao diện"
+                      aria-label="Close appearance settings"
                       className="ghost-button aa-close-btn"
                       onClick={() => setShowAaPopover(false)}
                       type="button"
@@ -712,8 +773,8 @@ function ContentReaderPage() {
 
                   {/* 1. Theme Color Swatches (Light, Sepia Warm Paper, Dark) */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Chủ đề màu (Theme)</label>
-                    <div className="aa-theme-swatches" role="radiogroup" aria-label="Chủ đề màu">
+                    <label className="aa-section-label">Theme</label>
+                    <div className="aa-theme-swatches" role="radiogroup" aria-label="Theme">
                       <button
                         aria-checked={theme === 'light'}
                         className={`aa-swatch aa-swatch-light ${theme === 'light' ? 'active' : ''}`}
@@ -722,7 +783,7 @@ function ContentReaderPage() {
                         type="button"
                       >
                         <span className="swatch-circle" />
-                        <span className="swatch-name">Sáng</span>
+                        <span className="swatch-name">Light</span>
                       </button>
                       <button
                         aria-checked={theme === 'sepia'}
@@ -732,7 +793,7 @@ function ContentReaderPage() {
                         type="button"
                       >
                         <span className="swatch-circle" />
-                        <span className="swatch-name">Giấy ngà</span>
+                        <span className="swatch-name">Sepia</span>
                       </button>
                       <button
                         aria-checked={theme === 'dark'}
@@ -742,14 +803,14 @@ function ContentReaderPage() {
                         type="button"
                       >
                         <span className="swatch-circle" />
-                        <span className="swatch-name">Đêm</span>
+                        <span className="swatch-name">Dark</span>
                       </button>
                     </div>
                   </div>
 
                   {/* 2. Font Family */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Kiểu chữ (Font)</label>
+                    <label className="aa-section-label">Font family</label>
                     <div className="aa-segmented-group">
                       <button
                         className={`aa-segment-btn ${fontFamily === 'serif' ? 'active' : ''}`}
@@ -757,7 +818,7 @@ function ContentReaderPage() {
                         type="button"
                         style={{ fontFamily: "'Lora', Georgia, serif" }}
                       >
-                        Có chân (Serif)
+                        Serif
                       </button>
                       <button
                         className={`aa-segment-btn ${fontFamily === 'sans' ? 'active' : ''}`}
@@ -765,7 +826,7 @@ function ContentReaderPage() {
                         type="button"
                         style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
                       >
-                        Không chân (Sans)
+                        Sans-serif
                       </button>
                     </div>
                   </div>
@@ -773,12 +834,12 @@ function ContentReaderPage() {
                   {/* 3. Font Size Slider */}
                   <div className="aa-section">
                     <div className="aa-section-row">
-                      <label className="aa-section-label">Cỡ chữ</label>
+                      <label className="aa-section-label">Font size</label>
                       <span className="aa-value-badge">{fontSize}px</span>
                     </div>
                     <div className="aa-slider-row">
                       <button
-                        aria-label="Giảm cỡ chữ"
+                        aria-label="Decrease font size"
                         className="ghost-button aa-step-btn"
                         disabled={fontSize <= 14}
                         onClick={() => setFontSize((s) => Math.max(14, s - 1))}
@@ -787,7 +848,7 @@ function ContentReaderPage() {
                         A-
                       </button>
                       <input
-                        aria-label="Thanh trượt cỡ chữ"
+                        aria-label="Font size slider"
                         className="aa-range-slider"
                         max="26"
                         min="14"
@@ -797,7 +858,7 @@ function ContentReaderPage() {
                         value={fontSize}
                       />
                       <button
-                        aria-label="Tăng cỡ chữ"
+                        aria-label="Increase font size"
                         className="ghost-button aa-step-btn"
                         disabled={fontSize >= 26}
                         onClick={() => setFontSize((s) => Math.min(26, s + 1))}
@@ -810,77 +871,77 @@ function ContentReaderPage() {
 
                   {/* 4. Line Spacing */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Giãn dòng</label>
+                    <label className="aa-section-label">Line spacing</label>
                     <div className="aa-segmented-group">
                       <button
                         className={`aa-segment-btn ${lineHeight === 1.6 ? 'active' : ''}`}
                         onClick={() => setLineHeight(1.6)}
                         type="button"
                       >
-                        Gọn (1.6x)
+                        Compact (1.6x)
                       </button>
                       <button
                         className={`aa-segment-btn ${lineHeight === 1.85 ? 'active' : ''}`}
                         onClick={() => setLineHeight(1.85)}
                         type="button"
                       >
-                        Chuẩn (1.85x)
+                        Normal (1.85x)
                       </button>
                       <button
                         className={`aa-segment-btn ${lineHeight === 2.1 ? 'active' : ''}`}
                         onClick={() => setLineHeight(2.1)}
                         type="button"
                       >
-                        Thoáng (2.1x)
+                        Relaxed (2.1x)
                       </button>
                     </div>
                   </div>
 
                   {/* 5. Column Width */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Độ rộng trang</label>
+                    <label className="aa-section-label">Page width</label>
                     <div className="aa-segmented-group">
                       <button
                         className={`aa-segment-btn ${pageWidth === 640 ? 'active' : ''}`}
                         onClick={() => setPageWidth(640)}
                         type="button"
                       >
-                        Hẹp (640px)
+                        Narrow (640px)
                       </button>
                       <button
                         className={`aa-segment-btn ${pageWidth === 760 ? 'active' : ''}`}
                         onClick={() => setPageWidth(760)}
                         type="button"
                       >
-                        Vừa (760px)
+                        Medium (760px)
                       </button>
                       <button
                         className={`aa-segment-btn ${pageWidth === 880 ? 'active' : ''}`}
                         onClick={() => setPageWidth(880)}
                         type="button"
                       >
-                        Rộng (880px)
+                        Wide (880px)
                       </button>
                     </div>
                   </div>
 
                   {/* 6. Text Alignment */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Căn lề</label>
+                    <label className="aa-section-label">Text alignment</label>
                     <div className="aa-segmented-group">
                       <button
                         className={`aa-segment-btn ${textAlign === 'justify' ? 'active' : ''}`}
                         onClick={() => setTextAlign('justify')}
                         type="button"
                       >
-                        <i className="bi bi-justify" /> Căn đều
+                        <i className="bi bi-justify" /> Justify
                       </button>
                       <button
                         className={`aa-segment-btn ${textAlign === 'left' ? 'active' : ''}`}
                         onClick={() => setTextAlign('left')}
                         type="button"
                       >
-                        <i className="bi bi-text-left" /> Căn trái
+                        <i className="bi bi-text-left" /> Left
                       </button>
                     </div>
                   </div>
@@ -897,7 +958,7 @@ function ContentReaderPage() {
                       type="button"
                     >
                       <i className={`bi ${zenMode ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`} />
-                      <span>{zenMode ? 'Thoát Zen Mode' : 'Đọc tập trung (Zen Mode)'}</span>
+                      <span>{zenMode ? 'Exit Zen mode' : 'Zen mode (distraction-free)'}</span>
                     </button>
                   </div>
                 </div>
@@ -906,10 +967,10 @@ function ContentReaderPage() {
 
             {/* Zen Mode Toggle Button */}
             <button
-              aria-label={zenMode ? 'Thoát chế độ tập trung' : 'Chế độ đọc tập trung (Zen Mode)'}
+              aria-label={zenMode ? 'Exit Zen mode' : 'Zen mode (distraction-free)'}
               className={`ghost-button reader-bar-icon-btn reader-zen-trigger ${zenMode ? 'active' : ''}`}
               onClick={() => setZenMode((v) => !v)}
-              title={zenMode ? 'Thoát Zen Mode (Esc)' : 'Đọc tập trung không xao nhãng (Zen Mode)'}
+              title={zenMode ? 'Exit Zen mode (Esc)' : 'Distraction-free reading (Zen mode)'}
               type="button"
             >
               <i className={`bi ${zenMode ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`} />
@@ -926,31 +987,31 @@ function ContentReaderPage() {
       <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px` }}>
         {/* Resume Banner */}
         {showResumeBanner && savedResume && (
-          <aside aria-label="Tiếp tục đọc sách" className="reader-resume-banner">
+          <aside aria-label="Continue reading" className="reader-resume-banner">
             <div className="reader-resume-banner-info">
               <div className="resume-icon-badge">
                 <i className="bi bi-bookmark-check-fill" />
               </div>
               <div className="resume-text-details">
-                <strong>Tiếp tục đọc từ lần trước (Continue Reading)</strong>
+                <strong>Continue reading</strong>
                 <p>
-                  Bạn đang đọc dở{' '}
+                  You were reading{' '}
                   <strong>
                     {savedResume.chapterTitle ||
                       (savedResume.chapterOrder === 0
-                        ? 'Phần mở đầu'
-                        : `Chương ${savedResume.chapterOrder || (savedResume.chapterIndex != null ? savedResume.chapterIndex : 1)}`)}
+                        ? 'Introduction'
+                        : `Chapter ${savedResume.chapterOrder || (savedResume.chapterIndex != null ? savedResume.chapterIndex : 1)}`)}
                   </strong>
-                  {savedResume.percent ? ` (${savedResume.percent}% tiến độ)` : ''}
+                  {savedResume.percent ? ` (${savedResume.percent}% progress)` : ''}
                 </p>
               </div>
             </div>
             <div className="resume-banner-actions">
               <button className="primary-button" onClick={handleResume} type="button">
-                <i className="bi bi-book-half" /> Tiếp tục đọc
+                <i className="bi bi-book-half" /> Resume reading
               </button>
               <button
-                aria-label="Đóng thông báo"
+                aria-label="Dismiss banner"
                 className="ghost-button resume-dismiss-btn"
                 onClick={() => setShowResumeBanner(false)}
                 type="button"
@@ -965,7 +1026,7 @@ function ContentReaderPage() {
         <section className="content-reader-header">
           <p className="mono-eyebrow">{item.source || 'Gutenberg Ebook'}</p>
           <h1 className="reader-book-title">{item.title}</h1>
-          <p className="reader-author-line">Tác giả: <strong>{item.author || 'Khuyết danh'}</strong></p>
+          <p className="reader-author-line">Author: <strong>{item.author || 'Unknown'}</strong></p>
           {item.description && <p className="reader-desc-line">{item.description}</p>}
 
           {/* Paired Audiobook Callout Banner */}
@@ -974,8 +1035,8 @@ function ContentReaderPage() {
               <div className="reader-paired-callout-text">
                 <i className="bi bi-headphones" />
                 <div>
-                  <strong>Có bản Sách nói (Audiobook)</strong>
-                  <p>Nghe diễn đọc trọn vẹn với giọng đọc chuẩn và các chương đồng bộ.</p>
+                  <strong>Audiobook available</strong>
+                  <p>Listen to the complete audio narration with synced chapters.</p>
                 </div>
               </div>
               <button
@@ -983,7 +1044,7 @@ function ContentReaderPage() {
                 onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
                 type="button"
               >
-                <i className="bi bi-play-circle-fill" /> Nghe ngay &rarr;
+                <i className="bi bi-play-circle-fill" /> Listen now &rarr;
               </button>
             </div>
           )}
@@ -992,200 +1053,12 @@ function ContentReaderPage() {
             <div className="admin-row-actions" style={{ marginTop: '16px' }}>
               {downloadFiles.map((file) => (
                 <a className="ghost-button" href={file.url} key={file.url} rel="noreferrer" target="_blank">
-                  <i className="bi bi-download" /> Tải về {file.format}
+                  <i className="bi bi-download" /> Download {file.format}
                 </a>
               ))}
             </div>
           )}
         </section>
-
-        {/* Table of Contents & Bookmarks Drawer */}
-        {showToc && (
-          <div className="reader-toc-overlay" onClick={() => setShowToc(false)}>
-            <aside aria-label="Mục lục sách" className="reader-toc-drawer" onClick={(e) => e.stopPropagation()}>
-              <div className="reader-toc-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <i className="bi bi-journal-text" style={{ color: 'var(--app-accent)', fontSize: '1.25rem' }} />
-                  <h3>Mục lục &amp; Dấu trang</h3>
-                </div>
-                <button
-                  aria-label="Đóng mục lục"
-                  className="ghost-button"
-                  onClick={() => setShowToc(false)}
-                  type="button"
-                >
-                  <i className="bi bi-x-lg" />
-                </button>
-              </div>
-
-              {/* Drawer Tabs: Chapters vs Bookmarks */}
-              <div className="reader-toc-tabs" role="tablist">
-                <button
-                  aria-selected={tocTab === 'chapters'}
-                  className={`reader-toc-tab-btn ${tocTab === 'chapters' ? 'active' : ''}`}
-                  onClick={() => setTocTab('chapters')}
-                  role="tab"
-                  type="button"
-                >
-                  <i className="bi bi-list-ol" /> Danh sách chương ({chapters.length})
-                </button>
-                <button
-                  aria-selected={tocTab === 'bookmarks'}
-                  className={`reader-toc-tab-btn ${tocTab === 'bookmarks' ? 'active' : ''}`}
-                  onClick={() => setTocTab('bookmarks')}
-                  role="tab"
-                  type="button"
-                >
-                  <i className="bi bi-bookmarks-fill" /> Dấu trang ({bookmarks.length})
-                </button>
-              </div>
-
-              {tocTab === 'chapters' ? (
-                <>
-                  {/* Quick Return to Last Read Chapter Callout */}
-                  {recentPreviousChapter !== null &&
-                    recentPreviousChapter !== activeChapterIndex &&
-                    chapters[recentPreviousChapter] && (
-                      <div className="reader-toc-quick-return">
-                        <div className="toc-quick-return-info">
-                          <i className="bi bi-clock-history" />
-                          <div>
-                            <small>Vừa xem gần nhất:</small>
-                            <strong>
-                              {chapters[recentPreviousChapter].isIntro
-                                ? 'Phần mở đầu (Introduction)'
-                                : chapters[recentPreviousChapter].title || `Chương ${chapters[recentPreviousChapter].order || recentPreviousChapter}`}
-                            </strong>
-                          </div>
-                        </div>
-                        <button
-                          className="primary-button toc-quick-return-btn"
-                          onClick={() => jumpToChapter(recentPreviousChapter)}
-                          type="button"
-                        >
-                          <i className="bi bi-arrow-return-left" /> Quay lại ngay
-                        </button>
-                      </div>
-                    )}
-
-                  {chapters.length > 5 && (
-                    <div className="reader-toc-search-wrap">
-                      <i className="bi bi-search" />
-                      <input
-                        aria-label="Tìm kiếm chương"
-                        className="reader-toc-search-input"
-                        onChange={(e) => setTocSearch(e.target.value)}
-                        placeholder="Tìm tên hoặc số chương..."
-                        type="search"
-                        value={tocSearch}
-                      />
-                      {tocSearch && (
-                        <button
-                          aria-label="Xoá tìm kiếm"
-                          className="reader-toc-search-clear"
-                          onClick={() => setTocSearch('')}
-                          type="button"
-                        >
-                          <i className="bi bi-x-circle-fill" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="reader-toc-list">
-                    {chaptersLoading ? (
-                      <p className="settings-copy"><span className="admin-spin-small" /> Đang chuẩn bị danh mục chương...</p>
-                    ) : filteredChapters.length > 0 ? (
-                      filteredChapters.map((ch) => {
-                        const realIdx = chapters.indexOf(ch)
-                        const isActive = activeChapterIndex === realIdx
-                        const isRecent = recentPreviousChapter === realIdx
-                        const isBookmarked = bookmarks.some((b) => b.chapterIndex === realIdx)
-
-                        return (
-                          <button
-                            className={`reader-toc-item ${isActive ? 'active' : ''}`}
-                            key={ch.order || realIdx}
-                            onClick={() => jumpToChapter(realIdx)}
-                            type="button"
-                          >
-                            <span className="toc-item-order">
-                              {ch.isIntro || ch.order === 0 ? (
-                                <i className="bi bi-journal-bookmark" title="Phần mở đầu" />
-                              ) : (
-                                ch.order || realIdx
-                              )}
-                            </span>
-                            <div className="toc-item-info">
-                              <div className="toc-item-title-row">
-                                <strong>
-                                  {ch.isIntro || ch.order === 0
-                                    ? ch.title || 'Phần mở đầu (Introduction)'
-                                    : ch.title || `Chương ${ch.order || realIdx}`}
-                                </strong>
-                                <div className="toc-item-tags">
-                                  {isActive && <span className="toc-status-badge current">Đang đọc</span>}
-                                  {isRecent && !isActive && <span className="toc-status-badge recent">Gần nhất</span>}
-                                  {isBookmarked && <i className="bi bi-bookmark-fill toc-bookmark-icon" title="Đã đánh dấu" />}
-                                </div>
-                              </div>
-                              {ch.excerpt && <small>{ch.excerpt}</small>}
-                            </div>
-                            <i className="bi bi-chevron-right" />
-                          </button>
-                        )
-                      })
-                    ) : (
-                      <p className="empty-state">Không tìm thấy chương phù hợp.</p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="reader-toc-bookmarks-list">
-                  {bookmarks.length > 0 ? (
-                    bookmarks.map((bm) => (
-                      <div className="reader-bookmark-item" key={bm.id}>
-                        <div className="reader-bookmark-item-info">
-                          <div className="reader-bookmark-item-title">
-                            <i className="bi bi-bookmark-fill" style={{ color: 'var(--app-accent)' }} />
-                            <strong>{bm.chapterTitle || `Chương ${bm.chapterOrder || bm.chapterIndex}`}</strong>
-                          </div>
-                          <span className="reader-bookmark-item-time">
-                            <i className="bi bi-clock" /> {new Date(bm.timestamp).toLocaleDateString('vi-VN')} {new Date(bm.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className="reader-bookmark-actions">
-                          <button
-                            className="primary-button reader-bookmark-jump-btn"
-                            onClick={() => jumpToChapter(bm.chapterIndex)}
-                            type="button"
-                          >
-                            <i className="bi bi-arrow-right-circle" /> Đọc tiếp
-                          </button>
-                          <button
-                            aria-label="Xoá dấu trang"
-                            className="ghost-button reader-bookmark-del-btn"
-                            onClick={(e) => handleRemoveBookmark(bm.id, e)}
-                            title="Xoá dấu trang"
-                            type="button"
-                          >
-                            <i className="bi bi-trash" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="empty-state reader-bookmarks-empty">
-                      <i className="bi bi-bookmark-plus" style={{ fontSize: '2rem', color: 'var(--app-muted)' }} />
-                      <p>Bạn chưa đánh dấu chương nào.</p>
-                      <small>Bấm nút <strong>[Đánh dấu]</strong> trên thanh điều hướng trên cùng để lưu nhanh vị trí bạn muốn quay lại!</small>
-                    </div>
-                  )}
-                </div>
-              )}
-            </aside>
-          </div>
-        )}
 
         {/* Reading Body Column */}
         <article
@@ -1212,52 +1085,52 @@ function ContentReaderPage() {
         {/* Floating Text Selection Quick Actions */}
         {selectionMenu && (
           <aside
-            aria-label="Thao tác nhanh cho đoạn trích"
+            aria-label="Quick snippet actions"
             className="selection-action-tooltip"
             style={{ top: `${selectionMenu.top}px`, left: `${selectionMenu.left}px` }}
           >
             <button
               className="sel-tool-btn"
               onClick={handleSelHighlight}
-              title="Tô màu làm nổi bật"
+              title="Highlight snippet"
               type="button"
             >
               <i className="bi bi-brush-fill" style={{ color: '#eab308' }} />
-              <span>Nổi bật</span>
+              <span>Highlight</span>
             </button>
             <button
               className="sel-tool-btn"
               onClick={handleSelNote}
-              title="Ghi chú đoạn này"
+              title="Add note for this section"
               type="button"
             >
               <i className="bi bi-chat-quote-fill" style={{ color: 'var(--app-accent, #16a09a)' }} />
-              <span>Ghi chú</span>
+              <span>Note</span>
             </button>
             <button
               className="sel-tool-btn"
               onClick={handleSelSpeak}
-              title="Đọc to câu này"
+              title="Speak this selection"
               type="button"
             >
               <i className="bi bi-volume-up-fill" style={{ color: '#3b82f6' }} />
-              <span>Đọc to</span>
+              <span>Speak</span>
             </button>
             <button
               className="sel-tool-btn"
               onClick={handleSelCopy}
-              title="Sao chép đoạn trích"
+              title="Copy snippet"
               type="button"
             >
               <i className="bi bi-clipboard-check" />
-              <span>Sao chép</span>
+              <span>Copy</span>
             </button>
           </aside>
         )}
 
         {/* Floating TTS Player Dock */}
         {isTtsActive && (
-          <aside aria-label="Trình đọc sách AI TTS" className="tts-player-dock">
+          <aside aria-label="AI TTS reader" className="tts-player-dock">
             <div className="tts-dock-soundwave">
               <span className={`tts-wave-bar ${isTtsPlaying ? 'animating' : ''}`} />
               <span className={`tts-wave-bar ${isTtsPlaying ? 'animating' : ''}`} />
@@ -1265,56 +1138,56 @@ function ContentReaderPage() {
             </div>
             <div className="tts-dock-info">
               <span className="tts-dock-title">
-                {isTtsPlaying ? 'Đang đọc to (AI TTS)...' : 'Đã tạm dừng'}
+                {isTtsPlaying ? 'Reading aloud (AI TTS)...' : 'Paused'}
               </span>
               <small className="tts-dock-sub">
-                Đoạn {ttsLocalIndex + 1} / {currentChapterParagraphs.length || 1} • {currentChapterObj?.isIntro ? 'Mở đầu' : `Chương ${currentChapterObj?.order || activeChapterIndex}`}
+                Paragraph {ttsLocalIndex + 1} / {currentChapterParagraphs.length || 1} • {currentChapterObj?.isIntro ? 'Introduction' : `Chapter ${currentChapterObj?.order || activeChapterIndex}`}
               </small>
             </div>
             <div className="tts-dock-controls">
               <button
-                aria-label="Đoạn trước"
+                aria-label="Previous paragraph"
                 className="ghost-button tts-dock-btn"
                 disabled={ttsLocalIndex <= 0}
                 onClick={handleTtsPrev}
-                title="Đoạn trước"
+                title="Previous paragraph"
                 type="button"
               >
                 <i className="bi bi-skip-start-fill" />
               </button>
               <button
-                aria-label={isTtsPlaying ? 'Tạm dừng đọc' : 'Tiếp tục đọc'}
+                aria-label={isTtsPlaying ? 'Pause reading aloud' : 'Resume reading aloud'}
                 className="primary-button tts-dock-play-btn"
                 onClick={handleTtsTogglePlay}
-                title={isTtsPlaying ? 'Tạm dừng đọc to' : 'Tiếp tục đọc to'}
+                title={isTtsPlaying ? 'Pause reading aloud' : 'Resume reading aloud'}
                 type="button"
               >
                 <i className={`bi ${isTtsPlaying ? 'bi-pause-fill' : 'bi-play-fill'}`} />
               </button>
               <button
-                aria-label="Đoạn sau"
+                aria-label="Next paragraph"
                 className="ghost-button tts-dock-btn"
                 disabled={ttsLocalIndex >= currentChapterParagraphs.length - 1}
                 onClick={handleTtsNext}
-                title="Đoạn sau"
+                title="Next paragraph"
                 type="button"
               >
                 <i className="bi bi-skip-end-fill" />
               </button>
               <button
-                aria-label="Tốc độ đọc"
+                aria-label="Reading speed"
                 className="ghost-button tts-dock-speed-btn"
                 onClick={handleTtsCycleSpeed}
-                title="Chỉnh tốc độ đọc"
+                title="Change reading speed"
                 type="button"
               >
                 {ttsSpeed}x
               </button>
               <button
-                aria-label="Dừng và đóng trình đọc"
+                aria-label="Stop reading aloud"
                 className="ghost-button tts-dock-close-btn"
                 onClick={handleTtsStop}
-                title="Đóng trình đọc"
+                title="Close reader"
                 type="button"
               >
                 <i className="bi bi-x-lg" />
@@ -1332,32 +1205,53 @@ function ContentReaderPage() {
               onClick={() => jumpToChapter(activeChapterIndex - 1)}
               type="button"
             >
-              <i className="bi bi-chevron-left" /> Chương trước
+              <i className="bi bi-chevron-left" /> Previous chapter
             </button>
           )}
 
-          <button
-            className="secondary-button reader-toc-center-btn"
-            onClick={() => setShowToc(true)}
-            title="Mở mục lục chương để chuyển nhanh"
-            type="button"
-          >
-            <i className="bi bi-list-ul" />
-            <span>
-              {currentChapterObj?.isIntro
-                ? 'Mở đầu'
-                : `Chương ${currentChapterObj?.order || activeChapterIndex}`} / {totalRegularChapters}
-            </span>
-          </button>
+          <div className="reader-bottom-toc-wrap">
+            <button
+              aria-expanded={showToc && tocOrigin === 'bottom'}
+              className="secondary-button reader-toc-center-btn"
+              onClick={() => handleToggleToc('bottom')}
+              title="Open table of contents to jump chapters"
+              type="button"
+            >
+              <i className="bi bi-list-ul" />
+              <span>
+                {currentChapterObj?.isIntro
+                  ? 'Introduction'
+                  : `Chapter ${currentChapterObj?.order || activeChapterIndex}`} / {totalRegularChapters}
+              </span>
+            </button>
+            {showToc && tocOrigin === 'bottom' && (
+              <ChapterTocPopover
+                activeChapterIndex={activeChapterIndex}
+                bookmarks={bookmarks}
+                chapters={chapters}
+                chaptersLoading={chaptersLoading}
+                filteredChapters={filteredChapters}
+                handleRemoveBookmark={handleRemoveBookmark}
+                jumpToChapter={jumpToChapter}
+                onClose={() => setShowToc(false)}
+                placement="bottom"
+                recentPreviousChapter={recentPreviousChapter}
+                setTocSearch={setTocSearch}
+                setTocTab={setTocTab}
+                tocSearch={tocSearch}
+                tocTab={tocTab}
+              />
+            )}
+          </div>
 
           {activeChapterIndex > 1 && (
             <button
               className="ghost-button reader-jump-first-btn"
               onClick={() => jumpToChapter(chapters[0]?.isIntro ? 0 : 0)}
-              title="Về chương đầu sách"
+              title="First chapter of book"
               type="button"
             >
-              <i className="bi bi-skip-backward-fill" /> Về đầu sách
+              <i className="bi bi-skip-backward-fill" /> First chapter
             </button>
           )}
 
@@ -1365,10 +1259,10 @@ function ContentReaderPage() {
             <button
               className="ghost-button reader-jump-recent-btn"
               onClick={() => jumpToChapter(recentPreviousChapter)}
-              title="Quay lại chương bạn vừa đọc gần nhất"
+              title="Return to recently viewed chapter"
               type="button"
             >
-              <i className="bi bi-arrow-return-left" /> Về Ch. {chapters[recentPreviousChapter]?.order || recentPreviousChapter}
+              <i className="bi bi-arrow-return-left" /> Back to Ch. {chapters[recentPreviousChapter]?.order || recentPreviousChapter}
             </button>
           )}
 
@@ -1377,7 +1271,7 @@ function ContentReaderPage() {
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             type="button"
           >
-            <i className="bi bi-arrow-up" /> Lên đầu
+            <i className="bi bi-arrow-up" /> Top
           </button>
 
           {chapters.length > 1 && (
@@ -1387,7 +1281,7 @@ function ContentReaderPage() {
               onClick={() => jumpToChapter(activeChapterIndex + 1)}
               type="button"
             >
-              Chương tiếp <i className="bi bi-chevron-right" />
+              Next chapter <i className="bi bi-chevron-right" />
             </button>
           )}
 
@@ -1397,7 +1291,7 @@ function ContentReaderPage() {
               onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
               type="button"
             >
-              <i className="bi bi-headphones" /> Nghe sách nói
+              <i className="bi bi-headphones" /> Listen to audiobook
             </button>
           )}
         </div>
@@ -1416,6 +1310,213 @@ function ContentReaderPage() {
           <i className="bi bi-bookmark-check-fill" />
           <span>{toastMsg}</span>
         </aside>
+      )}
+    </div>
+  )
+}
+
+function ChapterTocPopover({
+  chapters,
+  filteredChapters,
+  activeChapterIndex,
+  recentPreviousChapter,
+  bookmarks,
+  tocTab,
+  setTocTab,
+  tocSearch,
+  setTocSearch,
+  chaptersLoading,
+  jumpToChapter,
+  handleRemoveBookmark,
+  onClose,
+  placement = 'top',
+}) {
+  return (
+    <div
+      className={`reader-toc-adjacent-popover placement-${placement}`}
+      role="dialog"
+      aria-label="Table of contents"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="reader-toc-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <i className="bi bi-journal-text" style={{ color: 'var(--app-accent)', fontSize: '1.25rem' }} />
+          <h3>Table of contents</h3>
+        </div>
+        <button
+          aria-label="Close table of contents"
+          className="ghost-button aa-close-btn"
+          onClick={onClose}
+          type="button"
+        >
+          <i className="bi bi-x-lg" />
+        </button>
+      </div>
+
+      {/* Tabs: Chapters vs Bookmarks */}
+      <div className="reader-toc-tabs" role="tablist">
+        <button
+          aria-selected={tocTab === 'chapters'}
+          className={`reader-toc-tab-btn ${tocTab === 'chapters' ? 'active' : ''}`}
+          onClick={() => setTocTab('chapters')}
+          role="tab"
+          type="button"
+        >
+          <i className="bi bi-list-ol" /> Chapters ({chapters.length})
+        </button>
+        <button
+          aria-selected={tocTab === 'bookmarks'}
+          className={`reader-toc-tab-btn ${tocTab === 'bookmarks' ? 'active' : ''}`}
+          onClick={() => setTocTab('bookmarks')}
+          role="tab"
+          type="button"
+        >
+          <i className="bi bi-bookmarks-fill" /> Bookmarks ({bookmarks.length})
+        </button>
+      </div>
+
+      {tocTab === 'chapters' ? (
+        <>
+          {/* Quick Return to Last Read Chapter Callout */}
+          {recentPreviousChapter !== null &&
+            recentPreviousChapter !== activeChapterIndex &&
+            chapters[recentPreviousChapter] && (
+              <div className="reader-toc-quick-return">
+                <div className="toc-quick-return-info">
+                  <i className="bi bi-clock-history" />
+                  <div>
+                    <small>Recently viewed:</small>
+                    <strong>
+                      {chapters[recentPreviousChapter].isIntro
+                        ? 'Introduction'
+                        : chapters[recentPreviousChapter].title || `Chapter ${chapters[recentPreviousChapter].order || recentPreviousChapter}`}
+                    </strong>
+                  </div>
+                </div>
+                <button
+                  className="primary-button toc-quick-return-btn"
+                  onClick={() => jumpToChapter(recentPreviousChapter)}
+                  type="button"
+                >
+                  <i className="bi bi-arrow-return-left" /> Return to chapter
+                </button>
+              </div>
+            )}
+
+          {chapters.length > 5 && (
+            <div className="reader-toc-search-wrap">
+              <i className="bi bi-search" />
+              <input
+                aria-label="Search chapters"
+                className="reader-toc-search-input"
+                onChange={(e) => setTocSearch(e.target.value)}
+                placeholder="Search chapter title or number..."
+                type="search"
+                value={tocSearch}
+              />
+              {tocSearch && (
+                <button
+                  aria-label="Clear search"
+                  className="reader-toc-search-clear"
+                  onClick={() => setTocSearch('')}
+                  type="button"
+                >
+                  <i className="bi bi-x-circle-fill" />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="reader-toc-list">
+            {chaptersLoading ? (
+              <p className="settings-copy"><span className="admin-spin-small" /> Loading chapter list...</p>
+            ) : filteredChapters.length > 0 ? (
+              filteredChapters.map((ch) => {
+                const realIdx = chapters.indexOf(ch)
+                const isActive = activeChapterIndex === realIdx
+                const isRecent = recentPreviousChapter === realIdx
+                const isBookmarked = bookmarks.some((b) => b.chapterIndex === realIdx)
+
+                return (
+                  <button
+                    className={`reader-toc-item ${isActive ? 'active' : ''}`}
+                    key={ch.order || realIdx}
+                    onClick={() => jumpToChapter(realIdx)}
+                    type="button"
+                  >
+                    <span className="toc-item-order">
+                      {ch.isIntro || ch.order === 0 ? (
+                        <i className="bi bi-journal-bookmark" title="Introduction" />
+                      ) : (
+                        ch.order || realIdx
+                      )}
+                    </span>
+                    <div className="toc-item-info">
+                      <div className="toc-item-title-row">
+                        <strong>
+                          {ch.isIntro || ch.order === 0
+                            ? ch.title || 'Introduction'
+                            : ch.title || `Chapter ${ch.order || realIdx}`}
+                        </strong>
+                        <div className="toc-item-tags">
+                          {isActive && <span className="toc-status-badge current">Current</span>}
+                          {isRecent && !isActive && <span className="toc-status-badge recent">Recent</span>}
+                          {isBookmarked && <i className="bi bi-bookmark-fill toc-bookmark-icon" title="Bookmarked" />}
+                        </div>
+                      </div>
+                      {ch.excerpt && <small>{ch.excerpt}</small>}
+                    </div>
+                    <i className="bi bi-chevron-right" />
+                  </button>
+                )
+              })
+            ) : (
+              <p className="empty-state">No matching chapters found.</p>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="reader-toc-bookmarks-list">
+          {bookmarks.length > 0 ? (
+            bookmarks.map((bm) => (
+              <div className="reader-bookmark-item" key={bm.id}>
+                <div className="reader-bookmark-item-info">
+                  <div className="reader-bookmark-item-title">
+                    <i className="bi bi-bookmark-fill" style={{ color: 'var(--app-accent)' }} />
+                    <strong>{bm.chapterTitle || `Chapter ${bm.chapterOrder || bm.chapterIndex}`}</strong>
+                  </div>
+                  <span className="reader-bookmark-item-time">
+                    <i className="bi bi-clock" /> {new Date(bm.timestamp).toLocaleDateString('en-US')} {new Date(bm.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="reader-bookmark-actions">
+                  <button
+                    className="primary-button reader-bookmark-jump-btn"
+                    onClick={() => jumpToChapter(bm.chapterIndex)}
+                    type="button"
+                  >
+                    <i className="bi bi-arrow-right-circle" /> Read
+                  </button>
+                  <button
+                    aria-label="Delete bookmark"
+                    className="ghost-button reader-bookmark-del-btn"
+                    onClick={(e) => handleRemoveBookmark(bm.id, e)}
+                    title="Delete bookmark"
+                    type="button"
+                  >
+                    <i className="bi bi-trash" />
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state reader-bookmarks-empty">
+              <i className="bi bi-bookmark-plus" style={{ fontSize: '2rem', color: 'var(--app-muted)' }} />
+              <p>No bookmarks saved yet.</p>
+              <small>Click the <strong>[Bookmark]</strong> button in the reading bar to save quick positions you want to return to!</small>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

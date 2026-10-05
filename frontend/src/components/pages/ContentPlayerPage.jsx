@@ -218,30 +218,30 @@ function ContentPlayerPage() {
 
       {/* Continue Listening / Resume Audio Banner */}
       {showResumeBanner && savedResume && (
-        <aside aria-label="Tiếp tục nghe sách" className="audio-resume-banner">
+        <aside aria-label="Continue listening" className="audio-resume-banner">
           <div className="audio-resume-banner-info">
             <div className="resume-icon-badge">
               <i className="bi bi-soundwave" />
             </div>
             <div className="resume-text-details">
-              <strong>Tiếp tục nghe từ lần trước (Continue Listening)</strong>
+              <strong>Continue listening</strong>
               <p>
-                Bạn đang nghe dở{' '}
+                You were listening to{' '}
                 <strong>
                   {pageChapters[savedResume.chapterIndex]?.title
-                    ? `Chương ${savedResume.chapterIndex + 1}: ${pageChapters[savedResume.chapterIndex].title}`
-                    : `Chương ${savedResume.chapterIndex + 1}`}
+                    ? `Chapter ${savedResume.chapterIndex + 1}: ${pageChapters[savedResume.chapterIndex].title}`
+                    : `Chapter ${savedResume.chapterIndex + 1}`}
                 </strong>{' '}
-                tại <strong>{formatTime(savedResume.currentTime)}</strong>
+                at <strong>{formatTime(savedResume.currentTime)}</strong>
               </p>
             </div>
           </div>
           <div className="resume-banner-actions">
             <button className="primary-button" onClick={handleResumeListening} type="button">
-              <i className="bi bi-play-circle-fill" /> Tiếp tục nghe ({formatTime(savedResume.currentTime)})
+              <i className="bi bi-play-circle-fill" /> Resume listening ({formatTime(savedResume.currentTime)})
             </button>
             <button
-              aria-label="Đóng thông báo"
+              aria-label="Dismiss banner"
               className="ghost-button resume-dismiss-btn"
               onClick={() => setShowResumeBanner(false)}
               type="button"
