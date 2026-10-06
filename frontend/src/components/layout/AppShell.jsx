@@ -163,6 +163,9 @@ function AppShell({
           type="button"
         >
           <i className={`bi ${isMobileNavOpen ? 'bi-x-lg' : 'bi-list'}`} />
+          {unreadNotifications > 0 && !isMobileNavOpen && (
+            <span className="mobile-toggle-badge" aria-label={`${unreadNotifications} unread notifications`} />
+          )}
         </button>
 
         <div className={`main-nav-group${isMobileNavOpen ? ' open' : ''}`}>
@@ -344,8 +347,6 @@ function AppShell({
           </div>
         </div>
 
-        {isMobileNavOpen && <button aria-label="Close menu" className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} type="button" />}
-
         <div className="header-account">
           {!isGuest && (
             <div className="mongo-notification" ref={notificationRef} style={{ position: 'relative' }}>
@@ -444,6 +445,15 @@ function AppShell({
           )}
         </div>
       </header>
+      )}
+
+      {isMobileNavOpen && !isAdminPage && (
+        <button
+          aria-label="Close menu"
+          className="mobile-nav-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+          type="button"
+        />
       )}
 
       {showLogoutConfirm && (

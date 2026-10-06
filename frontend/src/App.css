@@ -1075,7 +1075,6 @@ textarea {
 
 .card-actions .primary-button,
 .card-actions .ghost-button {
-  flex: 1;
   min-width: 0;
   height: 36px;
   padding: 0 8px;
@@ -1089,9 +1088,34 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.card-actions .primary-button,
-.card-actions .ghost-button {
-  flex: 1;
+.card-actions .card-main-action-btn,
+.card-actions .primary-button {
+  flex: 1 1 auto;
+}
+
+.card-actions .card-save-btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .book-carousel-item .card-actions,
+  .card-actions {
+    gap: 6px;
+    padding: 8px 10px 12px;
+  }
+
+  .book-carousel-item .card-actions .card-save-btn .card-btn-text,
+  .book-grid .card-actions .card-save-btn .card-btn-text {
+    display: none;
+  }
+
+  .book-carousel-item .card-actions .card-save-btn,
+  .book-grid .card-actions .card-save-btn {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 
 .rental-pill {
@@ -1568,6 +1592,8 @@ progress {
   --app-line: #d8d8d3;
   --app-accent: #16a09a;
   min-height: 100svh;
+  width: 100%;
+  overflow-x: clip;
   background: var(--app-bg);
   color: var(--app-text);
   font-family: var(--font-body);
@@ -2025,6 +2051,8 @@ progress {
     gap: 12px;
     max-height: calc(100svh - 60px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 16px clamp(14px, 4vw, 24px) 20px;
     border-bottom: 1px solid var(--app-line);
     border-top: 1px solid var(--app-line);
@@ -2279,9 +2307,17 @@ progress {
     padding: 8px clamp(10px, 3vw, 16px);
   }
 
-  .header-account .avatar-chip,
   .header-account .header-logout-button,
   .header-account .guest-preview-button {
+    display: none !important;
+  }
+
+  .header-account .avatar-chip {
+    padding: 2px;
+    border-radius: 50%;
+  }
+
+  .header-account .avatar-chip strong {
     display: none !important;
   }
 }
@@ -2294,6 +2330,7 @@ progress {
   .brand-button {
     font-size: 17px;
     gap: 6px;
+    flex-shrink: 0;
   }
 
   .brand-button img {
@@ -2302,7 +2339,7 @@ progress {
   }
 
   .guest-preview-button {
-    display: none;
+    display: none !important;
   }
 
   .header-account {
@@ -2310,13 +2347,30 @@ progress {
   }
 
   .header-account .primary-button {
-    display: none !important;
+    display: inline-flex;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 8px;
   }
 
   .quick-theme-toggle button,
   .mobile-nav-toggle {
     width: 38px;
     height: 38px;
+  }
+
+  .mobile-toggle-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 1px solid var(--app-surface);
   }
 
   .primary-button {
@@ -2730,21 +2784,47 @@ progress {
   }
 }
 
+@media (max-width: 768px) {
+  .promo-banner {
+    aspect-ratio: 16 / 6;
+    min-height: 160px;
+    margin-bottom: 18px;
+    border-radius: 12px;
+  }
+
+  .promo-banner-slide img {
+    aspect-ratio: 16 / 6;
+    object-fit: cover;
+    object-position: center;
+  }
+}
+
 @media (max-width: 520px) {
   .promo-banner {
-    aspect-ratio: 1936 / 528;
-    height: auto;
-    min-height: 100px;
+    aspect-ratio: 16 / 8;
+    min-height: 140px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+  }
+
+  .promo-banner-slide img {
+    aspect-ratio: 16 / 8;
+    object-fit: cover;
+    object-position: center;
   }
 
   .promo-banner-dots {
-    bottom: 10px;
+    bottom: 8px;
     gap: 6px;
   }
 
   .promo-banner-dots button {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
+  }
+
+  .promo-banner-dots button.active {
+    width: 16px;
   }
 
   .random-feature-panel {
@@ -8052,7 +8132,16 @@ progress {
   }
 
   .detail-tabs {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .detail-tabs button {
+    min-height: 38px;
+    padding: 0 6px;
+    font-size: 13px;
+    gap: 5px;
   }
 
   .comment-sort {
@@ -8080,8 +8169,9 @@ progress {
   }
 
   .page-shell {
-    width: min(100% - 22px, 480px);
-    padding-top: 18px;
+    width: calc(100% - 20px);
+    max-width: 100%;
+    padding-top: 16px;
   }
 
   .save-book-prompt {
@@ -10927,7 +11017,9 @@ progress {
   align-items: center;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px 0 24px;
+  padding: 4px 14px 20px;
+  scroll-padding: 0 14px;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -10937,6 +11029,7 @@ progress {
 }
 
 .home-genre-chip {
+  scroll-snap-align: start;
   display: inline-flex;
   align-items: center;
   gap: 6px;

@@ -50,13 +50,13 @@ function ExternalMediaCard({ item, onDetail }) {
         <small>{meta}</small>
       </div>
       <div className="card-actions">
-        <button className="primary-button" onClick={handleAction} type="button">
+        <button className="primary-button card-main-action-btn" onClick={handleAction} type="button">
           <i className={`bi ${isEbook ? 'bi-journal-text' : 'bi-headphones'}`} />
-          {isEbook ? 'Read' : 'Listen'}
+          <span>{isEbook ? 'Read' : 'Listen'}</span>
         </button>
-        <button className="ghost-button" onClick={openDetail} type="button">
+        <button className="ghost-button card-save-btn" onClick={openDetail} title="Book details" type="button">
           <i className="bi bi-info-circle" />
-          Detail
+          <span className="card-btn-text">Detail</span>
         </button>
       </div>
     </article>

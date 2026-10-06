@@ -37,13 +37,18 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progress
         )}
       </div>
       <div className="card-actions">
-        <button className="primary-button" onClick={() => onRead(book)} type="button">
+        <button className="primary-button card-main-action-btn" onClick={() => onRead(book)} type="button">
           <i className={`bi ${isAudiobook ? 'bi-headphones' : 'bi-journal-text'}`} />
-          {isAudiobook ? 'Listen' : hasProgress ? 'Continue' : 'Read'}
+          <span>{isAudiobook ? 'Listen' : hasProgress ? 'Continue' : 'Read'}</span>
         </button>
-        <button className="ghost-button" onClick={() => onFavorite(book._id || book.id)} type="button">
+        <button
+          className={`ghost-button card-save-btn ${favorites.includes(book._id || book.id) ? 'is-saved' : ''}`}
+          onClick={() => onFavorite(book._id || book.id)}
+          title={favorites.includes(book._id || book.id) ? 'Remove from saved' : 'Save to shelf'}
+          type="button"
+        >
           <i className={`bi ${favorites.includes(book._id || book.id) ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
-          {favorites.includes(book._id || book.id) ? 'Saved' : 'Save'}
+          <span className="card-btn-text">{favorites.includes(book._id || book.id) ? 'Saved' : 'Save'}</span>
         </button>
       </div>
     </article>
