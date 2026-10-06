@@ -606,8 +606,13 @@ const generateBookMetadata = asyncHandler(async (req, res) => {
 //        replacing the old browser-only counter that reset on every reload
 //        and never counted anyone else's visits.
 const incrementBookViews = asyncHandler(async (req, res) => {
-  const book = await Book.findByIdAndUpdate(
-    req.params.id,
+  const mongoose = require('mongoose');
+  const filter = mongoose.Types.ObjectId.isValid(req.params.id)
+    ? { _id: req.params.id }
+    : { externalId: req.params.id };
+
+  const book = await Book.findOneAndUpdate(
+    filter,
     { $inc: { views: 1 } },
     { new: true, select: 'views' }
   );

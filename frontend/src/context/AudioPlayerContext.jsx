@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { auth } from '../features/auth-firebase/firebaseConfig'
+import { apiFetch } from '../utils/apiClient'
 
 const AudioPlayerContext = createContext(null)
-
-const PROGRESS_STORAGE_PREFIX = 'bookworm_audio_progress_'
 
 export function AudioPlayerProvider({ children }) {
   const audioRef = useRef(null)
@@ -75,27 +75,31 @@ export function AudioPlayerProvider({ children }) {
   }, [audioItem, currentChapter])
 
   function saveProgress(itemId, chIndex, time) {
-    if (!itemId) return
-    try {
-      localStorage.setItem(
-        `${PROGRESS_STORAGE_PREFIX}${itemId}`,
-        JSON.stringify({
-          chapterIndex: chIndex,
-          currentTime: Math.floor(time),
-          updatedAt: Date.now(),
-        })
-      )
-    } catch (_) {}
+    if (!itemId || !auth.currentUser) return
+    const ch = chapters[chIndex]
+    const totalDur = duration || 0
+    const percent = totalDur > 0 ? Math.min(100, Math.round((time / totalDur) * 100)) : 0
+
+    apiFetch('/api/users/me/progress', {
+      method: 'POST',
+      body: {
+        contentId: String(itemId),
+        title: audioItem?.title || 'Audiobook',
+        author: audioItem?.author || 'LibriVox / BookWorm',
+        cover: audioItem?.cover_image || audioItem?.cover || '',
+        type: 'audiobook',
+        chapterIndex: chIndex,
+        chapterOrder: chIndex + 1,
+        chapterTitle: ch?.title || `Chapter ${chIndex + 1}`,
+        percent,
+        currentTime: Math.floor(time),
+        duration: Math.floor(totalDur),
+      },
+    }).catch(() => {})
   }
 
-  function getSavedProgress(itemId) {
-    if (!itemId) return null
-    try {
-      const data = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}${itemId}`)
-      return data ? JSON.parse(data) : null
-    } catch (_) {
-      return null
-    }
+  function getSavedProgress() {
+    return null
   }
 
   function loadAudiobook(item, chaptersList = [], startChapterIndex = 0, resumeTime = 0, autoPlay = true) {

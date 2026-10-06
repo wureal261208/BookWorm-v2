@@ -1,5 +1,6 @@
 const Content = require('../models/Content');
 const Book = require('../models/Book');
+const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { ingestAllContent } = require('../utils/contentIngestion');
@@ -563,11 +564,28 @@ const getTopCategories = asyncHandler(async (req, res) => {
   );
 });
 
-// Triggered by Vercel Cron once a day (see vercel.json) via
-// routes/cronRoutes.js, which checks CRON_SECRET before this ever runs.
-const runContentIngestion = asyncHandler(async (req, res) => {
-  const result = await ingestAllContent();
-  return success(res, 200, 'Content ingestion finished.', result);
+// Triggered when a reader opens or dwells on an ebook/audiobook
+const incrementContentViews = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const filter = mongoose.Types.ObjectId.isValid(req.params.id)
+    ? { _id: req.params.id }
+    : { externalId: req.params.id };
+
+  const content = await Content.findOneAndUpdate(
+    filter,
+    { $inc: { views: 1 } },
+    { new: true, select: 'views downloadCount' }
+  );
+
+  if (!content) {
+    return fail(res, 404, 'Content not found.');
+  }
+
+  if (req.user) {
+    await User.findByIdAndUpdate(req.user._id, { $inc: { booksReadCount: 1 } });
+  }
+
+  return success(res, 200, 'View recorded.', { views: content.views });
 });
 
 module.exports = {
@@ -582,4 +600,5 @@ module.exports = {
   getLanguageFacets,
   getForYou,
   runContentIngestion,
+  incrementContentViews,
 };

@@ -16,6 +16,7 @@ function sanitizeUser(user) {
     themePreference: user.themePreference || null,
     preferredCategories: user.preferredCategories || [],
     hasSetPreferences: Boolean(user.hasSetPreferences),
+    savedBooks: user.savedBooks || [],
   };
 }
 

@@ -11,8 +11,14 @@ const {
   getTopCategories,
   getLanguageFacets,
   getForYou,
+  incrementContentViews,
 } = require('../controllers/contentController');
-const { listContentComments, createContentComment } = require('../controllers/contentCommentController');
+const {
+  listContentComments,
+  createContentComment,
+  updateContentComment,
+  deleteContentComment,
+} = require('../controllers/contentCommentController');
 const { listNotes, createNote, deleteNote } = require('../controllers/marginNoteController');
 
 const router = express.Router();
@@ -59,6 +65,8 @@ router.post('/', protect, createUserContent);
 // commentController.js).
 router.get('/:id/comments', listContentComments);
 router.post('/:id/comments', protect, createContentComment);
+router.patch('/:id/comments/:commentId', protect, updateContentComment);
+router.delete('/:id/comments/:commentId', protect, deleteContentComment);
 
 // GET /api/content/:id/chapters - audiobook chapter list (title + playable
 // mp3 URL per chapter), parsed live from the item's LibriVox RSS feed. See
@@ -77,5 +85,8 @@ router.delete('/:id/notes/:noteId', protect, deleteNote);
 
 // GET /api/content/:id - single item, for the in-app reader/player pages.
 router.get('/:id', getPublicContentDetail);
+
+// POST /api/content/:id/view - records view/read counts
+router.post('/:id/view', identify, incrementContentViews);
 
 module.exports = router;

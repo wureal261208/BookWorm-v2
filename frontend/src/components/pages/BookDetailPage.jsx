@@ -121,7 +121,10 @@ function BookDetailPage({
     )
   }
 
-  const totalReads = (currentBook.download_count || currentBook.downloadCount || 0) + viewCount
+  const baseReads = typeof currentBook.views === 'number' && currentBook.views > 0
+    ? currentBook.views
+    : (currentBook.download_count || currentBook.downloadCount || 0)
+  const totalReads = Math.max(baseReads, Number(viewCount) || 0)
   const totalPages = getTotalPages(currentBook)
   const detailChapters = fetchedChapters.length > 0
     ? fetchedChapters

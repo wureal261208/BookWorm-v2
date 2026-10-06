@@ -4,6 +4,10 @@ const {
   banCustomer,
   unbanCustomer,
   notifyPasswordChanged,
+  getMyProgress,
+  updateMyProgress,
+  getMyFavorites,
+  toggleFavorite,
 } = require('../controllers/userController');
 const { getMe, updateMyTheme, updateMyPreferences, recordCategoryEngagement } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
@@ -17,6 +21,14 @@ router.get('/me', getMe);
 router.patch('/me/theme', updateMyTheme);
 router.patch('/me/preferences', updateMyPreferences);
 router.post('/me/engagement', recordCategoryEngagement);
+
+// Per-user reading & listening progress in MongoDB
+router.get('/me/progress', getMyProgress);
+router.post('/me/progress', updateMyProgress);
+
+// Per-user saved books (favorites) in MongoDB
+router.get('/me/favorites', getMyFavorites);
+router.post('/me/favorites/:bookId', toggleFavorite);
 
 // Called after Firebase reauth + updatePassword already succeeded
 // client-side - see components/pages/ProfilePage.jsx.

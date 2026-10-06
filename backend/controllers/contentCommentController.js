@@ -15,7 +15,9 @@ function serializeComment(comment) {
     contentId: comment.content || comment.book,
     text: comment.text,
     createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
     author: {
+      id: comment.user?._id || comment.user,
       name: comment.user?.name || 'Reader',
       role: comment.user?.role || 'customer',
       maskedEmail: comment.user?.email ? maskEmail(comment.user.email) : '',
@@ -71,4 +73,53 @@ const createContentComment = asyncHandler(async (req, res) => {
   return success(res, 201, 'Comment posted.', { comment: serializeComment(comment) });
 });
 
-module.exports = { listContentComments, createContentComment };
+// @route PATCH /api/content/:id/comments/:commentId
+// @desc  Comment author or admin can edit a comment.
+const updateContentComment = asyncHandler(async (req, res) => {
+  const text = (req.body.text || '').trim();
+  if (!text) {
+    return fail(res, 400, 'Comment text is required.');
+  }
+
+  const comment = await Comment.findById(req.params.commentId).populate('user', 'name role email');
+  if (!comment) {
+    return fail(res, 404, 'Comment not found.');
+  }
+
+  const isOwner = comment.user && comment.user._id.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === 'admin';
+  if (!isOwner && !isAdmin) {
+    return fail(res, 403, 'You do not have permission to edit this comment.');
+  }
+
+  comment.text = text;
+  await comment.save();
+
+  return success(res, 200, 'Comment updated.', { comment: serializeComment(comment) });
+});
+
+// @route DELETE /api/content/:id/comments/:commentId
+// @desc  Comment author or admin can delete a comment.
+const deleteContentComment = asyncHandler(async (req, res) => {
+  const comment = await Comment.findById(req.params.commentId);
+  if (!comment) {
+    return fail(res, 404, 'Comment not found.');
+  }
+
+  const isOwner = comment.user && comment.user.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === 'admin';
+  if (!isOwner && !isAdmin) {
+    return fail(res, 403, 'You do not have permission to delete this comment.');
+  }
+
+  await Comment.findByIdAndDelete(req.params.commentId);
+
+  return success(res, 200, 'Comment deleted successfully.');
+});
+
+module.exports = {
+  listContentComments,
+  createContentComment,
+  updateContentComment,
+  deleteContentComment,
+};

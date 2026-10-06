@@ -60,19 +60,39 @@ function ContentPlayerPage() {
   const [savedResume, setSavedResume] = useState(null)
   const [showResumeBanner, setShowResumeBanner] = useState(false)
 
-  // Restore saved audio progress for Continue Listening banner
+  // Restore saved audio progress from MongoDB (authenticated user only)
   useEffect(() => {
-    if (!id) return
-    try {
-      const raw = localStorage.getItem(`bookworm_audio_progress_${id}`)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed && (parsed.currentTime > 5 || parsed.chapterIndex > 0)) {
-          setSavedResume(parsed)
+    if (!id || !auth.currentUser) {
+      setSavedResume(null)
+      setShowResumeBanner(false)
+      return undefined
+    }
+    let ignore = false
+    apiFetch('/api/users/me/progress')
+      .then((data) => {
+        if (ignore || !Array.isArray(data?.progress)) return
+        const match = data.progress.find((p) => String(p.contentId) === String(id))
+        if (match && (match.currentTime > 5 || match.chapterIndex > 0)) {
+          setSavedResume(match)
           setShowResumeBanner(true)
         }
-      }
-    } catch (_) {}
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [id])
+
+  // Engagement tracking: increment view/listen count in MongoDB and sync UI
+  useEffect(() => {
+    if (!id) return undefined
+    publicApiFetch(`/api/content/${id}/view`, { method: 'POST' })
+      .then((res) => {
+        if (res?.data?.views) {
+          setItem((prev) => (prev ? { ...prev, views: res.data.views } : prev))
+        }
+      })
+      .catch(() => {})
   }, [id])
 
   function handleResumeListening() {

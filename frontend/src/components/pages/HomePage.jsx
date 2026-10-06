@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
-import { publicApiFetch } from '../../utils/apiClient'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { GENRE_SLIDES, GENRE_ICONS } from '../../utils/genreSlides'
 import { useNavigation } from '../../context/NavigationContext'
 import BookGrid from '../books/BookGrid'
@@ -67,9 +67,10 @@ function useExternalRow(path) {
 }
 
 function HomePage({
+  account,
   books = [],
   booksLoading = false,
-  favorites,
+  favorites = [],
   onDetail,
   onFavorite,
   onRead,
@@ -81,7 +82,7 @@ function HomePage({
   viewerCounts,
 }) {
   const { navigateTo } = useNavigation()
-  const isGuest = !auth.currentUser
+  const isGuest = !account || account.role === 'guest' || !auth.currentUser
 
   // Recommended shelf: leverages user's selected preferred categories
   const [recommended, recommendedLoading] = useBookRow(`limit=16&sort=recommended&v=${preferenceVersion}`)
@@ -97,22 +98,49 @@ function HomePage({
   const [recentItems, setRecentItems] = useState([])
 
   useEffect(() => {
-    try {
-      const items = []
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith('bookworm_ebook_pos_')) {
-          const val = JSON.parse(localStorage.getItem(key))
-          if (val && val.id) items.push({ ...val, type: 'ebook' })
+    if (isGuest) {
+      setRecentItems([])
+      return undefined
+    }
+
+    let ignore = false
+    apiFetch('/api/users/me/progress')
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.progress)) {
+          const mapped = data.progress.map((p) => ({
+            id: p.contentId,
+            _id: p.contentId,
+            title: p.title,
+            author: p.author,
+            cover_image: p.cover,
+            cover: p.cover,
+            type: p.type || 'ebook',
+            percent: p.percent || 0,
+            chapterTitle: p.chapterTitle,
+            chapterIndex: p.chapterIndex,
+            currentTime: p.currentTime,
+            duration: p.duration,
+            updatedAt: new Date(p.updatedAt).getTime(),
+          }))
+          setRecentItems(mapped.slice(0, 4))
         }
-      }
-      items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      setRecentItems(items.slice(0, 3))
-    } catch (_) {}
-  }, [])
+      })
+      .catch(() => {
+        if (!ignore) setRecentItems([])
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [isGuest])
 
   const newBooks = books.slice(0, 16)
-  const continueReading = books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
+  const continueReading = isGuest
+    ? []
+    : books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
+  const savedBooksList = !isGuest && Array.isArray(favorites) && favorites.length > 0
+    ? books.filter((book) => favorites.includes(book.id) || favorites.includes(book._id))
+    : []
 
   return (
     <div className="home-page">
@@ -142,8 +170,8 @@ function HomePage({
         ))}
       </nav>
 
-      {/* Continue Reading / Listening (Recent active reads) */}
-      {recentItems.length > 0 && (
+      {/* Continue Reading / Listening (Recent active reads - Signed-in only) */}
+      {!isGuest && recentItems.length > 0 && (
         <section className="section-block">
           <div className="section-heading">
             <div>
@@ -181,8 +209,35 @@ function HomePage({
         </section>
       )}
 
-      {/* Continue Reading shelf (User catalog books with progress) */}
-      {continueReading.length > 0 && (
+      {/* Saved books (Quick shelf for authenticated readers) */}
+      {!isGuest && savedBooksList.length > 0 && (
+        <section className="section-block">
+          <div className="section-heading">
+            <div>
+              <p className="mono-eyebrow">Your shelf</p>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="bi bi-bookmark-heart-fill" style={{ color: 'var(--app-accent)' }} />
+                Saved books
+              </h2>
+            </div>
+            <button className="ghost-button" onClick={() => setPage?.('profile')} type="button">
+              View all ({favorites.length})
+            </button>
+          </div>
+          <BookCarousel
+            books={savedBooksList}
+            favorites={favorites}
+            onDetail={onDetail}
+            onFavorite={onFavorite}
+            onRead={onRead}
+            viewCounts={viewCounts}
+            viewerCounts={viewerCounts}
+          />
+        </section>
+      )}
+
+      {/* Continue Reading shelf (User catalog books with progress - Signed-in only) */}
+      {!isGuest && continueReading.length > 0 && (
         <section className="section-block">
           <div className="section-heading">
             <div>

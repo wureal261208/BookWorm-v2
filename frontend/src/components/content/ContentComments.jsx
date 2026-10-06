@@ -45,6 +45,25 @@ function ContentComments({ contentId }) {
   const [error, setError] = useState('')
   const [showAll, setShowAll] = useState(false)
 
+  // Edit comment state
+  const [editingCommentId, setEditingCommentId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [currentUserId, setCurrentUserId] = useState(null)
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      publicApiFetch('/api/auth/me')
+        .then((res) => {
+          if (res?.data?.user?.id) setCurrentUserId(String(res.data.user.id))
+        })
+        .catch(() => {})
+    } else {
+      setCurrentUserId(null)
+    }
+  }, [auth.currentUser])
+
   useEffect(() => {
     if (!contentId) {
       setLoading(false)
@@ -83,6 +102,50 @@ function ContentComments({ contentId }) {
       setError(err.message || 'Could not post comment. Please try again.')
     } finally {
       setPosting(false)
+    }
+  }
+
+  function startEditing(comment) {
+    setEditingCommentId(comment.id)
+    setEditText(comment.text)
+    setEditError('')
+  }
+
+  function cancelEditing() {
+    setEditingCommentId(null)
+    setEditText('')
+    setEditError('')
+  }
+
+  async function handleSaveEdit(commentId) {
+    const trimmed = editText.trim()
+    if (!trimmed || !contentId || !commentId) return
+
+    setSavingEdit(true)
+    setEditError('')
+    try {
+      const data = await apiFetch(`/api/content/${contentId}/comments/${commentId}`, {
+        method: 'PATCH',
+        body: { text: trimmed },
+      })
+      if (data?.comment) {
+        setComments((current) => current.map((c) => (c.id === commentId ? { ...c, text: data.comment.text, updatedAt: data.comment.updatedAt } : c)))
+        cancelEditing()
+      }
+    } catch (err) {
+      setEditError(err.message || 'Could not update comment.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleDeleteComment(commentId) {
+    if (!window.confirm('Delete this comment permanently?')) return
+    try {
+      await apiFetch(`/api/content/${contentId}/comments/${commentId}`, { method: 'DELETE' })
+      setComments((current) => current.filter((c) => c.id !== commentId))
+    } catch (err) {
+      alert(err.message || 'Could not delete comment.')
     }
   }
 
@@ -167,27 +230,96 @@ function ContentComments({ contentId }) {
         </div>
       ) : visibleComments.length > 0 ? (
         <div className="comment-list">
-          {visibleComments.map((comment) => (
-            <article className="comment-item" key={comment.id}>
-              <div className="comment-item-avatar">
-                {getAuthorInitial(comment.author?.name)}
-              </div>
-              <div className="comment-item-content">
-                <div className="comment-item-header">
-                  <div className="comment-item-author-wrap">
-                    <strong className="comment-item-author">{comment.author?.name || 'Reader'}</strong>
-                    <span className="comment-role-badge">
-                      {formatRoleBadge(comment.author?.role)}
-                    </span>
-                  </div>
-                  <time className="comment-item-time" dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString('en-US')}>
-                    {formatCommentDate(comment.createdAt)}
-                  </time>
+          {visibleComments.map((comment) => {
+            const isEditing = editingCommentId === comment.id
+            const isAuthor = Boolean(
+              currentUserId && (
+                String(comment.author?.id) === currentUserId ||
+                comment.author?.name === (auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0])
+              )
+            )
+
+            return (
+              <article className="comment-item" key={comment.id}>
+                <div className="comment-item-avatar">
+                  {getAuthorInitial(comment.author?.name)}
                 </div>
-                <p className="comment-item-text">{comment.text}</p>
-              </div>
-            </article>
-          ))}
+                <div className="comment-item-content">
+                  <div className="comment-item-header">
+                    <div className="comment-item-author-wrap">
+                      <strong className="comment-item-author">{comment.author?.name || 'Reader'}</strong>
+                      <span className="comment-role-badge">
+                        {formatRoleBadge(comment.author?.role)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <time className="comment-item-time" dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString('en-US')}>
+                        {formatCommentDate(comment.createdAt)}
+                        {comment.updatedAt && comment.updatedAt !== comment.createdAt && ' (edited)'}
+                      </time>
+                      {isAuthor && !isEditing && (
+                        <div className="comment-item-actions">
+                          <button
+                            className="ghost-button comment-action-icon-btn"
+                            onClick={() => startEditing(comment)}
+                            title="Edit comment"
+                            type="button"
+                          >
+                            <i className="bi bi-pencil" />
+                          </button>
+                          <button
+                            className="ghost-button comment-action-icon-btn comment-delete-btn"
+                            onClick={() => handleDeleteComment(comment.id)}
+                            title="Delete comment"
+                            type="button"
+                          >
+                            <i className="bi bi-trash3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="comment-edit-box">
+                      <textarea
+                        autoFocus
+                        className="comment-edit-textarea"
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={3}
+                        value={editText}
+                      />
+                      {editError && (
+                        <p className="admin-validation-error">
+                          <i className="bi bi-x-circle" /> {editError}
+                        </p>
+                      )}
+                      <div className="comment-edit-actions">
+                        <button
+                          className="ghost-button"
+                          disabled={savingEdit}
+                          onClick={cancelEditing}
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="primary-button"
+                          disabled={!editText.trim() || savingEdit}
+                          onClick={() => handleSaveEdit(comment.id)}
+                          type="button"
+                        >
+                          {savingEdit ? 'Saving...' : 'Save changes'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="comment-item-text">{comment.text}</p>
+                  )}
+                </div>
+              </article>
+            )
+          })}
           {comments.length > PREVIEW_LIMIT && (
             <button className="ghost-button comment-more-button" onClick={() => setShowAll((value) => !value)} type="button">
               <i className={`bi ${showAll ? 'bi-chevron-up' : 'bi-chat-dots'}`} />

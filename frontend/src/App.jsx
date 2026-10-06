@@ -193,6 +193,7 @@ function App() {
           displayId: data.user?.displayId || '',
           themePreference: data.user?.themePreference || '',
           hasSetPreferences: Boolean(data.user?.hasSetPreferences),
+          savedBooks: Array.isArray(data.user?.savedBooks) ? data.user.savedBooks : [],
         }
       } catch (error) {
         const isRealRejection = error.status === 401 || error.status === 403
@@ -544,6 +545,9 @@ function App() {
       }
 
       setAccount(nextAccount)
+      if (Array.isArray(trustedProfile.savedBooks) && trustedProfile.savedBooks.length > 0) {
+        setFavorites(trustedProfile.savedBooks)
+      }
       if (!trustedProfile.hasSetPreferences) setShowPreferencesModal(true)
       // The account's saved theme preference (MongoDB) wins over whatever
       // was showing before login - only applied when the account actually
@@ -769,6 +773,19 @@ function App() {
   async function handleLogout() {
     await signOut(auth)
     setAccount(guestAccount)
+    setFavorites([])
+    setProgress({})
+    setCheckpoints({})
+    try {
+      const keysToRemove = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && (k.startsWith('bookworm_ebook_pos_') || k.startsWith('bookworm_audio_progress_') || k.startsWith('bookworm_last_read_prev_'))) {
+          keysToRemove.push(k)
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k))
+    } catch (_) {}
     navigateTo('home', { instant: true })
     setSelectedBook(null)
   }
@@ -871,49 +888,63 @@ function App() {
   }
 
   function recordBookView(book) {
-    setViewCounts((current) => ({ ...current, [book.id]: (current[book.id] || 0) + 1 }))
+    const bookId = book?._id || book?.id
+    if (!bookId) return
+
     setBookReaders((current) => {
       const accountKey = getAccountKey(account)
-      const readers = current[book.id] || []
+      const readers = current[bookId] || []
       if (readers.includes(accountKey)) return current
-      return { ...current, [book.id]: [...readers, accountKey] }
+      return { ...current, [bookId]: [...readers, accountKey] }
     })
-    // Real, persisted count (Book.views, and User.booksReadCount when
-    // signed in) - what the Admin Dashboard's "Most viewed"/"Top readers"
-    // stats actually read from. publicApiFetch (not apiFetch) because
-    // anonymous visitors' views should still count toward the book's
-    // total; it just attaches a token (and so credits a reader) when
-    // someone happens to be signed in. Fire-and-forget: a failed ping here
-    // shouldn't block the reader from opening.
-    publicApiFetch(`/api/books/${book.id}/view`, { method: 'POST' }).catch(() => {})
+
+    // Real, persisted count (Book.views/Content.views, and User.booksReadCount when signed in).
+    // Uses identify middleware so anonymous visitors count, and authenticated users get credited.
+    const isContent = Boolean(book.source || book.format || book.externalId || book.type === 'ebook')
+    const primaryUrl = isContent ? `/api/content/${bookId}/view` : `/api/books/${bookId}/view`
+    const fallbackUrl = isContent ? `/api/books/${bookId}/view` : `/api/content/${bookId}/view`
+
+    const updateViewsInState = (res) => {
+      const nextViews = res?.views ?? res?.data?.views ?? res?.item?.views ?? res?.book?.views
+      if (typeof nextViews === 'number') {
+        setViewCounts((current) => ({ ...current, [bookId]: nextViews }))
+        setBooks((current) => current.map((b) => ((b._id === bookId || b.id === bookId) ? { ...b, views: nextViews } : b)))
+      } else {
+        setViewCounts((current) => ({ ...current, [bookId]: (current[bookId] || 0) + 1 }))
+      }
+    }
+
+    publicApiFetch(primaryUrl, { method: 'POST' })
+      .then(updateViewsInState)
+      .catch(() => {
+        publicApiFetch(fallbackUrl, { method: 'POST' })
+          .then(updateViewsInState)
+          .catch(() => {
+            setViewCounts((current) => ({ ...current, [bookId]: (current[bookId] || 0) + 1 }))
+          })
+      })
   }
 
-  // Genuine-engagement view counting: opening the detail page or reader
-  // used to call recordBookView() the instant the page mounted, so a
-  // click-then-immediately-leave still counted as a "view" - not a real
-  // read. Instead, this starts a timer the moment someone lands on the
-  // detail page or the reader for a book, and only actually records the
-  // view once they've stuck around VIEW_DWELL_MS - if they navigate away
-  // (or switch to a different book) before that, the effect's cleanup
-  // clears the timer and nothing gets recorded at all.
+  // Genuine-engagement view counting: opening the detail page, reader, or audio player
+  // starts a timer, and only records the view once they have dwelled VIEW_DWELL_MS.
   const recordedViewIdsRef = useRef(new Set())
   useEffect(() => {
-    const isViewingBook = selectedBook && (activePage === 'detail' || activePage === 'reader')
+    const isViewingBook = selectedBook && (
+      activePage === 'detail' ||
+      activePage === 'reader' ||
+      activePage === 'read' ||
+      activePage === 'listen'
+    )
     if (!isViewingBook) {
-      // Left the detail/reader pages entirely - a later fresh visit to the
-      // same book should be able to count again, so clear the memory of
-      // what's already been recorded for "this sitting".
       recordedViewIdsRef.current.clear()
       return undefined
     }
 
-    // Already counted for this book without having left detail/reader in
-    // between (e.g. they went detail -> reader for the same book) - don't
-    // start a second timer or double-count it.
-    if (recordedViewIdsRef.current.has(selectedBook.id)) return undefined
+    const currentId = selectedBook._id || selectedBook.id
+    if (!currentId || recordedViewIdsRef.current.has(currentId)) return undefined
 
     const timer = window.setTimeout(() => {
-      recordedViewIdsRef.current.add(selectedBook.id)
+      recordedViewIdsRef.current.add(currentId)
       recordBookView(selectedBook)
     }, VIEW_DWELL_MS)
 
@@ -996,6 +1027,14 @@ function App() {
     }
 
     setFavorites((current) => applyFavoriteUpdates(current, [{ action, bookId }]))
+
+    apiFetch(`/api/users/me/favorites/${encodeURIComponent(bookId)}`, { method: 'POST' })
+      .then((res) => {
+        if (Array.isArray(res?.favorites)) {
+          setFavorites(res.favorites)
+        }
+      })
+      .catch(() => {})
   }
 
   async function markNotificationRead(notificationId) {
@@ -1202,6 +1241,7 @@ function App() {
   const pages = {
     home: (
       <HomePage
+        account={account}
         books={allBooks}
         booksLoading={booksLoading}
         favorites={favorites}
@@ -1265,9 +1305,9 @@ function App() {
           const b = targetBook || selectedBook
           navigateTo('listen', { query: `id=${b?.pairedContent?.id || b?.audiobookId || b?._id || b?.id}` })
         }}
-        viewCount={selectedBook ? viewCounts[selectedBook.id] || 0 : 0}
+        viewCount={selectedBook ? viewCounts[selectedBook._id || selectedBook.id] || 0 : 0}
         viewCounts={viewCounts}
-        viewerCount={selectedBook ? bookReaders[selectedBook.id]?.length || 0 : 0}
+        viewerCount={selectedBook ? bookReaders[selectedBook._id || selectedBook.id]?.length || 0 : 0}
         viewerCounts={getViewerCounts(bookReaders)}
       />
     ),
@@ -1296,6 +1336,7 @@ function App() {
     ),
     profile: account.role === 'guest' ? (
       <HomePage
+        account={account}
         books={allBooks}
         favorites={favorites}
         onDetail={openDetail}

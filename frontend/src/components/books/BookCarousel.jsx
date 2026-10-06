@@ -1,28 +1,108 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BookCard from './BookCard'
 
-// A horizontally-scrolling row of BookCards with prev/next arrows - the
-// "sach moi" / "sach hot" carousel rows from the waka.vn-style layout.
-// Native scroll-snap does the actual sliding so it stays smooth and
-// touch-friendly without any extra JS animation.
-function BookCarousel({ books, favorites, onDetail, onFavorite, onRead, viewCounts, viewerCounts }) {
+const AUTO_SLIDE_MS = 5500
+
+function BookCarousel({ books = [], favorites, onDetail, onFavorite, onRead, viewCounts, viewerCounts }) {
   const trackRef = useRef(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const [activePageIndex, setActivePageIndex] = useState(0)
+  const [pageCount, setPageCount] = useState(1)
+
+  // Measure and compute total pages & active page
+  const updatePagination = () => {
+    const track = trackRef.current
+    if (!track) return
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (maxScroll <= 15) {
+      setPageCount(1)
+      setActivePageIndex(0)
+      return
+    }
+    const computedPages = Math.max(2, Math.min(6, Math.round(track.scrollWidth / track.clientWidth)))
+    setPageCount(computedPages)
+    const progress = track.scrollLeft / maxScroll
+    const currentIdx = Math.min(computedPages - 1, Math.max(0, Math.round(progress * (computedPages - 1))))
+    setActivePageIndex(currentIdx)
+  }
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return undefined
+
+    updatePagination()
+
+    const handleScroll = () => {
+      const maxScroll = track.scrollWidth - track.clientWidth
+      if (maxScroll <= 15) return
+      const progress = track.scrollLeft / maxScroll
+      const currentIdx = Math.min(pageCount - 1, Math.max(0, Math.round(progress * (pageCount - 1))))
+      setActivePageIndex(currentIdx)
+    }
+
+    track.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', updatePagination)
+
+    return () => {
+      track.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', updatePagination)
+    }
+  }, [books.length, pageCount])
+
+  // Banner-like auto-advance animation (pauses on hover or touch)
+  useEffect(() => {
+    if (books.length <= 2 || isPaused) return undefined
+
+    const timer = setInterval(() => {
+      const track = trackRef.current
+      if (!track) return
+      const maxScroll = track.scrollWidth - track.clientWidth
+      if (maxScroll <= 15) return
+
+      if (track.scrollLeft >= maxScroll - 20) {
+        track.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        track.scrollBy({ left: track.clientWidth * 0.85, behavior: 'smooth' })
+      }
+    }, AUTO_SLIDE_MS)
+
+    return () => clearInterval(timer)
+  }, [isPaused, books.length])
 
   function scrollByPage(direction) {
     const track = trackRef.current
     if (!track) return
-    track.scrollBy({ left: direction * track.clientWidth * 0.86, behavior: 'smooth' })
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (direction > 0 && track.scrollLeft >= maxScroll - 20) {
+      track.scrollTo({ left: 0, behavior: 'smooth' })
+    } else if (direction < 0 && track.scrollLeft <= 20) {
+      track.scrollTo({ left: maxScroll, behavior: 'smooth' })
+    } else {
+      track.scrollBy({ left: direction * track.clientWidth * 0.85, behavior: 'smooth' })
+    }
+  }
+
+  function goToPage(pageIdx) {
+    const track = trackRef.current
+    if (!track || pageCount <= 1) return
+    const maxScroll = track.scrollWidth - track.clientWidth
+    const targetScroll = (pageIdx / (pageCount - 1)) * maxScroll
+    track.scrollTo({ left: targetScroll, behavior: 'smooth' })
+    setActivePageIndex(pageIdx)
   }
 
   if (!books.length) return null
 
-  // A single book has nothing to scroll to - showing arrows that do
-  // nothing (or just nudge the lone card a few px and back) reads as
-  // broken, not as a real carousel.
-  const showArrows = books.length > 1
+  const showArrows = books.length > 2
 
   return (
-    <div className="book-carousel">
+    <div
+      className="book-carousel"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
       {showArrows && (
         <button
           aria-label="Scroll to previous books"
@@ -58,6 +138,22 @@ function BookCarousel({ books, favorites, onDetail, onFavorite, onRead, viewCoun
         >
           <i className="bi bi-chevron-right" />
         </button>
+      )}
+
+      {pageCount > 1 && (
+        <div className="book-carousel-dots" role="tablist" aria-label="Book pages">
+          {Array.from({ length: pageCount }).map((_, idx) => (
+            <button
+              aria-label={`Show books page ${idx + 1}`}
+              aria-selected={idx === activePageIndex}
+              className={idx === activePageIndex ? 'active' : ''}
+              key={idx}
+              onClick={() => goToPage(idx)}
+              role="tab"
+              type="button"
+            />
+          ))}
+        </div>
       )}
     </div>
   )

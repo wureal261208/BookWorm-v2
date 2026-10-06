@@ -59,6 +59,8 @@ const UserSchema = new mongoose.Schema(
     // counts for something even if they never filled in the onboarding
     // step, and vice versa.
     categoryEngagement: { type: Map, of: Number, default: {} },
+    // Array of book/content IDs saved (bookmarked) by this user
+    savedBooks: { type: [String], default: [] },
   },
   { timestamps: true, collection: 'user_profiles' }
 );

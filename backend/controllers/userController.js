@@ -181,9 +181,84 @@ const notifyPasswordChanged = asyncHandler(async (req, res) => {
   return success(res, 200, 'Password change recorded.', { passwordChangedAt: req.user.passwordChangedAt });
 });
 
+// @route GET /api/users/me/progress
+// @desc  Returns reading/audio progress for the authenticated user from MongoDB
+const getMyProgress = asyncHandler(async (req, res) => {
+  const ReadingProgress = require('../models/ReadingProgress');
+  const items = await ReadingProgress.find({ user: req.user._id })
+    .sort({ updatedAt: -1 })
+    .limit(30);
+  return success(res, 200, 'Reading progress retrieved.', { progress: items });
+});
+
+// @route POST /api/users/me/progress
+// @desc  Creates or updates reading/audio progress for the authenticated user
+const updateMyProgress = asyncHandler(async (req, res) => {
+  const ReadingProgress = require('../models/ReadingProgress');
+  const { contentId, title, author, cover, type, chapterIndex, chapterOrder, chapterTitle, percent, currentTime, duration } = req.body;
+  if (!contentId || !title) {
+    return fail(res, 400, 'contentId and title are required.');
+  }
+
+  const update = {
+    title,
+    author: author || 'Unknown author',
+    cover: cover || '',
+    type: type || 'ebook',
+    chapterIndex: Number(chapterIndex) || 0,
+    chapterOrder: Number(chapterOrder) || 0,
+    chapterTitle: chapterTitle || '',
+    percent: Math.min(100, Math.max(0, Number(percent) || 0)),
+    currentTime: Number(currentTime) || 0,
+    duration: Number(duration) || 0,
+    updatedAt: new Date(),
+  };
+
+  const item = await ReadingProgress.findOneAndUpdate(
+    { user: req.user._id, contentId: String(contentId) },
+    { $set: update },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  return success(res, 200, 'Progress updated.', { progress: item });
+});
+
+// @route GET /api/users/me/favorites
+// @desc  Returns saved books list for the authenticated user from MongoDB
+const getMyFavorites = asyncHandler(async (req, res) => {
+  return success(res, 200, 'Favorites retrieved.', { favorites: req.user.savedBooks || [] });
+});
+
+// @route POST /api/users/me/favorites/:bookId
+// @desc  Toggles saved book status for the authenticated user in MongoDB
+const toggleFavorite = asyncHandler(async (req, res) => {
+  const bookId = String(req.params.bookId || '').trim();
+  if (!bookId) {
+    return fail(res, 400, 'Book ID is required.');
+  }
+
+  const isSaved = (req.user.savedBooks || []).includes(bookId);
+  if (isSaved) {
+    await User.findByIdAndUpdate(req.user._id, { $pull: { savedBooks: bookId } });
+    req.user.savedBooks = (req.user.savedBooks || []).filter((id) => id !== bookId);
+  } else {
+    await User.findByIdAndUpdate(req.user._id, { $addToSet: { savedBooks: bookId } });
+    req.user.savedBooks = [...(req.user.savedBooks || []), bookId];
+  }
+
+  return success(res, 200, isSaved ? 'Removed from saved books.' : 'Saved to your shelf.', {
+    saved: !isSaved,
+    favorites: req.user.savedBooks,
+  });
+});
+
 module.exports = {
   listUsers,
   banCustomer,
   unbanCustomer,
   notifyPasswordChanged,
+  getMyProgress,
+  updateMyProgress,
+  getMyFavorites,
+  toggleFavorite,
 };

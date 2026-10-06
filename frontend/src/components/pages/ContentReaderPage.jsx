@@ -6,8 +6,6 @@ import { useNavigation } from '../../context/NavigationContext'
 import ContentComments from '../content/ContentComments'
 import MarginNotesReader from '../content/MarginNotesReader'
 
-const EBOOK_STORAGE_PREFIX = 'bookworm_ebook_pos_'
-
 function ContentReaderPage() {
   const { navigateTo } = useNavigation()
   const [searchParams] = useSearchParams()
@@ -101,39 +99,47 @@ function ContentReaderPage() {
     return () => clearTimeout(timer)
   }, [toastMsg])
 
-  // Restore saved chapter progress on initial load
+  // Restore saved chapter progress from MongoDB (signed-in user only)
   useEffect(() => {
-    if (!id) return
-    try {
-      const raw = localStorage.getItem(`bookworm_reading_progress_${id}`)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (typeof parsed?.chapterIndex === 'number' && parsed.chapterIndex > 0) {
-          setActiveChapterIndex(parsed.chapterIndex)
-          setSavedResume(parsed)
+    if (!id || !auth.currentUser) {
+      setSavedResume(null)
+      setShowResumeBanner(false)
+      return undefined
+    }
+    let ignore = false
+    apiFetch('/api/users/me/progress')
+      .then((data) => {
+        if (ignore || !Array.isArray(data?.progress)) return
+        const match = data.progress.find((p) => String(p.contentId) === String(id))
+        if (match && typeof match.chapterIndex === 'number' && match.chapterIndex > 0) {
+          setActiveChapterIndex(match.chapterIndex)
+          setSavedResume(match)
           setShowResumeBanner(true)
         }
-      }
-    } catch (_) {}
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
   }, [id])
 
-  // Save chapter progress whenever chapter changes
+  // Save chapter progress to MongoDB whenever chapter changes (only for signed-in user)
   useEffect(() => {
-    if (!id || !chapters.length) return
+    if (!id || !chapters.length || !auth.currentUser) return
     const ch = chapters[activeChapterIndex]
-    try {
-      const progressData = {
-        id,
-        chapterIndex: activeChapterIndex,
-        chapterOrder: ch?.order ?? activeChapterIndex,
-        chapterTitle: ch?.title || (ch?.isIntro ? 'Introduction' : `Chapter ${activeChapterIndex + 1}`),
-        totalChapters: chapters.length,
-        percent: Math.round(((activeChapterIndex + 1) / chapters.length) * 100),
-        updatedAt: Date.now(),
-      }
-      localStorage.setItem(`bookworm_reading_progress_${id}`, JSON.stringify(progressData))
-    } catch (_) {}
-  }, [id, activeChapterIndex, chapters])
+    const progressData = {
+      contentId: String(id),
+      title: item?.title || 'Ebook',
+      author: item?.author || 'Unknown author',
+      cover: item?.cover || '',
+      type: 'ebook',
+      chapterIndex: activeChapterIndex,
+      chapterOrder: ch?.order ?? activeChapterIndex,
+      chapterTitle: ch?.title || (ch?.isIntro ? 'Introduction' : `Chapter ${activeChapterIndex + 1}`),
+      percent: Math.round(((activeChapterIndex + 1) / chapters.length) * 100),
+    }
+    apiFetch('/api/users/me/progress', { method: 'POST', body: progressData }).catch(() => {})
+  }, [id, activeChapterIndex, chapters, item])
 
   useEffect(() => {
     if (!id) return
@@ -152,6 +158,18 @@ function ContentReaderPage() {
     return () => {
       ignore = true
     }
+  }, [id])
+
+  // Engagement tracking: increment view count in MongoDB and sync UI immediately
+  useEffect(() => {
+    if (!id) return undefined
+    publicApiFetch(`/api/content/${id}/view`, { method: 'POST' })
+      .then((res) => {
+        if (res?.data?.views) {
+          setItem((prev) => (prev ? { ...prev, views: res.data.views } : prev))
+        }
+      })
+      .catch(() => {})
   }, [id])
 
   function jumpToChapter(index) {
@@ -247,6 +265,7 @@ function ContentReaderPage() {
         showToc &&
         !e.target.closest('.reader-toc-wrap') &&
         !e.target.closest('.reader-bottom-toc-wrap') &&
+        !e.target.closest('.reader-chapter-dock') &&
         !e.target.closest('.zen-toc-wrap')
       ) {
         setShowToc(false)
@@ -499,17 +518,6 @@ function ContentReaderPage() {
           apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: data.categories } }).catch(() => {})
         }
 
-        // Check if there was a saved reading position
-        try {
-          const raw = localStorage.getItem(`${EBOOK_STORAGE_PREFIX}${id}`)
-          if (raw) {
-            const parsed = JSON.parse(raw)
-            if (parsed && parsed.scrollY > 200) {
-              setSavedResume(parsed)
-              setShowResumeBanner(true)
-            }
-          }
-        } catch (_) {}
       })
       .catch((err) => {
         if (!ignore) setError(err.message)
@@ -523,7 +531,7 @@ function ContentReaderPage() {
     }
   }, [id])
 
-  // Track scroll percentage and persist
+  // Track scroll percentage for progress indicator
   useEffect(() => {
     if (!id || !item) return
 
@@ -534,30 +542,11 @@ function ContentReaderPage() {
       const currentScroll = window.scrollY
       const percent = Math.min(100, Math.max(0, Math.round((currentScroll / scrollHeight) * 100)))
       setReadPercent(percent)
-
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
-      scrollTimeoutRef.current = setTimeout(() => {
-        try {
-          localStorage.setItem(
-            `${EBOOK_STORAGE_PREFIX}${id}`,
-            JSON.stringify({
-              id: item._id || id,
-              title: item.title,
-              author: item.author,
-              cover_image: item.cover_image,
-              scrollY: Math.round(currentScroll),
-              percent,
-              updatedAt: Date.now(),
-            })
-          )
-        } catch (_) {}
-      }, 500)
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
     }
   }, [id, item])
 
@@ -1213,105 +1202,125 @@ function ContentReaderPage() {
           </aside>
         )}
 
-        {/* Bottom Reader Utilities */}
-        <div className="reader-bottom-nav">
-          {chapters.length > 1 && (
+        {/* Modern Chapter Stepper Dock */}
+        <section aria-label="Chapter navigation" className="reader-chapter-dock">
+          {/* Main Stepper Navigation Row */}
+          <div className="reader-chapter-stepper-row">
             <button
-              className="ghost-button"
+              aria-label="Previous chapter"
+              className="reader-stepper-nav-btn"
               disabled={activeChapterIndex <= 0}
               onClick={() => jumpToChapter(activeChapterIndex - 1)}
+              title={activeChapterIndex > 0 ? `Go to previous chapter (${chapters[activeChapterIndex - 1]?.title || 'Chapter ' + (activeChapterIndex)})` : 'First chapter reached'}
               type="button"
             >
-              <i className="bi bi-chevron-left" /> Previous chapter
+              <i className="bi bi-chevron-left" />
+              <span className="reader-stepper-btn-label">Prev</span>
             </button>
-          )}
 
-          <div className="reader-bottom-toc-wrap">
+            <div className="reader-bottom-toc-wrap">
+              <button
+                aria-expanded={showToc && tocOrigin === 'bottom'}
+                className="reader-chapter-dock-pill"
+                onClick={() => handleToggleToc('bottom')}
+                title="Browse full chapter list & bookmarks"
+                type="button"
+              >
+                <i className="bi bi-grid-fill" />
+                <span>
+                  {currentChapterObj?.isIntro
+                    ? 'Introduction'
+                    : `Chapter ${currentChapterObj?.order || activeChapterIndex}`}
+                </span>
+                <span className="reader-chapter-dock-count">of {totalRegularChapters}</span>
+                <i className="bi bi-chevron-expand" />
+              </button>
+
+              {showToc && tocOrigin === 'bottom' && (
+                <ChapterTocPopover
+                  activeChapterIndex={activeChapterIndex}
+                  bookmarks={bookmarks}
+                  chapters={chapters}
+                  chaptersLoading={chaptersLoading}
+                  filteredChapters={filteredChapters}
+                  handleRemoveBookmark={handleRemoveBookmark}
+                  jumpToChapter={jumpToChapter}
+                  onClose={() => setShowToc(false)}
+                  placement="bottom"
+                  recentPreviousChapter={recentPreviousChapter}
+                  setTocSearch={setTocSearch}
+                  setTocTab={setTocTab}
+                  tocSearch={tocSearch}
+                  tocTab={tocTab}
+                />
+              )}
+            </div>
+
             <button
-              aria-expanded={showToc && tocOrigin === 'bottom'}
-              className="secondary-button reader-toc-center-btn"
-              onClick={() => handleToggleToc('bottom')}
-              title="Open table of contents to jump chapters"
-              type="button"
-            >
-              <i className="bi bi-list-ul" />
-              <span>
-                {currentChapterObj?.isIntro
-                  ? 'Introduction'
-                  : `Chapter ${currentChapterObj?.order || activeChapterIndex}`} / {totalRegularChapters}
-              </span>
-            </button>
-            {showToc && tocOrigin === 'bottom' && (
-              <ChapterTocPopover
-                activeChapterIndex={activeChapterIndex}
-                bookmarks={bookmarks}
-                chapters={chapters}
-                chaptersLoading={chaptersLoading}
-                filteredChapters={filteredChapters}
-                handleRemoveBookmark={handleRemoveBookmark}
-                jumpToChapter={jumpToChapter}
-                onClose={() => setShowToc(false)}
-                placement="bottom"
-                recentPreviousChapter={recentPreviousChapter}
-                setTocSearch={setTocSearch}
-                setTocTab={setTocTab}
-                tocSearch={tocSearch}
-                tocTab={tocTab}
-              />
-            )}
-          </div>
-
-          {activeChapterIndex > 1 && (
-            <button
-              className="ghost-button reader-jump-first-btn"
-              onClick={() => jumpToChapter(chapters[0]?.isIntro ? 0 : 0)}
-              title="First chapter of book"
-              type="button"
-            >
-              <i className="bi bi-skip-backward-fill" /> First chapter
-            </button>
-          )}
-
-          {recentPreviousChapter !== null && recentPreviousChapter !== activeChapterIndex && (
-            <button
-              className="ghost-button reader-jump-recent-btn"
-              onClick={() => jumpToChapter(recentPreviousChapter)}
-              title="Return to recently viewed chapter"
-              type="button"
-            >
-              <i className="bi bi-arrow-return-left" /> Back to Ch. {chapters[recentPreviousChapter]?.order || recentPreviousChapter}
-            </button>
-          )}
-
-          <button
-            className="ghost-button"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            type="button"
-          >
-            <i className="bi bi-arrow-up" /> Top
-          </button>
-
-          {chapters.length > 1 && (
-            <button
-              className="ghost-button"
+              aria-label="Next chapter"
+              className="reader-stepper-nav-btn"
               disabled={activeChapterIndex >= chapters.length - 1}
               onClick={() => jumpToChapter(activeChapterIndex + 1)}
+              title={activeChapterIndex < chapters.length - 1 ? `Go to next chapter (${chapters[activeChapterIndex + 1]?.title || 'Chapter ' + (activeChapterIndex + 2)})` : 'Final chapter reached'}
               type="button"
             >
-              Next chapter <i className="bi bi-chevron-right" />
+              <span className="reader-stepper-btn-label">Next</span>
+              <i className="bi bi-chevron-right" />
             </button>
+          </div>
+
+          {/* Quick Chapter Scrubber Slider */}
+          {chapters.length > 1 && (
+            <div className="reader-chapter-scrubber-wrap">
+              <input
+                aria-label="Chapter progress scrubber"
+                className="reader-chapter-scrubber-slider"
+                max={Math.max(0, chapters.length - 1)}
+                min="0"
+                onChange={(e) => jumpToChapter(Number(e.target.value))}
+                type="range"
+                value={activeChapterIndex}
+              />
+              <div className="reader-scrubber-ticks">
+                <span>Start</span>
+                <span>{Math.round(((activeChapterIndex + 1) / (chapters.length || 1)) * 100)}% through book</span>
+                <span>End</span>
+              </div>
+            </div>
           )}
 
-          {item.pairedContent && (
+          {/* Secondary Utilities Row */}
+          <div className="reader-chapter-utilities-row">
             <button
-              className="secondary-button"
-              onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
+              className="ghost-button reader-dock-utility-btn"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               type="button"
             >
-              <i className="bi bi-headphones" /> Listen to audiobook
+              <i className="bi bi-arrow-up" /> Top
             </button>
-          )}
-        </div>
+
+            {recentPreviousChapter !== null && recentPreviousChapter !== activeChapterIndex && chapters[recentPreviousChapter] && (
+              <button
+                className="ghost-button reader-dock-utility-btn reader-dock-return-btn"
+                onClick={() => jumpToChapter(recentPreviousChapter)}
+                title="Return to recently viewed chapter"
+                type="button"
+              >
+                <i className="bi bi-arrow-counterclockwise" /> Last visited: {chapters[recentPreviousChapter]?.isIntro ? 'Introduction' : `Chapter ${chapters[recentPreviousChapter]?.order || recentPreviousChapter}`}
+              </button>
+            )}
+
+            {item.pairedContent && (
+              <button
+                className="secondary-button reader-dock-utility-btn"
+                onClick={() => navigateTo('listen', { query: `id=${item.pairedContent.id}` })}
+                type="button"
+              >
+                <i className="bi bi-headphones" /> Listen audiobook
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* Comments Section (discrete in zen mode) */}
         {!zenMode && (

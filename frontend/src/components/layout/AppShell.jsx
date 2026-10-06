@@ -166,6 +166,93 @@ function AppShell({
         </button>
 
         <div className={`main-nav-group${isMobileNavOpen ? ' open' : ''}`}>
+          {/* Mobile Profile / Account Mini-Card */}
+          <div className="mobile-drawer-account">
+            {isGuest ? (
+              <div className="mobile-drawer-guest-card">
+                <div className="mobile-guest-header">
+                  <div className="mobile-guest-avatar">
+                    <i className="bi bi-person-circle" />
+                  </div>
+                  <div className="mobile-guest-info">
+                    <strong>Guest Reader</strong>
+                    <span>Sign in to save books & progress</span>
+                  </div>
+                </div>
+                <div className="mobile-guest-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false)
+                      onAuth()
+                    }}
+                    type="button"
+                  >
+                    Login / Sign up
+                  </button>
+                  <button
+                    className="ghost-button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false)
+                      onGuest()
+                    }}
+                    type="button"
+                  >
+                    Browse as guest
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mobile-drawer-user-card">
+                <button
+                  className="mobile-user-profile-btn"
+                  onClick={() => {
+                    setIsMobileNavOpen(false)
+                    navigateTo('profile')
+                  }}
+                  type="button"
+                >
+                  <div className="mobile-user-avatar">
+                    {account?.avatar ? <img src={account.avatar} alt="" /> : getInitials(displayName)}
+                  </div>
+                  <div className="mobile-user-meta">
+                    <strong>{displayName}</strong>
+                    <span>{account?.email || (isAdmin ? 'Admin / Staff' : 'Reader Account')}</span>
+                  </div>
+                  <i className="bi bi-chevron-right mobile-profile-arrow" />
+                </button>
+
+                <div className="mobile-user-quick-bar">
+                  <button
+                    className="ghost-button mobile-quick-btn"
+                    onClick={() => {
+                      setIsMobileNavOpen(false)
+                      navigateTo('profile')
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-person-gear" />
+                    <span>Profile</span>
+                  </button>
+                  <button
+                    className="ghost-button mobile-quick-btn"
+                    onClick={() => {
+                      setIsMobileNavOpen(false)
+                      setShowNotifications(true)
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-bell" />
+                    <span>Notifications</span>
+                    {unreadNotifications > 0 && <span className="notification-badge mini">{unreadNotifications}</span>}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <HeaderSearch onSearch={(term) => { setIsMobileNavOpen(false); onHeaderSearch?.(term) }} />
+
           <nav className="main-nav" aria-label="Main navigation">
             {visibleNavItems.map((item) => {
               if (item.admin && !canShowAdminNav) return null
@@ -193,8 +280,6 @@ function AppShell({
             })}
           </nav>
 
-          <HeaderSearch onSearch={(term) => { setIsMobileNavOpen(false); onHeaderSearch?.(term) }} />
-
           {!isGuest && (
             <div className="write-menu" ref={writeMenuRef} style={{ position: 'relative' }}>
               <button
@@ -213,6 +298,7 @@ function AppShell({
                   <button
                     onClick={() => {
                       setShowWriteMenu(false)
+                      setIsMobileNavOpen(false)
                       navigateTo('write')
                     }}
                     type="button"
@@ -224,6 +310,38 @@ function AppShell({
               )}
             </div>
           )}
+
+          {/* Mobile Drawer Footer Actions (Theme + Logout) */}
+          <div className="mobile-drawer-footer">
+            {typeof setWebsiteTheme === 'function' && (
+              <button
+                className="mobile-drawer-theme-btn"
+                onClick={() => {
+                  const nextIndex = (themeOrder.indexOf(websiteTheme) + 1) % themeOrder.length
+                  setWebsiteTheme(themeOrder[nextIndex])
+                }}
+                type="button"
+              >
+                <i className={`bi ${themeIcons[websiteTheme] || 'bi-sun'}`} />
+                <span>Theme: {websiteTheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                <small className="mobile-theme-hint">(Switch)</small>
+              </button>
+            )}
+
+            {!isGuest && (
+              <button
+                className="danger-button mobile-drawer-logout-btn"
+                onClick={() => {
+                  setIsMobileNavOpen(false)
+                  setShowLogoutConfirm(true)
+                }}
+                type="button"
+              >
+                <i className="bi bi-box-arrow-right" />
+                Log out
+              </button>
+            )}
+          </div>
         </div>
 
         {isMobileNavOpen && <button aria-label="Close menu" className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} type="button" />}

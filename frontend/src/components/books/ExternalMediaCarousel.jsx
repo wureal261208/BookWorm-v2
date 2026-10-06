@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigation } from '../../context/NavigationContext'
 
 import { getCover } from '../../utils/bookUtils'
@@ -13,7 +13,10 @@ function ExternalMediaCard({ item, onDetail }) {
   const title = item.title || 'Untitled'
   const author = item.author || 'Unknown author'
   const cover = getCover(item)
-  const meta = isEbook ? `${(item.downloadCount || 0).toLocaleString()} downloads` : 'LibriVox audio'
+  const totalReads = (item.views || 0) + (item.downloadCount || 0)
+  const meta = isEbook
+    ? `${totalReads.toLocaleString()} reads`
+    : (item.views ? `${item.views.toLocaleString()} listens` : 'LibriVox audio')
 
   function openDetail() {
     if (onDetail) {
@@ -43,7 +46,7 @@ function ExternalMediaCard({ item, onDetail }) {
         <p title={author}>{author}</p>
       </div>
       <div className="book-card-meta">
-        <i className={`bi ${isEbook ? 'bi-download' : 'bi-headphones'}`} />
+        <i className={`bi ${isEbook ? 'bi-eye' : 'bi-headphones'}`} />
         <small>{meta}</small>
       </div>
       <div className="card-actions">
@@ -60,23 +63,108 @@ function ExternalMediaCard({ item, onDetail }) {
   )
 }
 
-// Same scroll-by-page track/arrows behavior as BookCarousel, rendering
-// ExternalMediaCard with onDetail routing.
-function ExternalMediaCarousel({ items, onDetail }) {
+const AUTO_SLIDE_MS = 5500
+
+function ExternalMediaCarousel({ items = [], onDetail }) {
   const trackRef = useRef(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const [activePageIndex, setActivePageIndex] = useState(0)
+  const [pageCount, setPageCount] = useState(1)
+
+  // Measure and compute total pages & active page
+  const updatePagination = () => {
+    const track = trackRef.current
+    if (!track) return
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (maxScroll <= 15) {
+      setPageCount(1)
+      setActivePageIndex(0)
+      return
+    }
+    const computedPages = Math.max(2, Math.min(6, Math.round(track.scrollWidth / track.clientWidth)))
+    setPageCount(computedPages)
+    const progress = track.scrollLeft / maxScroll
+    const currentIdx = Math.min(computedPages - 1, Math.max(0, Math.round(progress * (computedPages - 1))))
+    setActivePageIndex(currentIdx)
+  }
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return undefined
+
+    updatePagination()
+
+    const handleScroll = () => {
+      const maxScroll = track.scrollWidth - track.clientWidth
+      if (maxScroll <= 15) return
+      const progress = track.scrollLeft / maxScroll
+      const currentIdx = Math.min(pageCount - 1, Math.max(0, Math.round(progress * (pageCount - 1))))
+      setActivePageIndex(currentIdx)
+    }
+
+    track.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', updatePagination)
+
+    return () => {
+      track.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', updatePagination)
+    }
+  }, [items.length, pageCount])
+
+  // Banner-like auto-advance animation (pauses on hover or touch)
+  useEffect(() => {
+    if (items.length <= 2 || isPaused) return undefined
+
+    const timer = setInterval(() => {
+      const track = trackRef.current
+      if (!track) return
+      const maxScroll = track.scrollWidth - track.clientWidth
+      if (maxScroll <= 15) return
+
+      if (track.scrollLeft >= maxScroll - 20) {
+        track.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        track.scrollBy({ left: track.clientWidth * 0.85, behavior: 'smooth' })
+      }
+    }, AUTO_SLIDE_MS)
+
+    return () => clearInterval(timer)
+  }, [isPaused, items.length])
 
   function scrollByPage(direction) {
     const track = trackRef.current
     if (!track) return
-    track.scrollBy({ left: direction * track.clientWidth * 0.86, behavior: 'smooth' })
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (direction > 0 && track.scrollLeft >= maxScroll - 20) {
+      track.scrollTo({ left: 0, behavior: 'smooth' })
+    } else if (direction < 0 && track.scrollLeft <= 20) {
+      track.scrollTo({ left: maxScroll, behavior: 'smooth' })
+    } else {
+      track.scrollBy({ left: direction * track.clientWidth * 0.85, behavior: 'smooth' })
+    }
+  }
+
+  function goToPage(pageIdx) {
+    const track = trackRef.current
+    if (!track || pageCount <= 1) return
+    const maxScroll = track.scrollWidth - track.clientWidth
+    const targetScroll = (pageIdx / (pageCount - 1)) * maxScroll
+    track.scrollTo({ left: targetScroll, behavior: 'smooth' })
+    setActivePageIndex(pageIdx)
   }
 
   if (!items.length) return null
 
-  const showArrows = items.length > 1
+  const showArrows = items.length > 2
 
   return (
-    <div className="book-carousel">
+    <div
+      className="book-carousel"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
       {showArrows && (
         <button
           aria-label="Scroll to previous items"
@@ -105,6 +193,22 @@ function ExternalMediaCarousel({ items, onDetail }) {
         >
           <i className="bi bi-chevron-right" />
         </button>
+      )}
+
+      {pageCount > 1 && (
+        <div className="book-carousel-dots" role="tablist" aria-label="Book pages">
+          {Array.from({ length: pageCount }).map((_, idx) => (
+            <button
+              aria-label={`Show items page ${idx + 1}`}
+              aria-selected={idx === activePageIndex}
+              className={idx === activePageIndex ? 'active' : ''}
+              key={idx}
+              onClick={() => goToPage(idx)}
+              role="tab"
+              type="button"
+            />
+          ))}
+        </div>
       )}
     </div>
   )
