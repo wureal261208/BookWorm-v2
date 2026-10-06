@@ -527,9 +527,9 @@ const getLanguageFacets = asyncHandler(async (req, res) => {
 const getForYou = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 16, 40);
 
-  const engagementEntries = req.user.categoryEngagement ? [...req.user.categoryEngagement.entries()] : [];
+  const engagementEntries = req.user?.categoryEngagement ? [...req.user.categoryEngagement.entries()] : [];
   const scored = new Map();
-  for (const category of req.user.preferredCategories || []) {
+  for (const category of req.user?.preferredCategories || []) {
     scored.set(category, (scored.get(category) || 0) + 2);
   }
   for (const [category, count] of engagementEntries) {
