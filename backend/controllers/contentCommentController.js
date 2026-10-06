@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const Comment = require('../models/Comment');
@@ -28,8 +29,28 @@ function serializeComment(comment) {
 // @route GET /api/content/:id/comments
 // @desc  Public - anyone can read a content item's comments.
 const listContentComments = asyncHandler(async (req, res) => {
+  let targetId = null;
+  if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+    targetId = req.params.id;
+  } else {
+    const c = await Content.findOne({ externalId: String(req.params.id) }).select('_id');
+    if (c) {
+      targetId = c._id;
+    } else {
+      const num = Number(req.params.id);
+      if (Number.isInteger(num) && num > 0) {
+        const b = await Book.findOne({ sourceEtextNumber: num }).select('_id');
+        if (b) targetId = b._id;
+      }
+    }
+  }
+
+  if (!targetId) {
+    return success(res, 200, 'Comments retrieved successfully.', { comments: [] });
+  }
+
   const comments = await Comment.find({
-    $or: [{ content: req.params.id }, { book: req.params.id }],
+    $or: [{ content: targetId }, { book: targetId }],
   })
     .sort({ createdAt: -1 })
     .populate('user', 'name role email')
@@ -48,13 +69,24 @@ const createContentComment = asyncHandler(async (req, res) => {
     return fail(res, 400, 'Comment text is required.');
   }
 
-  let target = await Content.findOne({ _id: req.params.id, status: 'published' }).select('_id');
+  const isObjId = mongoose.Types.ObjectId.isValid(req.params.id);
+  let target = null;
   let isBook = false;
-  if (!target) {
-    const book = await Book.findOne({ _id: req.params.id, status: 'published' }).select('_id');
-    if (book) {
-      target = book;
-      isBook = true;
+
+  if (isObjId) {
+    target = await Content.findOne({ _id: req.params.id, status: 'published' }).select('_id');
+    if (!target) {
+      target = await Book.findOne({ _id: req.params.id, status: 'published' }).select('_id');
+      if (target) isBook = true;
+    }
+  } else {
+    target = await Content.findOne({ externalId: String(req.params.id), status: 'published' }).select('_id');
+    if (!target) {
+      const num = Number(req.params.id);
+      if (Number.isInteger(num) && num > 0) {
+        target = await Book.findOne({ sourceEtextNumber: num, status: 'published' }).select('_id');
+        if (target) isBook = true;
+      }
     }
   }
 

@@ -56,7 +56,8 @@ function ContentComments({ contentId }) {
     if (auth.currentUser) {
       publicApiFetch('/api/auth/me')
         .then((res) => {
-          if (res?.data?.user?.id) setCurrentUserId(String(res.data.user.id))
+          const userObj = res?.user || res?.data?.user
+          if (userObj?._id || userObj?.id) setCurrentUserId(String(userObj._id || userObj.id))
         })
         .catch(() => {})
     } else {

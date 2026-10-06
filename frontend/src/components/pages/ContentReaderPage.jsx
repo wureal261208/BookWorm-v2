@@ -165,8 +165,9 @@ function ContentReaderPage() {
     if (!id) return undefined
     publicApiFetch(`/api/content/${id}/view`, { method: 'POST' })
       .then((res) => {
-        if (res?.data?.views) {
-          setItem((prev) => (prev ? { ...prev, views: res.data.views } : prev))
+        const views = res?.views ?? res?.data?.views
+        if (typeof views === 'number') {
+          setItem((prev) => (prev ? { ...prev, views } : prev))
         }
       })
       .catch(() => {})
@@ -512,15 +513,25 @@ function ContentReaderPage() {
     publicApiFetch(`/api/content/${id}`)
       .then((data) => {
         if (ignore) return
-        setItem(data)
-
-        if (auth.currentUser && data.categories?.length) {
-          apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: data.categories } }).catch(() => {})
+        if (data && (data._id || data.id || data.title)) {
+          setItem(data)
+          if (auth.currentUser && data.categories?.length) {
+            apiFetch('/api/users/me/engagement', { method: 'POST', body: { categories: data.categories } }).catch(() => {})
+          }
+        } else {
+          return publicApiFetch(`/api/books/${id}`).then((bData) => {
+            if (!ignore && bData?.book) setItem(bData.book)
+          })
         }
-
       })
-      .catch((err) => {
-        if (!ignore) setError(err.message)
+      .catch(() => {
+        return publicApiFetch(`/api/books/${id}`)
+          .then((bData) => {
+            if (!ignore && bData?.book) setItem(bData.book)
+          })
+          .catch((err) => {
+            if (!ignore) setError(err.message)
+          })
       })
       .finally(() => {
         if (!ignore) setLoading(false)

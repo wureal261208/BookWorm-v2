@@ -21,7 +21,7 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
   let payload = null
   try {
     payload = await response.json()
-  } catch (error) {
+  } catch (_) {
     payload = null
   }
 

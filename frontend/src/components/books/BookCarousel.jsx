@@ -9,34 +9,32 @@ function BookCarousel({ books = [], favorites, onDetail, onFavorite, onRead, vie
   const [activePageIndex, setActivePageIndex] = useState(0)
   const [pageCount, setPageCount] = useState(1)
 
-  // Measure and compute total pages & active page
-  const updatePagination = () => {
-    const track = trackRef.current
-    if (!track) return
-    const maxScroll = track.scrollWidth - track.clientWidth
-    if (maxScroll <= 15) {
-      setPageCount(1)
-      setActivePageIndex(0)
-      return
-    }
-    const computedPages = Math.max(2, Math.min(6, Math.round(track.scrollWidth / track.clientWidth)))
-    setPageCount(computedPages)
-    const progress = track.scrollLeft / maxScroll
-    const currentIdx = Math.min(computedPages - 1, Math.max(0, Math.round(progress * (computedPages - 1))))
-    setActivePageIndex(currentIdx)
-  }
-
   useEffect(() => {
     const track = trackRef.current
     if (!track) return undefined
+
+    const updatePagination = () => {
+      const maxScroll = track.scrollWidth - track.clientWidth
+      if (maxScroll <= 15) {
+        setPageCount(1)
+        setActivePageIndex(0)
+        return
+      }
+      const computedPages = Math.max(2, Math.min(6, Math.round(track.scrollWidth / track.clientWidth)))
+      setPageCount(computedPages)
+      const progress = track.scrollLeft / maxScroll
+      const currentIdx = Math.min(computedPages - 1, Math.max(0, Math.round(progress * (computedPages - 1))))
+      setActivePageIndex(currentIdx)
+    }
 
     updatePagination()
 
     const handleScroll = () => {
       const maxScroll = track.scrollWidth - track.clientWidth
       if (maxScroll <= 15) return
+      const computedPages = Math.max(2, Math.min(6, Math.round(track.scrollWidth / track.clientWidth)))
       const progress = track.scrollLeft / maxScroll
-      const currentIdx = Math.min(pageCount - 1, Math.max(0, Math.round(progress * (pageCount - 1))))
+      const currentIdx = Math.min(computedPages - 1, Math.max(0, Math.round(progress * (computedPages - 1))))
       setActivePageIndex(currentIdx)
     }
 
@@ -47,11 +45,11 @@ function BookCarousel({ books = [], favorites, onDetail, onFavorite, onRead, vie
       track.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', updatePagination)
     }
-  }, [books.length, pageCount])
+  }, [books.length])
 
   // Banner-like auto-advance animation (pauses on hover or touch)
   useEffect(() => {
-    if (books.length <= 2 || isPaused) return undefined
+    if (books.length <= 1 || isPaused) return undefined
 
     const timer = setInterval(() => {
       const track = trackRef.current
@@ -93,7 +91,7 @@ function BookCarousel({ books = [], favorites, onDetail, onFavorite, onRead, vie
 
   if (!books.length) return null
 
-  const showArrows = books.length > 2
+  const showArrows = books.length > 1
 
   return (
     <div

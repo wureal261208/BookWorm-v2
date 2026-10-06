@@ -88,8 +88,9 @@ function ContentPlayerPage() {
     if (!id) return undefined
     publicApiFetch(`/api/content/${id}/view`, { method: 'POST' })
       .then((res) => {
-        if (res?.data?.views) {
-          setItem((prev) => (prev ? { ...prev, views: res.data.views } : prev))
+        const views = res?.views ?? res?.data?.views
+        if (typeof views === 'number') {
+          setItem((prev) => (prev ? { ...prev, views } : prev))
         }
       })
       .catch(() => {})

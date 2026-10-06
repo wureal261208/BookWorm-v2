@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Content = require('../models/Content');
 const Book = require('../models/Book');
 const User = require('../models/User');
@@ -8,6 +9,27 @@ const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const escapeRegExp = require('../utils/escapeRegExp');
+
+async function findContentById(id, extra = {}) {
+  if (!id) return null;
+  const isObjId = mongoose.Types.ObjectId.isValid(id);
+  const query = isObjId
+    ? { $or: [{ _id: id }, { externalId: String(id) }], ...extra }
+    : { externalId: String(id), ...extra };
+  return Content.findOne(query).lean();
+}
+
+async function findBookById(id, extra = {}) {
+  if (!id) return null;
+  const isObjId = mongoose.Types.ObjectId.isValid(id);
+  const num = Number(id);
+  const conditions = [];
+  if (isObjId) conditions.push({ _id: id });
+  if (Number.isInteger(num) && num > 0) conditions.push({ sourceEtextNumber: num });
+  if (!conditions.length) return null;
+  const query = conditions.length === 1 ? { ...conditions[0], ...extra } : { $or: conditions, ...extra };
+  return Book.findOne(query).lean();
+}
 
 // In-memory cache & request deduplication for LibriVox RSS feeds
 const librivoxChaptersCache = new Map();
@@ -120,10 +142,10 @@ function normalizeTitle(title) {
 }
 
 const getPublicContentDetail = asyncHandler(async (req, res) => {
-  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  let item = await findContentById(req.params.id, { status: 'published' });
 
   if (!item) {
-    const book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    const book = await findBookById(req.params.id, { status: 'published' });
     if (book) {
       const isAudiobook = book.category === 'Audiobook' || book.title.toLowerCase().includes('(audiobook)');
       const baseTitle = book.title.replace(/\s*\(Audiobook\)\s*/i, '').trim();
@@ -192,11 +214,11 @@ const getPublicContentDetail = asyncHandler(async (req, res) => {
 // @desc  Public - powers the in-app margin-notes reader (see ContentReaderPage.jsx).
 //        Supports both Content documents and Book documents from the catalog.
 const getContentText = asyncHandler(async (req, res) => {
-  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  let item = await findContentById(req.params.id, { status: 'published' });
   let book = null;
 
   if (!item) {
-    book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    book = await findBookById(req.params.id, { status: 'published' });
     if (!book) return fail(res, 404, 'Content not found.');
   }
 
@@ -280,11 +302,11 @@ const getContentText = asyncHandler(async (req, res) => {
 // @desc  Public - backs in-app audiobook player chapter list & ebook chapter list.
 //        Supports both Content documents and Book documents from the catalog.
 const getAudiobookChapters = asyncHandler(async (req, res) => {
-  let item = await Content.findOne({ _id: req.params.id, status: 'published' }).lean();
+  let item = await findContentById(req.params.id, { status: 'published' });
   let book = null;
 
   if (!item) {
-    book = await Book.findOne({ _id: req.params.id, status: 'published' }).lean();
+    book = await findBookById(req.params.id, { status: 'published' });
     if (!book) return fail(res, 404, 'Content not found.');
   }
 
@@ -566,16 +588,28 @@ const getTopCategories = asyncHandler(async (req, res) => {
 
 // Triggered when a reader opens or dwells on an ebook/audiobook
 const incrementContentViews = asyncHandler(async (req, res) => {
-  const mongoose = require('mongoose');
-  const filter = mongoose.Types.ObjectId.isValid(req.params.id)
-    ? { _id: req.params.id }
-    : { externalId: req.params.id };
+  const isObjId = mongoose.Types.ObjectId.isValid(req.params.id);
+  const num = Number(req.params.id);
 
-  const content = await Content.findOneAndUpdate(
-    filter,
+  let content = await Content.findOneAndUpdate(
+    isObjId ? { $or: [{ _id: req.params.id }, { externalId: String(req.params.id) }] } : { externalId: String(req.params.id) },
     { $inc: { views: 1 } },
     { new: true, select: 'views downloadCount' }
   );
+
+  if (!content && (isObjId || (Number.isInteger(num) && num > 0))) {
+    const book = await Book.findOneAndUpdate(
+      isObjId ? { _id: req.params.id } : { sourceEtextNumber: num },
+      { $inc: { views: 1 } },
+      { new: true, select: 'views' }
+    );
+    if (book) {
+      if (req.user) {
+        await User.findByIdAndUpdate(req.user._id, { $inc: { booksReadCount: 1 } });
+      }
+      return success(res, 200, 'View recorded.', { views: book.views });
+    }
+  }
 
   if (!content) {
     return fail(res, 404, 'Content not found.');

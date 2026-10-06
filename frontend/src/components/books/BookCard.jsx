@@ -3,7 +3,7 @@ import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bo
 function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progressPercent, viewCount = 0 }) {
   const isAudiobook = book.category === 'Audiobook' || (book.title && book.title.toLowerCase().includes('(audiobook)')) || book.type === 'audiobook'
   const baseReads = typeof book.views === 'number' ? book.views : (book.downloadCount || book.download_count || 0)
-  const totalReads = Math.max(baseReads, Number(viewCount) || 0)
+  const totalReads = baseReads + (Number(viewCount) || 0)
   const hasProgress = typeof progressPercent === 'number' && progressPercent > 0
   const authorName = getAuthor(book)
   const categoryName = getCategory(book)
