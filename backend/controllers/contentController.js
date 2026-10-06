@@ -53,7 +53,7 @@ const listContent = asyncHandler(async (req, res) => {
   // banner) rarely match Gutendex's raw Library-of-Congress-style subject
   // strings or LibriVox's own genre labels word-for-word, so an exact
   // match would return nothing for most categories.
-  if (category) filter.categories = { $regex: category, $options: 'i' };
+  if (category) filter.categories = { $regex: escapeRegExp(category), $options: 'i' };
   if (language) filter.language = language;
   if (search) filter.$text = { $search: search };
 
@@ -482,7 +482,7 @@ const searchAuthors = asyncHandler(async (req, res) => {
   if (!q) return success(res, 200, 'Authors fetched.', []);
 
   const results = await Content.aggregate([
-    { $match: { status: 'published', author: { $regex: q, $options: 'i' } } },
+    { $match: { status: 'published', author: { $regex: escapeRegExp(q), $options: 'i' } } },
     { $group: { _id: '$author', count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: limit },
@@ -553,7 +553,19 @@ const getForYou = asyncHandler(async (req, res) => {
     return success(res, 200, 'For You fetched.', []);
   }
 
-  const items = await Content.find({ status: 'published', categories: { $regex: topCategories.slice(0, 8).join('|'), $options: 'i' } })
+  const safeCategories = topCategories
+    .slice(0, 8)
+    .map((entry) => escapeRegExp(String(entry || '').trim()))
+    .filter(Boolean);
+
+  if (!safeCategories.length) {
+    return success(res, 200, 'For You fetched.', []);
+  }
+
+  const items = await Content.find({
+    status: 'published',
+    categories: { $regex: safeCategories.join('|'), $options: 'i' },
+  })
     .sort({ downloadCount: -1 })
     .limit(limit)
     .lean();

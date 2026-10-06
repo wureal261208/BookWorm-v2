@@ -2,13 +2,18 @@ const Book = require('../models/Book');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { generateRecommendationReply } = require('../utils/openrouter');
+const escapeRegExp = require('../utils/escapeRegExp');
 
 const recommendForMe = asyncHandler(async (req, res) => {
-  const preferences = req.user.preferences || {};
+  const preferences = req.user?.preferences || {};
   const filter = { moderationStatus: 'approved' };
   if (preferences.formats?.length) filter.type = { $in: preferences.formats };
   if (preferences.languages?.length) filter.language = { $in: preferences.languages };
-  if (preferences.categories?.length) filter.categories = { $in: preferences.categories.map((name) => new RegExp(name, 'i')) };
+  if (preferences.categories?.length) {
+    filter.categories = {
+      $in: preferences.categories.map((name) => new RegExp(escapeRegExp(name), 'i')),
+    };
+  }
   const books = await Book.find(filter).sort({ createdAt: -1 }).limit(24);
   return success(res, 200, 'Recommendations retrieved from your preferences.', { books, preferences });
 });
