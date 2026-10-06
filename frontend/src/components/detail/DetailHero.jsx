@@ -162,10 +162,18 @@ function DetailHero({
         </div>
 
         {checkpoint && (
-          <div className="checkpoint-chip">
-            <i className="bi bi-bookmark-check" />
-            Continue from page {checkpoint.page}
-          </div>
+          <button
+            className="checkpoint-chip checkpoint-resume-btn"
+            onClick={() => onRead(book)}
+            title={`Resume reading from ${checkpoint.chapter ? `Chapter ${checkpoint.chapter}, ` : ''}page ${checkpoint.page}`}
+            type="button"
+          >
+            <i className="bi bi-bookmark-check-fill" />
+            <span>
+              Continue {checkpoint.chapter ? `Chapter ${checkpoint.chapter}` : ''} (Page {checkpoint.page})
+            </span>
+            <i className="bi bi-arrow-right resume-arrow" />
+          </button>
         )}
 
         <div className="hero-actions">

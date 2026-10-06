@@ -364,7 +364,7 @@ function AppShell({
         </div>
       )}
 
-      <main className={`${isAdminPage ? 'admin-page-shell' : 'page-shell'}${isPlayerVisible && !isAdminPage ? ' has-mini-player' : ''}`}>{children}</main>
+      <main className={`${isAdminPage ? 'admin-page-shell' : `page-shell page-shell-${activePage || 'default'}`}${isPlayerVisible && !isAdminPage ? ' has-mini-player' : ''}`}>{children}</main>
       {!isAdminPage && <GlobalMiniPlayer />}
       {!isAdminPage && <ChatWidget isPlayerVisible={isPlayerVisible} />}
       {!isAdminPage && <footer className="site-footer">

@@ -25,7 +25,10 @@ function ContentReaderPage() {
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('bookworm_reader_fontsize')) || 18)
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('bookworm_reader_font') || 'serif')
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('bookworm_reader_lineheight')) || 1.85)
-  const [pageWidth, setPageWidth] = useState(() => Number(localStorage.getItem('bookworm_reader_width')) || 760)
+  const [pageWidth, setPageWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('bookworm_reader_width'))
+    return saved && saved >= 700 ? saved : 1040
+  })
   const [textAlign, setTextAlign] = useState(() => localStorage.getItem('bookworm_reader_align') || 'justify')
   const [showAaPopover, setShowAaPopover] = useState(false)
   const [zenMode, setZenMode] = useState(false)
@@ -592,7 +595,14 @@ function ContentReaderPage() {
     : chapters
 
   return (
-    <div className={`content-reader-page reader-theme-${theme} reader-font-${fontFamily} ${zenMode ? 'reader-zen-active' : ''}`}>
+    <div
+      className={`content-reader-page reader-theme-${theme} reader-font-${fontFamily} ${zenMode ? 'reader-zen-active' : ''}`}
+      style={{
+        '--reader-font-size': `${fontSize}px`,
+        '--reader-line-height': lineHeight,
+        '--reader-max-width': `${pageWidth}px`,
+      }}
+    >
       {/* Floating Zen Pill when in Zen distraction-free mode */}
       {zenMode && (
         <aside aria-label="Zen mode controls" className="reader-zen-floating-pill">
@@ -902,25 +912,32 @@ function ContentReaderPage() {
                     <label className="aa-section-label">Page width</label>
                     <div className="aa-segmented-group">
                       <button
-                        className={`aa-segment-btn ${pageWidth === 640 ? 'active' : ''}`}
-                        onClick={() => setPageWidth(640)}
-                        type="button"
-                      >
-                        Narrow (640px)
-                      </button>
-                      <button
                         className={`aa-segment-btn ${pageWidth === 760 ? 'active' : ''}`}
                         onClick={() => setPageWidth(760)}
                         type="button"
                       >
-                        Medium (760px)
+                        Compact (760px)
                       </button>
                       <button
-                        className={`aa-segment-btn ${pageWidth === 880 ? 'active' : ''}`}
-                        onClick={() => setPageWidth(880)}
+                        className={`aa-segment-btn ${pageWidth === 920 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(920)}
                         type="button"
                       >
-                        Wide (880px)
+                        Standard (920px)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${pageWidth === 1080 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(1080)}
+                        type="button"
+                      >
+                        Wide (1080px)
+                      </button>
+                      <button
+                        className={`aa-segment-btn ${pageWidth === 1260 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(1260)}
+                        type="button"
+                      >
+                        Immersive (1260px)
                       </button>
                     </div>
                   </div>
@@ -984,7 +1001,7 @@ function ContentReaderPage() {
       </header>
 
       {/* Reader Column Container */}
-      <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px` }}>
+      <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px`, width: '100%' }}>
         {/* Resume Banner */}
         {showResumeBanner && savedResume && (
           <aside aria-label="Continue reading" className="reader-resume-banner">
