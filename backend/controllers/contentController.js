@@ -622,6 +622,13 @@ const incrementContentViews = asyncHandler(async (req, res) => {
   return success(res, 200, 'View recorded.', { views: content.views });
 });
 
+// Triggered by Vercel Cron once a day (see vercel.json) via
+// routes/cronRoutes.js, which checks CRON_SECRET before this ever runs.
+const runContentIngestion = asyncHandler(async (req, res) => {
+  const result = await ingestAllContent();
+  return success(res, 200, 'Content ingestion finished.', result);
+});
+
 module.exports = {
   listContent,
   createUserContent,
