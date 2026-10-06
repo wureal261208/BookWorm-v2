@@ -21,14 +21,63 @@ const { success } = require('./utils/response');
 
 const app = express();
 
-// In production, set FRONTEND_URL to your deployed frontend's exact origin
-// (e.g. https://bookworm.vercel.app) to lock CORS down. Left unset, it
-// stays open (fine for local dev, and while the frontend URL isn't final).
-// Trimmed and stripped of any trailing slash - a copy-paste extra space or
-// "/" at the end would otherwise silently mismatch the browser's Origin
-// header (which never has a trailing slash) and break every request.
-const allowedFrontendOrigin = (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
-app.use(cors(allowedFrontendOrigin ? { origin: allowedFrontendOrigin } : {}));
+// In production, set FRONTEND_URL to your deployed frontend origin(s)
+// (supports comma-separated URLs or wildcard '*').
+// Automatically permits all *.vercel.app preview and production domains,
+// plus localhost for local development.
+const rawFrontendUrls = process.env.FRONTEND_URL || '';
+const allowedOrigins = rawFrontendUrls
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Requests with no origin (curl, mobile apps, server-to-server)
+    if (!origin) return callback(null, true);
+
+    // If FRONTEND_URL is explicitly wildcard '*' or left unset, allow all
+    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+
+    // Direct match with any configured origin
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow all *.vercel.app deployments (e.g. preview branches like book-worm-v2-stcm.vercel.app, book-worm-v2.vercel.app)
+    if (/^https:\/\/([a-zA-Z0-9_-]+\.)?vercel\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow localhost and local IP development
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-CSRF-Token',
+    'Accept-Version',
+    'Content-Length',
+    'Content-MD5',
+    'Date',
+    'X-Api-Version',
+  ],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
