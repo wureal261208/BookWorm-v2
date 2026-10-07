@@ -3833,6 +3833,12 @@ progress {
   margin-top: 28px;
 }
 
+.detail-bottom-recommendations {
+  margin-top: 56px;
+  padding-top: 36px;
+  border-top: 1px solid var(--app-line, #e2e0da);
+}
+
 .save-book-prompt {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto 34px;

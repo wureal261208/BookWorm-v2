@@ -37,20 +37,25 @@ function formatRoleBadge(role) {
   return 'Member'
 }
 
-function ContentComments({ contentId }) {
+function ContentComments({ contentId, account, onComment }) {
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState(null)
+
+  const userAccount = account && account.role !== 'guest' ? account : null
+  const isGuest = !auth.currentUser && !userAccount
+  const activeUserId = currentUserId || userAccount?.id || userAccount?._id
+  const activeUserName = auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || userAccount?.name || 'Reader'
 
   // Edit comment state
   const [editingCommentId, setEditingCommentId] = useState(null)
   const [editText, setEditText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState('')
-  const [currentUserId, setCurrentUserId] = useState(null)
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -98,6 +103,7 @@ function ContentComments({ contentId }) {
       if (data?.comment) {
         setComments((current) => [data.comment, ...current])
       }
+      onComment?.(contentId, trimmed)
       setText('')
     } catch (err) {
       setError(err.message || 'Could not post comment. Please try again.')
@@ -167,7 +173,6 @@ function ContentComments({ contentId }) {
   }
 
   const visibleComments = showAll ? comments : comments.slice(0, PREVIEW_LIMIT)
-  const isGuest = !auth.currentUser
 
   return (
     <section className="section-block comments-section" aria-label="Reader comments">
@@ -200,10 +205,10 @@ function ContentComments({ contentId }) {
         >
           <div className="comment-form-header">
             <span className="comment-avatar-bubble">
-              {getAuthorInitial(auth.currentUser?.displayName || auth.currentUser?.email)}
+              {getAuthorInitial(activeUserName)}
             </span>
             <label htmlFor="content-comment-input">
-              Commenting as <strong>{auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Reader'}</strong>
+              Commenting as <strong>{activeUserName}</strong>
             </label>
           </div>
           <textarea
@@ -298,9 +303,9 @@ function ContentComments({ contentId }) {
           {visibleComments.map((comment) => {
             const isEditing = editingCommentId === comment.id
             const isAuthor = Boolean(
-              currentUserId && (
-                String(comment.author?.id) === currentUserId ||
-                comment.author?.name === (auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0])
+              activeUserId && (
+                String(comment.author?.id) === String(activeUserId) ||
+                comment.author?.name === activeUserName
               )
             )
 

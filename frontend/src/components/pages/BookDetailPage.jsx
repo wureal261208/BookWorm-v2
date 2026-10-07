@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import DetailChapters from '../detail/DetailChapters'
-import DetailComments, { COMMENT_PREVIEW_LIMIT } from '../detail/DetailComments'
+import DetailComments from '../detail/DetailComments'
 import DetailHero from '../detail/DetailHero'
 import DetailRecommendations from '../detail/DetailRecommendations'
 import DetailTabs from '../detail/DetailTabs'
@@ -41,12 +41,12 @@ function BookDetailPage({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const [commentText, setCommentText] = useState('')
-  const [showAllComments, setShowAllComments] = useState(false)
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [showChapterPrompt, setShowChapterPrompt] = useState(false)
   const [activeDetailTab, setActiveDetailTab] = useState('chapters')
   const [ratingData, setRatingData] = useState({ average: 0, count: 0, userScore: null })
+  const [relatedBooks, setRelatedBooks] = useState([])
+  const [relatedLoading, setRelatedLoading] = useState(false)
 
   useEffect(() => {
     if (!queryId) return
@@ -160,34 +160,89 @@ function BookDetailPage({
   const readingTime = Math.max(1, Math.round(totalPages * 2.2))
   const checkpointKey = getCheckpointKey(account, currentBook)
   const checkpoint = account?.role === 'guest' ? null : checkpoints[checkpointKey]
-  const latestComments = getLatestComments(comments)
-  const visibleComments = showAllComments ? latestComments : latestComments.slice(0, COMMENT_PREVIEW_LIMIT)
-  const hasMoreComments = latestComments.length > COMMENT_PREVIEW_LIMIT
   const currentId = currentBook.id || currentBook._id
-  const recommendations = books
-    .filter((item) => (item.id || item._id) !== currentId)
-    .map((item) => ({
-      book: item,
-      score:
-        Number(getCategory(item) === getCategory(currentBook)) * 3 +
-        Number(getAuthor(item) === getAuthor(currentBook)) * 2 +
-        Number(Boolean(item.subjects?.some((subject) => currentBook.subjects?.includes(subject)))),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((first, second) => second.score - first.score || (second.book.download_count || 0) - (first.book.download_count || 0))
-    .map((item) => item.book)
-    .slice(0, 4)
+  const currentCategory = currentBook.category || (Array.isArray(currentBook.categories) && currentBook.categories[0]) || getCategory(currentBook) || 'Classic'
+  const isAudio = currentBook.type === 'audiobook' || currentBook.source === 'LibriVox' || currentBook.category === 'Audiobook'
 
-  const submitComment = () => {
-    const text = commentText.trim()
+  useEffect(() => {
+    if (!currentBook) return
+    const currentIdStr = String(currentBook._id || currentBook.id || '')
+    let ignore = false
+    setRelatedLoading(true)
 
-    if (!text) {
-      return
+    async function loadRelated() {
+      try {
+        let results = []
+        const cleanCat = String(currentCategory).replace(/Browsing:\s*/i, '').trim()
+
+        if (isAudio) {
+          const params = new URLSearchParams({ type: 'audiobook', limit: '16' })
+          if (cleanCat && cleanCat !== 'Audiobook' && cleanCat !== 'Classic') {
+            params.set('category', cleanCat)
+          }
+          const res = await publicApiFetch(`/api/content?${params.toString()}`)
+          if (Array.isArray(res?.items) && res.items.length > 0) {
+            results = res.items
+          } else {
+            const fallback = await publicApiFetch('/api/content?type=audiobook&limit=16')
+            if (Array.isArray(fallback?.items)) results = fallback.items
+          }
+        } else {
+          const params = new URLSearchParams({ sort: 'views', limit: '16' })
+          if (cleanCat && cleanCat !== 'all') {
+            params.set('category', cleanCat)
+          }
+          const res = await publicApiFetch(`/api/books?${params.toString()}`)
+          if (Array.isArray(res?.books) && res.books.length > 0) {
+            results = res.books
+          } else {
+            const hot = await publicApiFetch('/api/books?sort=hot&limit=16')
+            if (Array.isArray(hot?.books)) results = hot.books
+          }
+        }
+
+        if (!ignore) {
+          setRelatedBooks(results.filter((b) => String(b._id || b.id) !== currentIdStr))
+        }
+      } catch (_) {
+        // Fallback handled by useMemo with props.books
+      } finally {
+        if (!ignore) setRelatedLoading(false)
+      }
     }
 
-    onComment(currentId, text)
-    setCommentText('')
-  }
+    loadRelated()
+    return () => {
+      ignore = true
+    }
+  }, [currentBook?._id, currentBook?.id, currentCategory, isAudio])
+
+  const recommendations = useMemo(() => {
+    const pool = [...relatedBooks]
+    const seen = new Set(pool.map((b) => String(b._id || b.id)))
+    const currentIdStr = String(currentBook?._id || currentBook?.id || '')
+    const catLower = String(currentCategory).toLowerCase()
+
+    ;(books || []).forEach((b) => {
+      const bId = String(b._id || b.id)
+      if (bId && bId !== currentIdStr && !seen.has(bId)) {
+        const bCat = String(getCategory(b)).toLowerCase()
+        if (bCat.includes(catLower) || catLower.includes(bCat)) {
+          pool.push(b)
+          seen.add(bId)
+        }
+      }
+    })
+
+    return pool
+      .filter((b) => String(b._id || b.id) !== currentIdStr)
+      .sort((first, second) => {
+        const viewsA = Number(first.views ?? (first.download_count || first.downloadCount || 0))
+        const viewsB = Number(second.views ?? (second.download_count || second.downloadCount || 0))
+        return viewsB - viewsA
+      })
+      .slice(0, 8)
+  }, [relatedBooks, books, currentBook, currentCategory])
 
   const handleSaveBook = () => {
     if (account?.role === 'guest') {
@@ -283,26 +338,39 @@ function BookDetailPage({
       {effectiveDetailTab === 'comments' && (
         <DetailComments
           account={account}
-          commentText={commentText}
-          comments={latestComments}
-          hasMoreComments={hasMoreComments}
-          onCommentText={setCommentText}
-          onSubmitComment={submitComment}
-          onToggleComments={() => setShowAllComments((current) => !current)}
-          showAllComments={showAllComments}
-          visibleComments={visibleComments}
+          contentId={currentId}
+          onComment={onComment}
         />
       )}
 
       {effectiveDetailTab === 'more' && (
         <DetailRecommendations
           books={recommendations}
+          category={currentCategory}
+          isAudio={isAudio}
+          loading={relatedLoading}
           favorites={favorites}
           onDetail={onDetail}
           onFavorite={onFavorite}
           onRead={onRead}
           viewCounts={viewCounts}
           viewerCounts={viewerCounts}
+        />
+      )}
+
+      {effectiveDetailTab !== 'more' && recommendations.length > 0 && (
+        <DetailRecommendations
+          books={recommendations}
+          category={currentCategory}
+          isAudio={isAudio}
+          loading={relatedLoading}
+          favorites={favorites}
+          onDetail={onDetail}
+          onFavorite={onFavorite}
+          onRead={onRead}
+          viewCounts={viewCounts}
+          viewerCounts={viewerCounts}
+          isBottomSection
         />
       )}
       {showChapterPrompt && (
@@ -319,15 +387,6 @@ function BookDetailPage({
 function getCheckpointKey(account, book) {
   const accountKey = account?.role === 'guest' ? 'guest' : account?.id || account?.email || 'user'
   return `${accountKey}:${book.id}`
-}
-
-function getLatestComments(comments = []) {
-  return [...comments].sort((first, second) => {
-    const firstTime = new Date(first.createdAt).getTime()
-    const secondTime = new Date(second.createdAt).getTime()
-
-    return secondTime - firstTime
-  })
 }
 
 function DetailSkeleton() {
