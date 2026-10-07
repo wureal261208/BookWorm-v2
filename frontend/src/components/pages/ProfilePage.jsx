@@ -20,6 +20,7 @@ function ProfilePage({
   onChangePassword,
   onDetail,
   onFavorite,
+  onNavigate,
   onProfileUpdate,
   onRead,
   onToast,
@@ -66,6 +67,7 @@ function ProfilePage({
         onChangePassword={onChangePassword}
         onDetail={onDetail}
         onFavorite={onFavorite}
+        onNavigate={onNavigate}
         onProfileUpdate={onProfileUpdate}
         onRead={onRead}
         onToast={onToast}
@@ -93,6 +95,7 @@ function ProfileSettings({
   onChangePassword,
   onDetail,
   onFavorite,
+  onNavigate,
   onProfileUpdate,
   onRead,
   onToast,
@@ -120,6 +123,9 @@ function ProfileSettings({
   const [localShelf, setLocalShelf] = useState(shelf)
   const [activeShelfTab, setActiveShelfTab] = useState('reading')
   const [fetchedShelfBooks, setFetchedShelfBooks] = useState({})
+  const [mongoProgress, setMongoProgress] = useState({})
+  const [myBooks, setMyBooks] = useState([])
+  const [myBooksLoading, setMyBooksLoading] = useState(false)
 
   const accountKey = account?.id || account?.email || 'guest'
   const goalStorageKey = `bookworm_reading_goal_${accountKey}`
@@ -133,6 +139,50 @@ function ProfileSettings({
   })
   const [isEditingGoal, setIsEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState(readingGoal)
+
+  useEffect(() => {
+    if (!account || account.role === 'guest') return
+    let ignore = false
+    apiFetch('/api/users/me/progress')
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.progress)) {
+          const map = {}
+          data.progress.forEach((item) => {
+            if (item.contentId) {
+              map[item.contentId] = Number(item.percent) || 0
+            }
+          })
+          setMongoProgress(map)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [account])
+
+  useEffect(() => {
+    if (!account || account.role === 'guest') return
+    let ignore = false
+    setMyBooksLoading(true)
+    apiFetch('/api/books/mine?limit=50')
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.books)) {
+          setMyBooks(data.books)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setMyBooksLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [account])
+
+  const effectiveProgress = useMemo(() => {
+    return { ...progress, ...mongoProgress }
+  }, [progress, mongoProgress])
 
   useEffect(() => {
     setLocalShelf(shelf)
@@ -209,29 +259,29 @@ function ProfileSettings({
     return resolvedShelfBooks.filter((item) => {
       if (item.status === 'reading') return true
       const bId = item.book.id || item.book._id
-      const p = progress[bId] || 0
+      const p = effectiveProgress[bId] || 0
       return p > 0 && p < 100 && item.status !== 'finished'
     })
-  }, [resolvedShelfBooks, progress])
+  }, [resolvedShelfBooks, effectiveProgress])
 
   const wantToReadList = useMemo(() => {
     return resolvedShelfBooks.filter((item) => {
       if (item.status === 'want_to_read') {
         const bId = item.book.id || item.book._id
-        const p = progress[bId] || 0
+        const p = effectiveProgress[bId] || 0
         return p === 0 || !p
       }
       return false
     })
-  }, [resolvedShelfBooks, progress])
+  }, [resolvedShelfBooks, effectiveProgress])
 
   const finishedList = useMemo(() => {
     return resolvedShelfBooks.filter((item) => {
       if (item.status === 'finished') return true
       const bId = item.book.id || item.book._id
-      return (progress[bId] || 0) >= 100
+      return (effectiveProgress[bId] || 0) >= 100
     })
-  }, [resolvedShelfBooks, progress])
+  }, [resolvedShelfBooks, effectiveProgress])
 
   const safeName = displayName || account?.name || 'Reader'
   const safeEmail = account?.email || 'No email linked yet'
@@ -288,7 +338,7 @@ function ProfileSettings({
         )
         if (match) {
           const bId = match.book?.id || match.book?._id
-          const p = progress[bId] || 0
+          const p = effectiveProgress[bId] || 0
           if (p > 0 && p < 100) return match
         }
       }
@@ -296,11 +346,11 @@ function ProfileSettings({
     if (readingList.length > 0) return readingList[0]
     const anyProgress = resolvedShelfBooks.find((item) => {
       const bId = item.book?.id || item.book?._id
-      const p = progress[bId] || 0
+      const p = effectiveProgress[bId] || 0
       return p > 0 && p < 100
     })
     return anyProgress || null
-  }, [history, resolvedShelfBooks, readingList, progress])
+  }, [history, resolvedShelfBooks, readingList, effectiveProgress])
 
   function handleSaveGoal(e) {
     e.preventDefault()
@@ -502,12 +552,12 @@ function ProfileSettings({
                     <div
                       className="quick-resume-progress-fill"
                       style={{
-                        width: `${Math.min(100, Math.round(progress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0))}%`,
+                        width: `${Math.min(100, Math.round(effectiveProgress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0))}%`,
                       }}
                     />
                   </div>
                   <span className="quick-resume-pct">
-                    {Math.round(progress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0)}% hoàn thành
+                    {Math.round(effectiveProgress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0)}% hoàn thành
                   </span>
                 </div>
                 <div className="quick-resume-actions">
@@ -720,6 +770,17 @@ function ProfileSettings({
               <span>Đã đọc xong</span>
               <span className="shelf-count-pill">{finishedList.length}</span>
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeShelfTab === 'authored'}
+              className={`shelf-tab-btn ${activeShelfTab === 'authored' ? 'active' : ''}`}
+              onClick={() => setActiveShelfTab('authored')}
+            >
+              <i className="bi bi-journal-arrow-up" />
+              <span>Sách đã đăng</span>
+              <span className="shelf-count-pill">{myBooks.length}</span>
+            </button>
           </div>
 
           <div className="shelf-tab-content">
@@ -728,7 +789,7 @@ function ProfileSettings({
                 items={readingList}
                 emptyText="Bạn chưa có cuốn sách nào trong mục Đang đọc. Hãy mở một cuốn sách từ Trang chủ để bắt đầu đọc!"
                 emptyIcon="bi-journal-richtext"
-                progress={progress}
+                progress={effectiveProgress}
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
@@ -740,7 +801,7 @@ function ProfileSettings({
                 items={wantToReadList}
                 emptyText="Chưa có sách nào trong danh sách Muốn đọc. Khi lướt xem sách, chọn 'Muốn đọc' để lưu vào đây nhé."
                 emptyIcon="bi-bookmark-heart"
-                progress={progress}
+                progress={effectiveProgress}
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
@@ -752,11 +813,20 @@ function ProfileSettings({
                 items={finishedList}
                 emptyText="Chưa có cuốn sách nào được đánh dấu Đã đọc xong. Chúc bạn có những trải nghiệm đọc tuyệt vời!"
                 emptyIcon="bi-award"
-                progress={progress}
+                progress={effectiveProgress}
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
                 onRemove={onRemoveShelfBook}
+              />
+            )}
+            {activeShelfTab === 'authored' && (
+              <AuthoredBookList
+                items={myBooks}
+                loading={myBooksLoading}
+                onRead={onRead}
+                onDetail={onDetail}
+                onNavigate={onNavigate}
               />
             )}
           </div>
@@ -962,6 +1032,97 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 <option value="finished">Đã đọc xong</option>
                 <option value="remove">Xóa khỏi kệ</option>
               </select>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate }) {
+  if (loading) {
+    return (
+      <div className="shelf-empty-box">
+        <i className="bi bi-arrow-repeat spin" />
+        <p>Đang tải danh sách sách bạn đã đăng...</p>
+      </div>
+    )
+  }
+
+  if (!items.length) {
+    return (
+      <div className="shelf-empty-box">
+        <i className="bi bi-journal-plus" />
+        <p>Bạn chưa sáng tác hoặc đăng cuốn sách nào lên hệ thống.</p>
+        {onNavigate && (
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => onNavigate('write')}
+            style={{ marginTop: '0.75rem' }}
+          >
+            <i className="bi bi-feather" />
+            <span>Sáng tác / Đăng sách ngay</span>
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <ul className="book-thumb-list shelf-book-list authored-book-list">
+      {items.map((book) => {
+        const bId = book._id || book.id
+        const status = book.status || 'published'
+        return (
+          <li key={bId} className="shelf-book-item authored-book-item">
+            <img alt={book.title || ''} className="shelf-book-cover" src={getCover(book)} />
+            <div className="shelf-book-meta">
+              <strong>{book.title || 'Untitled'}</strong>
+              <span>{getAuthor(book)}</span>
+              <div className="shelf-authored-badges">
+                <span className={`authored-status-pill status-${status}`}>
+                  <i className={status === 'published' ? 'bi bi-check-circle-fill' : 'bi bi-file-earmark-text'} />
+                  <span>{status === 'published' ? 'Đã xuất bản' : 'Bản nháp'}</span>
+                </span>
+                {typeof book.views === 'number' && (
+                  <span className="authored-views-pill">
+                    <i className="bi bi-eye" />
+                    <span>{book.views} lượt xem</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="shelf-book-actions">
+              <button
+                className="primary-button shelf-action-btn"
+                onClick={() => onRead?.(book)}
+                type="button"
+              >
+                <i className="bi bi-book-half" />
+                <span>Đọc</span>
+              </button>
+              <button
+                className="ghost-button shelf-action-btn"
+                onClick={() => (onDetail ? onDetail(book) : onRead?.(book))}
+                type="button"
+              >
+                <i className="bi bi-info-circle" />
+                <span>Chi tiết</span>
+              </button>
+              {onNavigate && (
+                <button
+                  className="ghost-button shelf-action-btn"
+                  onClick={() => onNavigate('write')}
+                  type="button"
+                  title="Chỉnh sửa hoặc viết chương mới"
+                >
+                  <i className="bi bi-pencil-square" />
+                  <span>Viết / Sửa</span>
+                </button>
+              )}
             </div>
           </li>
         )

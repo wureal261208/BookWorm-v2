@@ -2,6 +2,16 @@ import { describe, expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ProfilePage from '../ProfilePage'
 
+vi.mock('../../utils/apiClient', () => ({
+  apiFetch: vi.fn().mockImplementation((url) => {
+    if (url.includes('/api/users/me/shelf')) return Promise.resolve({ shelf: [] })
+    if (url.includes('/api/users/me/progress')) return Promise.resolve({ progress: [] })
+    if (url.includes('/api/books/mine')) return Promise.resolve({ books: [] })
+    return Promise.resolve({})
+  }),
+  publicApiFetch: vi.fn().mockResolvedValue({}),
+}))
+
 const mockAccount = {
   id: 'usr-123',
   displayId: 'BW-0099',
@@ -112,5 +122,27 @@ describe('ProfilePage', () => {
     fireEvent.click(saveBtn)
 
     expect(screen.getByText(/1 \/ 25 cuốn/i)).toBeInTheDocument()
+  })
+
+  test('renders authored books tab and supports navigating to write page', async () => {
+    const onNavigate = vi.fn()
+    render(
+      <ProfilePage
+        account={mockAccount}
+        books={mockBooks}
+        shelf={[]}
+        progress={{}}
+        onNavigate={onNavigate}
+      />
+    )
+
+    const authoredTab = screen.getByRole('tab', { name: /Sách đã đăng/i })
+    expect(authoredTab).toBeInTheDocument()
+    fireEvent.click(authoredTab)
+
+    expect(await screen.findByText(/Bạn chưa sáng tác hoặc đăng cuốn sách nào/i)).toBeInTheDocument()
+    const writeBtn = screen.getByRole('button', { name: /Sáng tác \/ Đăng sách ngay/i })
+    fireEvent.click(writeBtn)
+    expect(onNavigate).toHaveBeenCalledWith('write')
   })
 })

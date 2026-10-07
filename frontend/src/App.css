@@ -16123,6 +16123,48 @@ progress {
   cursor: pointer;
 }
 
+.shelf-authored-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.authored-status-pill,
+.authored-views-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.authored-status-pill.status-published {
+  background: rgba(22, 160, 154, 0.12);
+  color: #16a09a;
+  border: 1px solid rgba(22, 160, 154, 0.25);
+}
+
+.authored-status-pill.status-draft {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.authored-views-pill {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--app-text-muted, #666660);
+  border: 1px solid var(--app-line, #e2e0da);
+}
+
+[data-theme='dark'] .authored-views-pill {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a3a39e;
+}
+
 /* =========================================================
    FEATURE 3: IN-BOOK TEXT SEARCH DRAWER & HIGHLIGHTING
    ========================================================= */

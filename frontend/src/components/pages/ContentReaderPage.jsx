@@ -512,7 +512,7 @@ function ContentReaderPage() {
   }
 
   function handleSelNote() {
-    setToastMsg('Click the note icon 💬 beside the paragraph to add a margin note.')
+    setToastMsg('Click the note icon beside the paragraph to add a margin note.')
     setSelectionMenu(null)
   }
 

@@ -150,12 +150,20 @@ function ContentComments({ contentId }) {
     }
   }
 
+  function handleInsertBold() {
+    setText((prev) => (prev ? `${prev} **in đậm**` : '**in đậm**'))
+  }
+
+  function handleInsertItalic() {
+    setText((prev) => (prev ? `${prev} *in nghiêng*` : '*in nghiêng*'))
+  }
+
   function handleInsertQuote() {
     setText((prev) => (prev ? `${prev}\n> ` : '> '))
   }
 
-  function handleInsertEmoji(emoji) {
-    setText((prev) => `${prev}${emoji} `)
+  function handleInsertBullet() {
+    setText((prev) => (prev ? `${prev}\n• ` : '• '))
   }
 
   const visibleComments = showAll ? comments : comments.slice(0, PREVIEW_LIMIT)
@@ -222,25 +230,36 @@ function ContentComments({ contentId }) {
             <div className="comment-tools-left">
               <button
                 className="comment-tool-btn"
+                onClick={handleInsertBold}
+                title="In đậm (**văn bản**)"
+                type="button"
+              >
+                <i className="bi bi-type-bold" /> In đậm
+              </button>
+              <button
+                className="comment-tool-btn"
+                onClick={handleInsertItalic}
+                title="In nghiêng (*văn bản*)"
+                type="button"
+              >
+                <i className="bi bi-type-italic" /> In nghiêng
+              </button>
+              <button
+                className="comment-tool-btn"
                 onClick={handleInsertQuote}
-                title="Thêm trích dẫn"
+                title="Thêm trích dẫn (> trích dẫn)"
                 type="button"
               >
                 <i className="bi bi-quote" /> Trích dẫn
               </button>
-              <div aria-label="Biểu cảm nhanh" className="comment-quick-emojis">
-                {['📖', '⭐', '💡', '❤️', '👏'].map((emoji) => (
-                  <button
-                    className="comment-emoji-btn"
-                    key={emoji}
-                    onClick={() => handleInsertEmoji(emoji)}
-                    title={`Chèn ${emoji}`}
-                    type="button"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+              <button
+                className="comment-tool-btn"
+                onClick={handleInsertBullet}
+                title="Gạch đầu dòng (• danh sách)"
+                type="button"
+              >
+                <i className="bi bi-list-ul" /> Gạch đầu dòng
+              </button>
             </div>
 
             <div className="comment-tools-right">

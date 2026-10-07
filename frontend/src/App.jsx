@@ -1300,6 +1300,7 @@ function App() {
         shelf={shelf}
         onUpdateShelfStatus={updateShelfStatus}
         onRemoveShelfBook={removeShelfBook}
+        onNavigate={navigateTo}
       />
     ),
     admin: hasAccess(account.role, 'employee') ? (

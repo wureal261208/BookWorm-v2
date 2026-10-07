@@ -128,7 +128,7 @@ function DetailHero({
         <div className="detail-rating-interactive">
           <span className="rating-interactive-label">
             {userScore ? (
-              <span><i className="bi bi-check-circle-fill" style={{ color: 'var(--app-accent)', marginRight: '4px' }} />Đánh giá của bạn: <strong>{userScore}★</strong></span>
+              <span><i className="bi bi-check-circle-fill" style={{ color: 'var(--app-accent)', marginRight: '4px' }} />Đánh giá của bạn: <strong>{userScore} <i className="bi bi-star-fill" style={{ color: '#f59e0b', fontSize: '0.9em' }} /></strong></span>
             ) : (
               <span>Chấm điểm sách:</span>
             )}
