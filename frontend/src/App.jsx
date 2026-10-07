@@ -25,14 +25,7 @@ import { auth } from './features/auth-firebase/firebaseConfig'
 import { getAuthor, getCategory, getReaderUrl } from './utils/bookUtils'
 import {
   globalDataDefaults,
-  migrateLegacyComments,
-  saveBookComment,
-  saveGlobalData,
-  saveUserData,
   stableStringify,
-  subscribeComments,
-  subscribeGlobalData,
-  subscribeUserData,
   userDataDefaults,
 } from './utils/firebaseData'
 import logo from './assets/logo.jpg'
@@ -131,6 +124,7 @@ function App() {
   const [managedBooksError, setManagedBooksError] = useState('')
   const addBookInFlightRef = useRef(false)
   const [favorites, setFavorites] = useState(userDataDefaults.favorites)
+  const [shelf, setShelf] = useState([])
   const [history, setHistory] = useState(userDataDefaults.history)
   const [readingActivity, setReadingActivity] = useState(userDataDefaults.readingActivity)
   const [viewCounts, setViewCounts] = useState(globalDataDefaults.viewCounts)
@@ -193,6 +187,7 @@ function App() {
           themePreference: data.user?.themePreference || '',
           hasSetPreferences: Boolean(data.user?.hasSetPreferences),
           savedBooks: Array.isArray(data.user?.savedBooks) ? data.user.savedBooks : [],
+          shelvedBooks: Array.isArray(data.user?.shelvedBooks) ? data.user.shelvedBooks : [],
         }
       } catch (error) {
         const isRealRejection = error.status === 401 || error.status === 403
@@ -359,115 +354,8 @@ function App() {
   }, [refreshNotifications])
 
   useEffect(() => {
-    return subscribeGlobalData(
-      (data) => {
-        const nextData = {
-          viewCounts: data.viewCounts || {},
-          bookReaders: data.bookReaders || {},
-        }
-
-        globalDataSnapshotRef.current = stableStringify(nextData)
-        setViewCounts(nextData.viewCounts)
-        setBookReaders(nextData.bookReaders)
-        if (data.comments && Object.keys(data.comments).length) {
-          setComments((current) => mergeCommentMaps(data.comments, current))
-          if (!migratedLegacyCommentsRef.current) {
-            migratedLegacyCommentsRef.current = true
-            migrateLegacyComments(data.comments).catch((error) => handleDataSyncError(error, 'migrate-legacy-comments'))
-          }
-        }
-        setGlobalDataReady(true)
-      },
-      (error) => {
-        setGlobalDataReady(true)
-        handleDataSyncError(error, 'subscribe-global-data')
-      },
-    )
-  }, [handleDataSyncError])
-
-  useEffect(() => {
-    return subscribeComments(
-      (nextComments) => {
-        setComments((current) => mergeCommentMaps(current, nextComments))
-      },
-      handleDataSyncError,
-    )
-  }, [handleDataSyncError])
-
-  useEffect(() => {
-    if (account.role === 'guest') {
-      let isCurrent = true
-      queueMicrotask(() => {
-        if (!isCurrent) return
-        setFavorites(userDataDefaults.favorites)
-        setHistory(userDataDefaults.history)
-        setReadingActivity(userDataDefaults.readingActivity)
-        setProgress(userDataDefaults.progress)
-        setCheckpoints(userDataDefaults.checkpoints)
-        setNotes(userDataDefaults.notes)
-        setHighlights(userDataDefaults.highlights)
-        setSearchHistory(userDataDefaults.searchHistory)
-        setAccountSettings(userDataDefaults.accountSettings)
-        setWebsiteTheme(userDataDefaults.websiteTheme)
-        setReaderTheme(userDataDefaults.readerTheme)
-        setReaderFontSize(userDataDefaults.readerFontSize)
-        setUserDataReady(false)
-        userDataSnapshotRef.current = ''
-      })
-      return () => {
-        isCurrent = false
-      }
-    }
-
-    queueMicrotask(() => {
-      setUserDataReady(false)
-    })
-
-    return subscribeUserData(
-      account.id,
-      (data) => {
-        const savedData = {
-          favorites: data.favorites || [],
-          history: data.history || [],
-          readingActivity: data.readingActivity || {},
-          progress: data.progress || {},
-          checkpoints: data.checkpoints || {},
-          notes: data.notes || {},
-          highlights: data.highlights || {},
-          searchHistory: data.searchHistory || [],
-          accountSettings: data.accountSettings || {},
-          websiteTheme: data.websiteTheme || userDataDefaults.websiteTheme,
-          readerTheme: data.readerTheme || userDataDefaults.readerTheme,
-          readerFontSize: data.readerFontSize || userDataDefaults.readerFontSize,
-        }
-        const pendingFavoriteUpdates = pendingFavoriteUpdatesRef.current
-        const nextData = {
-          ...savedData,
-          favorites: applyFavoriteUpdates(savedData.favorites, pendingFavoriteUpdates),
-        }
-
-        userDataSnapshotRef.current = stableStringify(savedData)
-        pendingFavoriteUpdatesRef.current = []
-        setFavorites(nextData.favorites)
-        setHistory(nextData.history)
-        setReadingActivity(nextData.readingActivity)
-        setProgress(nextData.progress)
-        setCheckpoints(nextData.checkpoints)
-        setNotes(nextData.notes)
-        setHighlights(nextData.highlights)
-        setSearchHistory(nextData.searchHistory)
-        setAccountSettings(nextData.accountSettings)
-        setWebsiteTheme(nextData.websiteTheme)
-        setReaderTheme(nextData.readerTheme)
-        setReaderFontSize(nextData.readerFontSize)
-        setUserDataReady(true)
-      },
-      (error) => {
-        setUserDataReady(true)
-        handleDataSyncError(error, 'subscribe-user-data')
-      },
-    )
-  }, [account.id, account.role, handleDataSyncError])
+    setGlobalDataReady(true)
+  }, [])
 
   useEffect(() => {
     if (account.role === 'guest' || !userDataReady) return
@@ -491,6 +379,11 @@ function App() {
 
       if (!user) {
         setAccount(guestAccount)
+        setFavorites([])
+        setShelf([])
+        setProgress({})
+        setCheckpoints({})
+        setUserDataReady(true)
         if (currentRoute === 'profile' || currentRoute === 'admin') {
           navigateTo('home', { instant: true, replace: true })
         }
@@ -544,9 +437,24 @@ function App() {
       }
 
       setAccount(nextAccount)
-      if (Array.isArray(trustedProfile.savedBooks) && trustedProfile.savedBooks.length > 0) {
+      if (Array.isArray(trustedProfile.savedBooks)) {
         setFavorites(trustedProfile.savedBooks)
       }
+      if (Array.isArray(trustedProfile.shelvedBooks)) {
+        setShelf(trustedProfile.shelvedBooks)
+      }
+      setUserDataReady(true)
+      apiFetch('/api/users/me/progress')
+        .then((pData) => {
+          if (Array.isArray(pData?.progress)) {
+            const map = {}
+            pData.progress.forEach((p) => {
+              if (p.contentId) map[p.contentId] = p.percent || 0
+            })
+            setProgress(map)
+          }
+        })
+        .catch(() => {})
       if (!trustedProfile.hasSetPreferences) setShowPreferencesModal(true)
       // The account's saved theme preference (MongoDB) wins over whatever
       // was showing before login - only applied when the account actually
@@ -666,29 +574,7 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!globalDataReady) return
 
-    const nextGlobalData = {
-      viewCounts,
-      bookReaders,
-    }
-    const nextSnapshot = stableStringify(nextGlobalData)
-    if (nextSnapshot === globalDataSnapshotRef.current) return
-
-    globalDataSnapshotRef.current = nextSnapshot
-    saveGlobalData(nextGlobalData).catch((error) => handleDataSyncError(error, 'save-global-data'))
-  }, [bookReaders, globalDataReady, handleDataSyncError, viewCounts])
-
-  useEffect(() => {
-    if (account.role === 'guest' || !userDataReady) return
-
-    const nextSnapshot = stableStringify(userData)
-    if (nextSnapshot === userDataSnapshotRef.current) return
-
-    userDataSnapshotRef.current = nextSnapshot
-    saveUserData(account.id, userData).catch((error) => handleDataSyncError(error, 'save-user-data'))
-  }, [account.id, account.role, handleDataSyncError, userData, userDataReady])
 
   const publishedManagedBooks = useMemo(
     () => managedBooks.filter((book) => (book.status || 'published') === 'published'),
@@ -773,6 +659,7 @@ function App() {
     await signOut(auth)
     setAccount(guestAccount)
     setFavorites([])
+    setShelf([])
     setProgress({})
     setCheckpoints({})
     try {
@@ -1013,7 +900,58 @@ function App() {
     saveBookComment(bookId, nextComment).catch((error) => handleDataSyncError(error, 'save-book-comment'))
   }
 
-  function toggleFavorite(bookId) {
+  const updateShelfStatus = useCallback(async (bookId, status) => {
+    if (!bookId) return
+    if (account.role === 'guest') {
+      setToast({ type: 'error', message: 'Please log in to manage your bookshelf.' })
+      navigateTo('auth')
+      return
+    }
+
+    setShelf((current) => {
+      const idx = current.findIndex((item) => String(item.bookId) === String(bookId))
+      if (idx >= 0) {
+        const next = [...current]
+        next[idx] = { ...next[idx], status, updatedAt: new Date().toISOString() }
+        return next
+      }
+      return [...current, { bookId: String(bookId), status, updatedAt: new Date().toISOString() }]
+    })
+    setFavorites((current) => (current.includes(String(bookId)) ? current : [...current, String(bookId)]))
+
+    try {
+      const res = await apiFetch(`/api/users/me/shelf/${encodeURIComponent(bookId)}`, {
+        method: 'POST',
+        body: { status },
+      })
+      if (Array.isArray(res?.shelf)) setShelf(res.shelf)
+      if (Array.isArray(res?.favorites)) setFavorites(res.favorites)
+      const label = status === 'reading' ? 'Đang đọc' : status === 'finished' ? 'Đã đọc xong' : 'Muốn đọc'
+      setToast({ type: 'success', message: `Đã thêm vào mục "${label}".` })
+    } catch (err) {
+      setToast({ type: 'error', message: err.message || 'Failed to update shelf' })
+    }
+  }, [account.role, navigateTo])
+
+  const removeShelfBook = useCallback(async (bookId) => {
+    if (!bookId || account.role === 'guest') return
+
+    setShelf((current) => current.filter((item) => String(item.bookId) !== String(bookId)))
+    setFavorites((current) => current.filter((id) => String(id) !== String(bookId)))
+
+    try {
+      const res = await apiFetch(`/api/users/me/shelf/${encodeURIComponent(bookId)}`, {
+        method: 'DELETE',
+      })
+      if (Array.isArray(res?.shelf)) setShelf(res.shelf)
+      if (Array.isArray(res?.favorites)) setFavorites(res.favorites)
+      setToast({ type: 'success', message: 'Đã xóa khỏi kệ sách.' })
+    } catch (err) {
+      setToast({ type: 'error', message: err.message || 'Failed to remove from shelf' })
+    }
+  }, [account.role])
+
+  const toggleFavorite = useCallback((bookId) => {
     if (!bookId) return
 
     if (account.role === 'guest') {
@@ -1022,22 +960,26 @@ function App() {
       return
     }
 
-    const action = favorites.includes(bookId) ? 'remove' : 'add'
-    if (!userDataReady) {
-      pendingFavoriteUpdatesRef.current = [...pendingFavoriteUpdatesRef.current, { action, bookId }]
-      setToast({ type: 'success', message: 'Bookmark updated. It will sync when your shelf is ready.' })
+    const isSaved = favorites.includes(bookId)
+    if (isSaved) {
+      setFavorites((current) => current.filter((id) => id !== bookId))
+      setShelf((current) => current.filter((item) => String(item.bookId) !== String(bookId)))
+    } else {
+      setFavorites((current) => [...current, bookId])
+      setShelf((current) => [...current, { bookId, status: 'want_to_read', updatedAt: new Date().toISOString() }])
     }
-
-    setFavorites((current) => applyFavoriteUpdates(current, [{ action, bookId }]))
 
     apiFetch(`/api/users/me/favorites/${encodeURIComponent(bookId)}`, { method: 'POST' })
       .then((res) => {
         if (Array.isArray(res?.favorites)) {
           setFavorites(res.favorites)
         }
+        if (Array.isArray(res?.shelf)) {
+          setShelf(res.shelf)
+        }
       })
       .catch(() => {})
-  }
+  }, [account.role, favorites, navigateTo])
 
   async function markNotificationRead(notificationId) {
     try {
@@ -1284,11 +1226,14 @@ function App() {
         account={account}
         comments={comments[selectedBook?.id] || []}
         favorites={favorites}
+        shelf={shelf}
         onBack={() => navigateTo('home')}
         onChapter={openChapter}
         onComment={addComment}
         onDetail={openDetail}
         onFavorite={toggleFavorite}
+        onUpdateShelfStatus={updateShelfStatus}
+        onRemoveShelfBook={removeShelfBook}
         onHome={() => navigateTo('home')}
         onAuth={goAuth}
         onRead={(targetBook) => {
@@ -1352,6 +1297,9 @@ function App() {
         viewCounts={viewCounts}
         viewerCounts={getViewerCounts(bookReaders)}
         websiteTheme={websiteTheme}
+        shelf={shelf}
+        onUpdateShelfStatus={updateShelfStatus}
+        onRemoveShelfBook={removeShelfBook}
       />
     ),
     admin: hasAccess(account.role, 'employee') ? (

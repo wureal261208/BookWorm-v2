@@ -8,6 +8,9 @@ const {
   updateMyProgress,
   getMyFavorites,
   toggleFavorite,
+  getMyShelf,
+  updateShelfStatus,
+  removeShelfBook,
 } = require('../controllers/userController');
 const { getMe, updateMyTheme, updateMyPreferences, recordCategoryEngagement } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
@@ -29,6 +32,11 @@ router.post('/me/progress', updateMyProgress);
 // Per-user saved books (favorites) in MongoDB
 router.get('/me/favorites', getMyFavorites);
 router.post('/me/favorites/:bookId', toggleFavorite);
+
+// Per-user categorized shelf ('reading', 'want_to_read', 'finished') in MongoDB
+router.get('/me/shelf', getMyShelf);
+router.post('/me/shelf/:bookId', updateShelfStatus);
+router.delete('/me/shelf/:bookId', removeShelfBook);
 
 // Called after Firebase reauth + updatePassword already succeeded
 // client-side - see components/pages/ProfilePage.jsx.

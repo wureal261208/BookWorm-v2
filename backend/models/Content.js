@@ -55,6 +55,10 @@ const ContentSchema = new mongoose.Schema(
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     downloadCount: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
+    rating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
+    },
     lastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true }

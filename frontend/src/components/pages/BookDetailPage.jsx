@@ -8,7 +8,7 @@ import DetailTabs from '../detail/DetailTabs'
 import MembershipRequiredModal from '../detail/MembershipRequiredModal'
 import { getAuthor, getCategory } from '../../utils/bookUtils'
 import { getBookChapters, getTotalPages, hasExplicitChapters } from '../../utils/chapterUtils'
-import { publicApiFetch } from '../../utils/apiClient'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 function BookDetailPage({
   account,
@@ -17,11 +17,14 @@ function BookDetailPage({
   checkpoints = {},
   comments = [],
   favorites = [],
+  shelf = [],
   onBack,
   onChapter,
   onComment,
   onDetail,
   onFavorite,
+  onUpdateShelfStatus,
+  onRemoveShelfBook,
   onHome,
   onAuth,
   onListen,
@@ -43,6 +46,7 @@ function BookDetailPage({
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [showChapterPrompt, setShowChapterPrompt] = useState(false)
   const [activeDetailTab, setActiveDetailTab] = useState('chapters')
+  const [ratingData, setRatingData] = useState({ average: 0, count: 0, userScore: null })
 
   useEffect(() => {
     if (!queryId) return
@@ -103,6 +107,26 @@ function BookDetailPage({
       ignore = true
     }
   }, [currentBook])
+
+  useEffect(() => {
+    const targetId = currentBook?._id || currentBook?.id || queryId
+    if (!targetId) return
+    let ignore = false
+    publicApiFetch(`/api/books/${targetId}/rate`)
+      .then((data) => {
+        if (!ignore && data?.rating) setRatingData(data.rating)
+      })
+      .catch(() => {
+        publicApiFetch(`/api/content/${targetId}/rate`)
+          .then((cData) => {
+            if (!ignore && cData?.rating) setRatingData(cData.rating)
+          })
+          .catch(() => {})
+      })
+    return () => {
+      ignore = true
+    }
+  }, [currentBook, queryId])
 
   if (loading) {
     return (
@@ -174,6 +198,36 @@ function BookDetailPage({
     onFavorite(currentId)
   }
 
+  const handleRateBook = async (score) => {
+    if (account?.role === 'guest') {
+      setShowSavePrompt(true)
+      return
+    }
+
+    setRatingData((prev) => {
+      const prevScore = prev.userScore
+      const newCount = prevScore ? prev.count : prev.count + 1
+      const total = (prev.average || 0) * (prev.count || 0) - (prevScore || 0) + score
+      const newAvg = Number((total / (newCount || 1)).toFixed(1))
+      return { average: newAvg, count: newCount, userScore: score }
+    })
+
+    try {
+      const res = await apiFetch(`/api/books/${currentId}/rate`, {
+        method: 'POST',
+        body: { score },
+      }).catch(() => {
+        return apiFetch(`/api/content/${currentId}/rate`, {
+          method: 'POST',
+          body: { score },
+        })
+      })
+      if (res?.rating) {
+        setRatingData(res.rating)
+      }
+    } catch (_) {}
+  }
+
   const handleChapterClick = (chapter) => {
     const num = chapter.number || chapter.order || 1
     if (account?.role === 'guest' && num > 3) {
@@ -197,21 +251,27 @@ function BookDetailPage({
   return (
     <section className="detail-page">
       <DetailHero
+        account={account}
         book={currentBook}
         checkpoint={checkpoint}
         favorites={favorites}
+        shelf={shelf}
         hasChapters={hasChapters}
         language={language}
         onAuth={onAuth}
         onListen={onListen}
         onRead={onRead}
         onSaveBook={handleSaveBook}
+        onUpdateShelfStatus={onUpdateShelfStatus}
+        onRemoveShelfBook={onRemoveShelfBook}
         onToggleSavePrompt={setShowSavePrompt}
         readingTime={readingTime}
         showSavePrompt={showSavePrompt}
         totalChapters={totalChapters}
         totalPages={totalPages}
         totalReads={totalReads}
+        ratingData={ratingData}
+        onRateBook={handleRateBook}
       />
 
       <DetailTabs activeTab={effectiveDetailTab} onChange={setActiveDetailTab} showChapters={hasChapters} />

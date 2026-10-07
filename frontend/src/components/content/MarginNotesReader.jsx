@@ -13,6 +13,9 @@ function MarginNotesReader({
   textAlign = 'justify',
   onParagraphsLoaded,
   onChaptersGenerated,
+  searchQuery = '',
+  searchMatchIndex = 0,
+  onSearchResults,
 }) {
   const isGuest = !auth.currentUser
   const [paragraphs, setParagraphs] = useState([])
@@ -138,6 +141,86 @@ function MarginNotesReader({
   }, [chapterParagraphs])
   const estimatedReadingMinutes = Math.max(1, Math.round(totalWords / 190))
 
+  const searchMatches = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase()
+    if (!q || q.length < 2) return []
+
+    const matches = []
+    chapterParagraphs.forEach((paragraph, localParaIdx) => {
+      const pLower = paragraph.toLowerCase()
+      let startIdx = 0
+      while (startIdx < pLower.length) {
+        const foundIdx = pLower.indexOf(q, startIdx)
+        if (foundIdx === -1) break
+        matches.push({
+          localParaIdx,
+          charStart: foundIdx,
+          charEnd: foundIdx + q.length,
+          globalParaIdx: startParagraph + localParaIdx,
+        })
+        startIdx = foundIdx + q.length
+      }
+    })
+    return matches
+  }, [searchQuery, chapterParagraphs, startParagraph])
+
+  useEffect(() => {
+    if (onSearchResults) {
+      onSearchResults(searchMatches.length)
+    }
+  }, [searchMatches.length, onSearchResults])
+
+  useEffect(() => {
+    if (!searchMatches.length || searchMatchIndex < 0 || searchMatchIndex >= searchMatches.length) return
+    const targetMatch = searchMatches[searchMatchIndex]
+    if (!targetMatch) return
+
+    const el = document.getElementById(`search-match-${searchMatchIndex}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      const paraEl = document.getElementById(`paragraph-${targetMatch.globalParaIdx}`)
+      if (paraEl) paraEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [searchMatchIndex, searchMatches])
+
+  function renderHighlightedText(text, localParaIdx) {
+    const q = (searchQuery || '').trim()
+    if (!q || q.length < 2) return text
+
+    const paraMatches = searchMatches
+      .map((m, overallIdx) => ({ ...m, overallIdx }))
+      .filter((m) => m.localParaIdx === localParaIdx)
+
+    if (!paraMatches.length) return text
+
+    const parts = []
+    let lastIndex = 0
+
+    paraMatches.forEach((m) => {
+      if (m.charStart > lastIndex) {
+        parts.push(text.slice(lastIndex, m.charStart))
+      }
+      const isCurrentActive = m.overallIdx === searchMatchIndex
+      parts.push(
+        <mark
+          id={`search-match-${m.overallIdx}`}
+          key={`match-${m.overallIdx}`}
+          className={`reader-search-highlight ${isCurrentActive ? 'active-match' : ''}`}
+        >
+          {text.slice(m.charStart, m.charEnd)}
+        </mark>
+      )
+      lastIndex = m.charEnd
+    })
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex))
+    }
+
+    return parts
+  }
+
   if (loading) {
     return (
       <div className="reader-skeleton-paragraphs" aria-busy="true" aria-label="Loading chapter text">
@@ -196,7 +279,7 @@ function MarginNotesReader({
             style={{ textAlign: textAlign || 'justify' }}
           >
             <div className="margin-notes-paragraph" id={`paragraph-${globalIndex}`}>
-              <p className={localIndex === 0 ? 'drop-cap' : ''}>{paragraph}</p>
+              <p className={localIndex === 0 && !searchQuery ? 'drop-cap' : ''}>{renderHighlightedText(paragraph, localIndex)}</p>
               <button
                 aria-label={`Notes for paragraph ${globalIndex + 1}`}
                 className={`margin-notes-toggle ${notes.length ? 'has-notes' : ''}`}

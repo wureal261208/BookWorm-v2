@@ -93,6 +93,25 @@ function ContentReaderPage() {
   })
   const [toastMsg, setToastMsg] = useState('')
 
+  // In-Book Text Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+  const [totalSearchMatches, setTotalSearchMatches] = useState(0)
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setIsSearchOpen((prev) => !prev)
+      } else if (e.key === 'Escape' && isSearchOpen) {
+        setIsSearchOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isSearchOpen])
+
   // Auto-dismiss toast
   useEffect(() => {
     if (!toastMsg) return
@@ -645,6 +664,14 @@ function ContentReaderPage() {
           >
             <i className="bi bi-fonts" />
           </button>
+          <button
+            className={`ghost-button zen-pill-btn ${isSearchOpen ? 'active' : ''}`}
+            onClick={() => setIsSearchOpen((v) => !v)}
+            title="Search in chapter (Ctrl+F)"
+            type="button"
+          >
+            <i className="bi bi-search" />
+          </button>
           <div className="zen-toc-wrap">
             <button
               aria-expanded={showToc && tocOrigin === 'zen'}
@@ -761,6 +788,18 @@ function ContentReaderPage() {
                   : `Ch. ${currentChapterObj?.order || activeChapterIndex}/${totalRegularChapters}`
                 : `${readPercent}%`}
             </span>
+
+            {/* In-Book Text Search trigger */}
+            <button
+              aria-label={isSearchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm trong nội dung'}
+              className={`ghost-button reader-bar-icon-btn reader-search-trigger ${isSearchOpen ? 'active' : ''}`}
+              onClick={() => setIsSearchOpen((v) => !v)}
+              title="Tìm kiếm từ khóa, nhân vật trong chương (Ctrl+F)"
+              type="button"
+            >
+              <i className="bi bi-search" />
+              <span className="reader-btn-label">Search</span>
+            </button>
 
             {/* Text-to-Speech (AI TTS) trigger */}
             <button
@@ -1021,6 +1060,75 @@ function ContentReaderPage() {
         </div>
       </header>
 
+      {/* Floating In-Book Search Drawer */}
+      {isSearchOpen && (
+        <aside aria-label="Tìm kiếm nội dung" className="reader-search-drawer" role="search">
+          <div className="reader-search-inner">
+            <i className="bi bi-search reader-search-icon" />
+            <input
+              autoFocus
+              className="reader-search-input"
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setSearchMatchIndex(0)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (e.shiftKey) {
+                    setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev - 1 + totalSearchMatches) % totalSearchMatches : 0))
+                  } else {
+                    setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev + 1) % totalSearchMatches : 0))
+                  }
+                }
+              }}
+              placeholder="Tìm từ khóa, tên nhân vật trong chương..."
+              type="text"
+              value={searchQuery}
+            />
+            {searchQuery && (
+              <span className="reader-search-count">
+                {totalSearchMatches > 0 ? `${searchMatchIndex + 1} / ${totalSearchMatches}` : '0 kết quả'}
+              </span>
+            )}
+            <div className="reader-search-nav-btns">
+              <button
+                aria-label="Kết quả trước"
+                className="ghost-button search-nav-btn"
+                disabled={totalSearchMatches <= 1}
+                onClick={() => setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev - 1 + totalSearchMatches) % totalSearchMatches : 0))}
+                title="Kết quả trước (Shift+Enter)"
+                type="button"
+              >
+                <i className="bi bi-chevron-up" />
+              </button>
+              <button
+                aria-label="Kết quả tiếp theo"
+                className="ghost-button search-nav-btn"
+                disabled={totalSearchMatches <= 1}
+                onClick={() => setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev + 1) % totalSearchMatches : 0))}
+                title="Kết quả tiếp theo (Enter)"
+                type="button"
+              >
+                <i className="bi bi-chevron-down" />
+              </button>
+              <button
+                aria-label="Đóng tìm kiếm"
+                className="ghost-button search-close-btn"
+                onClick={() => {
+                  setIsSearchOpen(false)
+                  setSearchQuery('')
+                }}
+                title="Đóng tìm kiếm (Esc)"
+                type="button"
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
+
       {/* Reader Column Container */}
       <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px`, width: '100%' }}>
         {/* Resume Banner */}
@@ -1116,6 +1224,9 @@ function ContentReaderPage() {
             onChapterChange={setActiveChapterIndex}
             onChaptersGenerated={handleChaptersGenerated}
             onParagraphsLoaded={handleParagraphsLoaded}
+            onSearchResults={setTotalSearchMatches}
+            searchMatchIndex={searchMatchIndex}
+            searchQuery={searchQuery}
             textAlign={textAlign}
             ttsActiveIndex={isTtsActive ? chapterStartParagraphIndex + ttsLocalIndex : null}
           />

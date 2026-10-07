@@ -641,6 +641,85 @@ const runContentIngestion = asyncHandler(async (req, res) => {
   return success(res, 200, 'Content ingestion finished.', result);
 });
 
+// @route POST /api/content/:id/rate
+// @desc  Rates a book/content with 1-5 stars and recalculates average rating
+const rateContent = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { score, review } = req.body;
+  const numScore = Math.round(Number(score));
+
+  if (!numScore || numScore < 1 || numScore > 5) {
+    return fail(res, 400, 'Score must be an integer between 1 and 5.');
+  }
+
+  const Rating = require('../models/Rating');
+  const Book = require('../models/Book');
+
+  // Upsert user's rating
+  await Rating.findOneAndUpdate(
+    { user: req.user._id, targetId: String(id) },
+    {
+      $set: {
+        score: numScore,
+        review: typeof review === 'string' ? review.trim().slice(0, 1000) : '',
+        updatedAt: new Date(),
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  // Recalculate average and count
+  const allRatings = await Rating.find({ targetId: String(id) });
+  const count = allRatings.length;
+  const total = allRatings.reduce((sum, r) => sum + r.score, 0);
+  const average = count > 0 ? Number((total / count).toFixed(1)) : 0;
+
+  // Cache on Content or Book if present
+  let isContent = false;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    const cItem = await Content.findByIdAndUpdate(id, { 'rating.average': average, 'rating.count': count });
+    if (cItem) isContent = true;
+    if (!isContent) {
+      await Book.findByIdAndUpdate(id, { 'rating.average': average, 'rating.count': count });
+    }
+  } else {
+    await Content.findOneAndUpdate({ externalId: id }, { 'rating.average': average, 'rating.count': count });
+  }
+
+  return success(res, 200, 'Rating saved successfully.', {
+    rating: {
+      average,
+      count,
+      userScore: numScore,
+    },
+  });
+});
+
+// @route GET /api/content/:id/rate
+// @desc  Retrieves rating stats and current user's rating for a book/content
+const getContentRating = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const Rating = require('../models/Rating');
+  const allRatings = await Rating.find({ targetId: String(id) });
+  const count = allRatings.length;
+  const total = allRatings.reduce((sum, r) => sum + r.score, 0);
+  const average = count > 0 ? Number((total / count).toFixed(1)) : 0;
+
+  let userScore = null;
+  if (req.user && req.user._id) {
+    const userRating = allRatings.find((r) => String(r.user) === String(req.user._id));
+    if (userRating) userScore = userRating.score;
+  }
+
+  return success(res, 200, 'Rating retrieved.', {
+    rating: {
+      average,
+      count,
+      userScore,
+    },
+  });
+});
+
 module.exports = {
   listContent,
   createUserContent,
@@ -654,4 +733,6 @@ module.exports = {
   getForYou,
   runContentIngestion,
   incrementContentViews,
+  rateContent,
+  getContentRating,
 };

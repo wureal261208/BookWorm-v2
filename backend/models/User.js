@@ -61,6 +61,14 @@ const UserSchema = new mongoose.Schema(
     categoryEngagement: { type: Map, of: Number, default: {} },
     // Array of book/content IDs saved (bookmarked) by this user
     savedBooks: { type: [String], default: [] },
+    // Shelved books with status ('reading', 'want_to_read', 'finished')
+    shelvedBooks: [
+      {
+        bookId: { type: String, required: true },
+        status: { type: String, enum: ['reading', 'want_to_read', 'finished'], default: 'want_to_read' },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true, collection: 'user_profiles' }
 );

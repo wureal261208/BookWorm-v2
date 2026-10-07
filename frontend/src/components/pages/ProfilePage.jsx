@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getAuthor, getCover, getInitials } from '../../utils/bookUtils'
 import { maskEmail } from '../../utils/maskEmail'
 import PreferencesModal from '../content/PreferencesModal'
 import { normalizeRole } from '../../data/bookData'
+import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const AVATAR_MAX_SIZE = 2 * 1024 * 1024
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -14,12 +15,15 @@ function ProfilePage({
   account,
   books = [],
   favorites = [],
+  shelf = [],
   onChangePassword,
   onDetail,
   onFavorite,
   onProfileUpdate,
   onRead,
   onToast,
+  onUpdateShelfStatus,
+  onRemoveShelfBook,
   progress = {},
   readerFontSize,
   readerTheme,
@@ -53,12 +57,15 @@ function ProfilePage({
         account={account}
         books={books}
         favorites={favorites}
+        shelf={shelf}
         onChangePassword={onChangePassword}
         onDetail={onDetail}
         onFavorite={onFavorite}
         onProfileUpdate={onProfileUpdate}
         onRead={onRead}
         onToast={onToast}
+        onUpdateShelfStatus={onUpdateShelfStatus}
+        onRemoveShelfBook={onRemoveShelfBook}
         progress={progress}
         readerFontSize={readerFontSize}
         readerTheme={readerTheme}
@@ -75,12 +82,15 @@ function ProfileSettings({
   account,
   books = [],
   favorites = [],
+  shelf = [],
   onChangePassword,
   onDetail,
   onFavorite,
   onProfileUpdate,
   onRead,
   onToast,
+  onUpdateShelfStatus,
+  onRemoveShelfBook,
   progress = {},
   readerFontSize,
   readerTheme,
@@ -100,11 +110,108 @@ function ProfileSettings({
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordLoading, setPasswordLoading] = useState(false)
-  const roleLabel = (account?.role || 'customer').charAt(0).toUpperCase() + (account?.role || 'customer').slice(1)
-  const continueReading = books
-    .filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100)
-    .slice(0, 6)
-  const savedBooks = books.filter((book) => favorites.includes(book.id)).slice(0, 8)
+  const [localShelf, setLocalShelf] = useState(shelf)
+  const [activeShelfTab, setActiveShelfTab] = useState('reading')
+  const [fetchedShelfBooks, setFetchedShelfBooks] = useState({})
+
+  useEffect(() => {
+    setLocalShelf(shelf)
+  }, [shelf])
+
+  useEffect(() => {
+    if (!account || account.role === 'guest') return
+    let ignore = false
+    apiFetch('/api/users/me/shelf')
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.shelf)) {
+          setLocalShelf(data.shelf)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [account])
+
+  useEffect(() => {
+    const missingIds = (localShelf || [])
+      .map((item) => String(item.bookId))
+      .filter((id) => id && !books.some((b) => String(b.id || b._id) === id) && !fetchedShelfBooks[id])
+    if (!missingIds.length) return
+
+    missingIds.forEach((id) => {
+      publicApiFetch(`/api/books/${id}`)
+        .then((res) => {
+          if (res?.book) {
+            setFetchedShelfBooks((prev) => ({ ...prev, [id]: res.book }))
+          } else {
+            publicApiFetch(`/api/content/${id}`)
+              .then((cRes) => {
+                if (cRes) setFetchedShelfBooks((prev) => ({ ...prev, [id]: cRes }))
+              })
+              .catch(() => {})
+          }
+        })
+        .catch(() => {
+          publicApiFetch(`/api/content/${id}`)
+            .then((cRes) => {
+              if (cRes) setFetchedShelfBooks((prev) => ({ ...prev, [id]: cRes }))
+            })
+            .catch(() => {})
+        })
+    })
+  }, [localShelf, books, fetchedShelfBooks])
+
+  const resolvedShelfBooks = useMemo(() => {
+    const list = []
+    const seen = new Set()
+
+    ;(localShelf || []).forEach((item) => {
+      const bId = String(item.bookId)
+      if (seen.has(bId)) return
+      seen.add(bId)
+      const found = books.find((b) => String(b.id || b._id) === bId) || fetchedShelfBooks[bId] || { id: bId, _id: bId, title: 'Book #' + bId }
+      list.push({ book: found, status: item.status, updatedAt: item.updatedAt })
+    })
+
+    ;(favorites || []).forEach((favId) => {
+      const bId = String(favId)
+      if (seen.has(bId)) return
+      seen.add(bId)
+      const found = books.find((b) => String(b.id || b._id) === bId) || fetchedShelfBooks[bId] || { id: bId, _id: bId, title: 'Book #' + bId }
+      list.push({ book: found, status: 'want_to_read' })
+    })
+
+    return list
+  }, [localShelf, favorites, books, fetchedShelfBooks])
+
+  const readingList = useMemo(() => {
+    return resolvedShelfBooks.filter((item) => {
+      if (item.status === 'reading') return true
+      const bId = item.book.id || item.book._id
+      const p = progress[bId] || 0
+      return p > 0 && p < 100 && item.status !== 'finished'
+    })
+  }, [resolvedShelfBooks, progress])
+
+  const wantToReadList = useMemo(() => {
+    return resolvedShelfBooks.filter((item) => {
+      if (item.status === 'want_to_read') {
+        const bId = item.book.id || item.book._id
+        const p = progress[bId] || 0
+        return p === 0 || !p
+      }
+      return false
+    })
+  }, [resolvedShelfBooks, progress])
+
+  const finishedList = useMemo(() => {
+    return resolvedShelfBooks.filter((item) => {
+      if (item.status === 'finished') return true
+      const bId = item.book.id || item.book._id
+      return (progress[bId] || 0) >= 100
+    })
+  }, [resolvedShelfBooks, progress])
 
   const safeName = displayName || account?.name || 'Reader'
   const safeEmail = account?.email || 'No email linked yet'
@@ -304,49 +411,83 @@ function ProfileSettings({
           {settingsSuccess && <p className="settings-success"><i className="bi bi-check-circle" /> {settingsSuccess}</p>}
         </form>
 
-        <div className="account-settings-card">
-          <SettingsHeading icon="bi-bookmark-star" kicker="Continue reading" title="Pick up where you left off" />
-          {continueReading.length ? (
-            <ul className="book-thumb-list">
-              {continueReading.map((book) => (
-                <li key={book.id}>
-                  <img alt="" src={getCover(book)} />
-                  <div>
-                    <strong>{book.title}</strong>
-                    <span>{getAuthor(book)} - {Math.round(progress[book.id] || 0)}% read</span>
-                  </div>
-                  <button className="ghost-button" onClick={() => onRead?.(book)} type="button">Resume</button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="settings-copy">Nothing in progress yet. Open a book from Home or Discover to start reading.</p>
-          )}
-        </div>
+        <div className="account-settings-card profile-shelf-card">
+          <SettingsHeading icon="bi-bookshelf" kicker="Tủ sách của tôi" title="Kệ sách cá nhân" />
 
-        <div className="account-settings-card">
-          <SettingsHeading icon="bi-heart" kicker="Saved" title="Favorites" />
-          {savedBooks.length ? (
-            <ul className="book-thumb-list">
-              {savedBooks.map((book) => (
-                <li key={book.id}>
-                  <img alt="" src={getCover(book)} />
-                  <div>
-                    <strong>{book.title}</strong>
-                    <span>{getAuthor(book)}</span>
-                  </div>
-                  <button className="ghost-button" onClick={() => (onDetail ? onDetail(book) : onRead?.(book))} type="button">View</button>
-                  {onFavorite && (
-                    <button aria-label="Remove from favorites" className="ghost-button" onClick={() => onFavorite(book.id)} type="button">
-                      <i className="bi bi-heart-fill" />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="settings-copy">No saved books yet. Tap the heart icon on any book to save it here.</p>
-          )}
+          <div className="shelf-tab-nav" role="tablist" aria-label="Phân loại kệ sách">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeShelfTab === 'reading'}
+              className={`shelf-tab-btn ${activeShelfTab === 'reading' ? 'active' : ''}`}
+              onClick={() => setActiveShelfTab('reading')}
+            >
+              <i className="bi bi-book-half" />
+              <span>Đang đọc</span>
+              <span className="shelf-count-pill">{readingList.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeShelfTab === 'want_to_read'}
+              className={`shelf-tab-btn ${activeShelfTab === 'want_to_read' ? 'active' : ''}`}
+              onClick={() => setActiveShelfTab('want_to_read')}
+            >
+              <i className="bi bi-bookmark-plus" />
+              <span>Muốn đọc</span>
+              <span className="shelf-count-pill">{wantToReadList.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeShelfTab === 'finished'}
+              className={`shelf-tab-btn ${activeShelfTab === 'finished' ? 'active' : ''}`}
+              onClick={() => setActiveShelfTab('finished')}
+            >
+              <i className="bi bi-check-circle-fill" />
+              <span>Đã đọc xong</span>
+              <span className="shelf-count-pill">{finishedList.length}</span>
+            </button>
+          </div>
+
+          <div className="shelf-tab-content">
+            {activeShelfTab === 'reading' && (
+              <ShelfBookList
+                items={readingList}
+                emptyText="Bạn chưa có cuốn sách nào trong mục Đang đọc. Hãy mở một cuốn sách từ Trang chủ để bắt đầu đọc!"
+                emptyIcon="bi-journal-richtext"
+                progress={progress}
+                onRead={onRead}
+                onDetail={onDetail}
+                onUpdateStatus={onUpdateShelfStatus}
+                onRemove={onRemoveShelfBook}
+              />
+            )}
+            {activeShelfTab === 'want_to_read' && (
+              <ShelfBookList
+                items={wantToReadList}
+                emptyText="Chưa có sách nào trong danh sách Muốn đọc. Khi lướt xem sách, chọn 'Muốn đọc' để lưu vào đây nhé."
+                emptyIcon="bi-bookmark-heart"
+                progress={progress}
+                onRead={onRead}
+                onDetail={onDetail}
+                onUpdateStatus={onUpdateShelfStatus}
+                onRemove={onRemoveShelfBook}
+              />
+            )}
+            {activeShelfTab === 'finished' && (
+              <ShelfBookList
+                items={finishedList}
+                emptyText="Chưa có cuốn sách nào được đánh dấu Đã đọc xong. Chúc bạn có những trải nghiệm đọc tuyệt vời!"
+                emptyIcon="bi-award"
+                progress={progress}
+                onRead={onRead}
+                onDetail={onDetail}
+                onUpdateStatus={onUpdateShelfStatus}
+                onRemove={onRemoveShelfBook}
+              />
+            )}
+          </div>
         </div>
 
         <form className="account-settings-card" onSubmit={handleChangePassword}>
@@ -479,6 +620,80 @@ function validateDisplayName(name) {
   }
 
   return ''
+}
+
+function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead, onDetail, onUpdateStatus, onRemove }) {
+  if (!items.length) {
+    return (
+      <div className="shelf-empty-box">
+        <i className={`bi ${emptyIcon || 'bi-book'}`} />
+        <p>{emptyText}</p>
+      </div>
+    )
+  }
+
+  return (
+    <ul className="book-thumb-list shelf-book-list">
+      {items.map(({ book, status }) => {
+        const bId = book._id || book.id
+        const bookProgress = Math.round(progress[bId] || 0)
+        return (
+          <li key={bId} className="shelf-book-item">
+            <img alt={book.title || ''} className="shelf-book-cover" src={getCover(book)} />
+            <div className="shelf-book-meta">
+              <strong>{book.title || 'Untitled'}</strong>
+              <span>{getAuthor(book)}</span>
+              {bookProgress > 0 && (
+                <div className="shelf-item-progress-wrap">
+                  <div className="shelf-item-progress-bar">
+                    <div className="shelf-item-progress-fill" style={{ width: `${Math.min(100, bookProgress)}%` }} />
+                  </div>
+                  <small>{bookProgress}% hoàn thành</small>
+                </div>
+              )}
+            </div>
+
+            <div className="shelf-book-actions">
+              <button
+                className="primary-button shelf-action-btn"
+                onClick={() => onRead?.(book)}
+                type="button"
+              >
+                {bookProgress > 0 && bookProgress < 100 ? 'Đọc tiếp' : status === 'finished' ? 'Đọc lại' : 'Đọc ngay'}
+              </button>
+
+              <button
+                className="ghost-button shelf-action-btn"
+                onClick={() => (onDetail ? onDetail(book) : onRead?.(book))}
+                type="button"
+              >
+                Chi tiết
+              </button>
+
+              <select
+                aria-label="Thay đổi trạng thái kệ sách"
+                className="shelf-status-select"
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === 'remove') {
+                    onRemove?.(bId)
+                  } else {
+                    onUpdateStatus?.(bId, val)
+                  }
+                }}
+                value={status || 'want_to_read'}
+              >
+                <option value="reading">📖 Đang đọc</option>
+                <option value="want_to_read">🔖 Muốn đọc</option>
+                <option value="finished">✅ Đã đọc xong</option>
+                <option value="remove">✕ Xóa khỏi kệ</option>
+              </select>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 export default ProfilePage

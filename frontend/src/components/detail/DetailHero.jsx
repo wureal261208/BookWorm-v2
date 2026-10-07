@@ -3,33 +3,56 @@ import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bo
 import { publicApiFetch } from '../../utils/apiClient'
 
 function DetailHero({
+  account,
   book,
   checkpoint,
-  favorites,
+  favorites = [],
+  shelf = [],
   hasChapters = true,
   language,
   onAuth,
   onListen,
   onRead,
   onSaveBook,
+  onUpdateShelfStatus,
+  onRemoveShelfBook,
   onToggleSavePrompt,
   readingTime,
   showSavePrompt,
   totalChapters,
   totalPages,
   totalReads,
+  ratingData,
+  onRateBook,
 }) {
   const [aiSummary, setAiSummary] = useState('')
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summaryError, setSummaryError] = useState('')
+  const [showShelfMenu, setShowShelfMenu] = useState(false)
+  const [hoverStar, setHoverStar] = useState(0)
 
-  const bId = book.id || book._id || '42'
-  const numericId = typeof bId === 'number'
-    ? bId
-    : String(bId).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  const ratingScore = (4.6 + ((numericId % 4) * 0.1)).toFixed(1)
-  const reviewCount = Math.max(18, ((numericId * 13) % 240) + 38)
-  const isSaved = favorites.includes(book.id || book._id)
+  const bookId = book._id || book.id
+  const currentShelfItem = shelf?.find((s) => String(s.bookId) === String(bookId))
+  const currentShelfStatus = currentShelfItem?.status || (favorites.includes(bookId) ? 'want_to_read' : null)
+  const isSaved = Boolean(currentShelfStatus)
+
+  const avgRating = ratingData?.average || book.rating?.average || 0
+  const reviewCount = ratingData?.count ?? book.rating?.count ?? 0
+  const userScore = ratingData?.userScore || null
+
+  function handleSelectShelfStatus(status) {
+    if (account?.role === 'guest') {
+      onToggleSavePrompt(true)
+      setShowShelfMenu(false)
+      return
+    }
+    if (status === 'remove') {
+      onRemoveShelfBook?.(bookId)
+    } else {
+      onUpdateShelfStatus?.(bookId, status)
+    }
+    setShowShelfMenu(false)
+  }
 
   const isAudiobook = book.type === 'audiobook' || book.source === 'LibriVox'
   const hasTextOption = Boolean(
@@ -91,14 +114,50 @@ function DetailHero({
         <p className="detail-author">{getAuthor(book)}</p>
 
         <div className="detail-rating-row">
-          <span className="detail-rating-pill" aria-label={`Rated ${ratingScore} out of 5 stars`}>
-            <i className="bi bi-star-fill" /> {ratingScore}
+          <span className="detail-rating-pill" aria-label={`Rated ${avgRating > 0 ? avgRating.toFixed(1) : 'New'} out of 5 stars`}>
+            <i className="bi bi-star-fill" style={{ color: '#f59e0b' }} /> {avgRating > 0 ? avgRating.toFixed(1) : 'New'}
           </span>
-          <span className="detail-rating-count">({reviewCount} reviews)</span>
+          <span className="detail-rating-count">({reviewCount} {reviewCount === 1 ? 'rating' : 'ratings'})</span>
           <span className="detail-meta-dot">•</span>
           <span className="detail-reads-count">
             <i className="bi bi-eye" /> {(totalReads || 0).toLocaleString()} reads
           </span>
+        </div>
+
+        {/* Interactive 5-star Rating Bar */}
+        <div className="detail-rating-interactive">
+          <span className="rating-interactive-label">
+            {userScore ? (
+              <span><i className="bi bi-check-circle-fill" style={{ color: 'var(--app-accent)', marginRight: '4px' }} />Đánh giá của bạn: <strong>{userScore}★</strong></span>
+            ) : (
+              <span>Chấm điểm sách:</span>
+            )}
+          </span>
+          <div className="star-rating-buttons" role="radiogroup" aria-label="1 to 5 star rating">
+            {[1, 2, 3, 4, 5].map((star) => {
+              const isFilled = star <= (hoverStar || userScore || 0)
+              return (
+                <button
+                  key={star}
+                  aria-label={`${star} star`}
+                  className={`star-rate-btn ${isFilled ? 'filled' : ''}`}
+                  onClick={() => {
+                    if (account?.role === 'guest') {
+                      onToggleSavePrompt(true)
+                      return
+                    }
+                    onRateBook?.(star)
+                  }}
+                  onMouseEnter={() => setHoverStar(star)}
+                  onMouseLeave={() => setHoverStar(0)}
+                  title={`Đánh giá ${star} sao`}
+                  type="button"
+                >
+                  <i className={`bi ${isFilled ? 'bi-star-fill' : 'bi-star'}`} />
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="detail-meta-grid">
@@ -193,10 +252,91 @@ function DetailHero({
               Listen audio
             </button>
           )}
-          <button className={`ghost-button ${isSaved ? 'is-saved' : ''}`} onClick={onSaveBook} type="button">
-            <i className={`bi ${isSaved ? 'bi-bookmark-fill' : 'bi-bookmark'}`} />
-            {isSaved ? 'Saved' : 'Save book'}
-          </button>
+          <div className="detail-shelf-dropdown-wrap">
+            <button
+              className={`ghost-button detail-shelf-trigger ${isSaved ? 'is-saved' : ''}`}
+              onClick={() => setShowShelfMenu((v) => !v)}
+              aria-expanded={showShelfMenu}
+              type="button"
+            >
+              <i
+                className={`bi ${
+                  currentShelfStatus === 'reading'
+                    ? 'bi-book-half'
+                    : currentShelfStatus === 'finished'
+                    ? 'bi-check-circle-fill'
+                    : currentShelfStatus === 'want_to_read'
+                    ? 'bi-bookmark-fill'
+                    : 'bi-bookmark-plus'
+                }`}
+              />
+              <span>
+                {currentShelfStatus === 'reading'
+                  ? 'Đang đọc'
+                  : currentShelfStatus === 'finished'
+                  ? 'Đã đọc xong'
+                  : currentShelfStatus === 'want_to_read'
+                  ? 'Muốn đọc'
+                  : 'Thêm vào kệ'}
+              </span>
+              <i className="bi bi-chevron-down shelf-caret" />
+            </button>
+
+            {showShelfMenu && (
+              <div className="detail-shelf-menu" role="menu">
+                <button
+                  className={`shelf-menu-item ${currentShelfStatus === 'reading' ? 'active' : ''}`}
+                  onClick={() => handleSelectShelfStatus('reading')}
+                  type="button"
+                  role="menuitem"
+                >
+                  <i className="bi bi-book-half" />
+                  <div>
+                    <strong>Đang đọc</strong>
+                    <small>Theo dõi tiến độ đọc sách</small>
+                  </div>
+                </button>
+                <button
+                  className={`shelf-menu-item ${currentShelfStatus === 'want_to_read' ? 'active' : ''}`}
+                  onClick={() => handleSelectShelfStatus('want_to_read')}
+                  type="button"
+                  role="menuitem"
+                >
+                  <i className="bi bi-bookmark-plus" />
+                  <div>
+                    <strong>Muốn đọc</strong>
+                    <small>Lưu lại để đọc sau</small>
+                  </div>
+                </button>
+                <button
+                  className={`shelf-menu-item ${currentShelfStatus === 'finished' ? 'active' : ''}`}
+                  onClick={() => handleSelectShelfStatus('finished')}
+                  type="button"
+                  role="menuitem"
+                >
+                  <i className="bi bi-check-circle-fill" />
+                  <div>
+                    <strong>Đã đọc xong</strong>
+                    <small>Đã hoàn thành cuốn này</small>
+                  </div>
+                </button>
+                {currentShelfStatus && (
+                  <button
+                    className="shelf-menu-item remove-item"
+                    onClick={() => handleSelectShelfStatus('remove')}
+                    type="button"
+                    role="menuitem"
+                  >
+                    <i className="bi bi-trash3" />
+                    <div>
+                      <strong>Xóa khỏi kệ</strong>
+                      <small>Bỏ sách khỏi kệ cá nhân</small>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className={`save-book-prompt ${showSavePrompt ? 'show' : ''}`} aria-live="polite">

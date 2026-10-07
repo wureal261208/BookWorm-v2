@@ -24,6 +24,13 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progress
         <p title={authorName}>{authorName}</p>
       </div>
       <div className="book-card-meta">
+        {book.rating && (book.rating.average > 0 || book.rating.count > 0) && (
+          <span className="book-card-rating" title={`Rated ${book.rating.average.toFixed(1)}/5 (${book.rating.count} reviews)`}>
+            <i className="bi bi-star-fill" style={{ color: '#f59e0b', marginRight: '4px' }} />
+            <strong>{book.rating.average.toFixed(1)}</strong>
+            <small style={{ marginLeft: '2px', opacity: 0.75 }}>({book.rating.count})</small>
+          </span>
+        )}
         {hasProgress ? (
           <>
             <i className="bi bi-bookmark-check" style={{ color: 'var(--app-accent)' }} />

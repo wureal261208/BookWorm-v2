@@ -41,6 +41,10 @@ const BookSchema = new mongoose.Schema(
     // the "most viewed" dashboard stat; the old client-only counter never
     // survived a refresh or counted anything for other visitors.
     views: { type: Number, default: 0 },
+    rating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
+    },
     // Links this Book back to its BookMetadata entry (book_metadata.etextNumber)
     // when it was pushed via "Import from catalog" or manually tagged to a
     // Gutenberg record. Optional - manually-typed books can leave this null.

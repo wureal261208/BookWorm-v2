@@ -18,6 +18,7 @@ const {
   splitChapters,
 } = require('../controllers/bookController');
 const { listComments, createComment } = require('../controllers/commentController');
+const { rateContent, getContentRating } = require('../controllers/contentController');
 const { identify, protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -55,6 +56,10 @@ router.get('/:id/reader-text', identify, getBookReaderText);
 router.get('/:id/comments', listComments);
 router.post('/:id/comments', protect, createComment);
 router.post('/:id/view', identify, incrementBookViews);
+
+// Ratings - 1 to 5 star user reviews and average score
+router.get('/:id/rate', identify, getContentRating);
+router.post('/:id/rate', protect, rateContent);
 // Phase 2 of customer self-publishing (see WritePage.jsx) - any logged-in
 // role can hit this, but updateMyBook itself only ever matches a book
 // where createdBy is the caller, so it's really just "edit your own".

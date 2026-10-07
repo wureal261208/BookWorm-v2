@@ -239,15 +239,92 @@ const toggleFavorite = asyncHandler(async (req, res) => {
 
   const isSaved = (req.user.savedBooks || []).includes(bookId);
   if (isSaved) {
-    await User.findByIdAndUpdate(req.user._id, { $pull: { savedBooks: bookId } });
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { savedBooks: bookId, shelvedBooks: { bookId } },
+    });
     req.user.savedBooks = (req.user.savedBooks || []).filter((id) => id !== bookId);
+    req.user.shelvedBooks = (req.user.shelvedBooks || []).filter((item) => String(item.bookId) !== bookId);
   } else {
-    await User.findByIdAndUpdate(req.user._id, { $addToSet: { savedBooks: bookId } });
+    const newShelfItem = { bookId, status: 'want_to_read', updatedAt: new Date() };
+    await User.findByIdAndUpdate(req.user._id, {
+      $addToSet: { savedBooks: bookId },
+      $push: { shelvedBooks: newShelfItem },
+    });
     req.user.savedBooks = [...(req.user.savedBooks || []), bookId];
+    req.user.shelvedBooks = [...(req.user.shelvedBooks || []), newShelfItem];
   }
 
   return success(res, 200, isSaved ? 'Removed from saved books.' : 'Saved to your shelf.', {
     saved: !isSaved,
+    favorites: req.user.savedBooks,
+    shelf: req.user.shelvedBooks,
+  });
+});
+
+// @route GET /api/users/me/shelf
+// @desc  Returns categorized shelf items ('reading', 'want_to_read', 'finished')
+const getMyShelf = asyncHandler(async (req, res) => {
+  return success(res, 200, 'Shelf retrieved.', {
+    shelf: req.user.shelvedBooks || [],
+    favorites: req.user.savedBooks || [],
+  });
+});
+
+// @route POST /api/users/me/shelf/:bookId
+// @desc  Adds or updates book in shelf category ('reading', 'want_to_read', 'finished')
+const updateShelfStatus = asyncHandler(async (req, res) => {
+  const bookId = String(req.params.bookId || '').trim();
+  const status = String(req.body.status || 'want_to_read').trim();
+  if (!bookId) {
+    return fail(res, 400, 'Book ID is required.');
+  }
+  if (!['reading', 'want_to_read', 'finished'].includes(status)) {
+    return fail(res, 400, 'Status must be one of: reading, want_to_read, finished');
+  }
+
+  let shelf = Array.isArray(req.user.shelvedBooks) ? [...req.user.shelvedBooks] : [];
+  const existingIdx = shelf.findIndex((item) => String(item.bookId) === bookId);
+  if (existingIdx >= 0) {
+    shelf[existingIdx] = { ...shelf[existingIdx], status, updatedAt: new Date() };
+  } else {
+    shelf.push({ bookId, status, updatedAt: new Date() });
+  }
+
+  await User.findByIdAndUpdate(req.user._id, {
+    $set: { shelvedBooks: shelf },
+    $addToSet: { savedBooks: bookId },
+  });
+  req.user.shelvedBooks = shelf;
+  if (!req.user.savedBooks.includes(bookId)) {
+    req.user.savedBooks = [...req.user.savedBooks, bookId];
+  }
+
+  return success(res, 200, 'Book shelf status updated.', {
+    shelf: req.user.shelvedBooks,
+    favorites: req.user.savedBooks,
+  });
+});
+
+// @route DELETE /api/users/me/shelf/:bookId
+// @desc  Removes book from shelf and saved books
+const removeShelfBook = asyncHandler(async (req, res) => {
+  const bookId = String(req.params.bookId || '').trim();
+  if (!bookId) {
+    return fail(res, 400, 'Book ID is required.');
+  }
+
+  await User.findByIdAndUpdate(req.user._id, {
+    $pull: {
+      shelvedBooks: { bookId: bookId },
+      savedBooks: bookId,
+    },
+  });
+
+  req.user.shelvedBooks = (req.user.shelvedBooks || []).filter((s) => String(s.bookId) !== bookId);
+  req.user.savedBooks = (req.user.savedBooks || []).filter((id) => String(id) !== bookId);
+
+  return success(res, 200, 'Book removed from shelf.', {
+    shelf: req.user.shelvedBooks,
     favorites: req.user.savedBooks,
   });
 });
@@ -261,4 +338,7 @@ module.exports = {
   updateMyProgress,
   getMyFavorites,
   toggleFavorite,
+  getMyShelf,
+  updateShelfStatus,
+  removeShelfBook,
 };

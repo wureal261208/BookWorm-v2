@@ -12,6 +12,8 @@ const {
   getLanguageFacets,
   getForYou,
   incrementContentViews,
+  rateContent,
+  getContentRating,
 } = require('../controllers/contentController');
 const {
   listContentComments,
@@ -88,5 +90,9 @@ router.get('/:id', getPublicContentDetail);
 
 // POST /api/content/:id/view - records view/read counts
 router.post('/:id/view', identify, incrementContentViews);
+
+// Ratings - 1 to 5 star user reviews and average score
+router.get('/:id/rate', identify, getContentRating);
+router.post('/:id/rate', protect, rateContent);
 
 module.exports = router;
