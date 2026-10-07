@@ -12,6 +12,8 @@ const NotificationSchema = new mongoose.Schema(
     // straight to that book's detail page - null for notifications that
     // aren't about a specific book.
     book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null },
+    // Set for support notifications so customer can open the relevant help conversation
+    conversation: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', default: null },
     readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true, collection: 'notifications' }

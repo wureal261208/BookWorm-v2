@@ -1005,6 +1005,14 @@ function App() {
 
   function handleNotificationClick(notification) {
     if (!notification.read) markNotificationRead(notification.id)
+    if (notification.conversationId || notification.title?.toLowerCase().includes('support')) {
+      window.dispatchEvent(
+        new CustomEvent('open-help-chat', {
+          detail: { conversationId: notification.conversationId || null },
+        })
+      )
+      return
+    }
     if (!notification.bookId) return
     const book = allBooks.find((item) => item.id === notification.bookId)
     if (book) openDetail(book)

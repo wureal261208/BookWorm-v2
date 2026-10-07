@@ -2233,49 +2233,140 @@ function SupportInboxPanel({ onCountChange, onToast }) {
 
         <section className="admin-table support-inbox-detail">
           {!activeId ? (
-            <p>Select a conversation to view it.</p>
+            <div className="support-inbox-empty-prompt">
+              <i className="bi bi-chat-left-dots" />
+              <p>Select a conversation from the left to start replying.</p>
+            </div>
           ) : !detail ? (
-            <p>Loading...</p>
+            <div className="support-inbox-empty-prompt">
+              <span className="admin-spin-small" />
+              <p>Loading conversation...</p>
+            </div>
           ) : (
             <>
-              <div className="ai-chat-messages support-inbox-messages" style={{ maxHeight: '420px', overflowY: 'auto' }}>
-                {detail.messages.map((message, index) => (
-                  <div
-                    className={`ai-chat-bubble ${
-                      message.role === 'user'
-                        ? 'ai-chat-bubble-user'
-                        : message.role === 'admin'
-                          ? 'ai-chat-bubble-admin'
-                          : message.role === 'system'
-                            ? 'ai-chat-bubble-system'
-                            : 'ai-chat-bubble-assistant'
-                    }`}
-                    key={index}
-                  >
-                    <p>{message.text}</p>
+              <div className="support-inbox-header">
+                <div className="support-inbox-customer-meta">
+                  <div className="support-customer-avatar">
+                    <i className="bi bi-person-circle" />
                   </div>
-                ))}
+                  <div>
+                    <div className="support-customer-name-row">
+                      <strong>{detail.user?.name || 'Reader'}</strong>
+                      <span className={`admin-status status-${detail.status === 'closed' ? 'hidden' : 'published'}`}>
+                        {detail.status === 'closed' ? 'Closed' : 'Escalated (Pending)'}
+                      </span>
+                    </div>
+                    <small className="support-customer-subtext">
+                      {detail.user?.email || 'Registered reader'} {detail.user?.displayId ? `• ID: ${detail.user.displayId}` : ''}
+                    </small>
+                  </div>
+                </div>
+                <div className="support-inbox-header-actions">
+                  {detail.status !== 'closed' ? (
+                    <button className="danger-button support-close-btn" onClick={closeConversation} type="button">
+                      <i className="bi bi-check2-circle" />
+                      <span>Close Conversation</span>
+                    </button>
+                  ) : (
+                    <span className="support-closed-tag">
+                      <i className="bi bi-lock-fill" /> Ticket Closed
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="ai-chat-messages support-inbox-messages" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+                {detail.messages.map((message, index) => {
+                  const isUser = message.role === 'user'
+                  const isAdmin = message.role === 'admin'
+                  const isSystem = message.role === 'system'
+                  const isAi = message.role === 'assistant'
+
+                  return (
+                    <div
+                      className={`ai-chat-bubble ${
+                        isUser
+                          ? 'support-bubble-user'
+                          : isAdmin
+                          ? 'support-bubble-admin'
+                          : isSystem
+                          ? 'ai-chat-bubble-system'
+                          : 'support-bubble-ai'
+                      }`}
+                      key={index}
+                    >
+                      <span className="ai-chat-role-label">
+                        <i
+                          className={`bi ${
+                            isUser
+                              ? 'bi-person-circle'
+                              : isAdmin
+                              ? 'bi-shield-check'
+                              : isAi
+                              ? 'bi-robot'
+                              : 'bi-info-circle'
+                          }`}
+                        />
+                        {isUser
+                          ? ` Customer (${detail.user?.name || 'Reader'})`
+                          : isAdmin
+                          ? ' You (Support Admin)'
+                          : isAi
+                          ? ' BookWorm AI Assistant'
+                          : ' System Notice'}
+                      </span>
+                      {isSystem ? (
+                        <div className="system-notice-content">
+                          <i className="bi bi-shield-check" />
+                          <span>{message.text}</span>
+                        </div>
+                      ) : (
+                        <p>{message.text}</p>
+                      )}
+                      {message.createdAt && (
+                        <span className="ai-chat-timestamp">
+                          {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </div>
-              <div className="admin-row-actions">
-                <input
-                  onChange={(event) => setReply(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') sendReply()
+
+              {detail.status === 'closed' ? (
+                <div className="support-inbox-closed-banner">
+                  <i className="bi bi-info-circle-fill" />
+                  <span>This conversation has been closed. If the customer reaches out again, a new ticket will be opened.</span>
+                </div>
+              ) : (
+                <form
+                  className="support-inbox-reply-bar"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    sendReply()
                   }}
-                  placeholder="Type a reply..."
-                  type="text"
-                  value={reply}
-                />
-                <button className="primary-button" disabled={!reply.trim() || sending} onClick={sendReply} type="button">
-                  Send
-                </button>
-                {detail.status !== 'closed' && (
-                  <button className="danger-button" onClick={closeConversation} type="button">
-                    Close
+                >
+                  <input
+                    aria-label="Admin reply input"
+                    className="support-inbox-reply-input"
+                    disabled={sending}
+                    onChange={(event) => setReply(event.target.value)}
+                    placeholder="Type your reply to customer..."
+                    type="text"
+                    value={reply}
+                  />
+                  <button
+                    aria-label="Send reply"
+                    className="primary-button support-inbox-send-btn"
+                    disabled={!reply.trim() || sending}
+                    type="submit"
+                  >
+                    <i className={`bi ${sending ? 'bi-arrow-repeat spin' : 'bi-send-fill'}`} />
+                    <span>Send</span>
                   </button>
-                )}
-              </div>
+                </form>
+              )}
             </>
           )}
         </section>

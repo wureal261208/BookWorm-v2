@@ -17,6 +17,7 @@ function sanitizeNotification(notification, viewerId) {
     audience: notification.audience,
     targetUser: notification.targetUser || null,
     bookId: notification.book || null,
+    conversationId: notification.conversation || null,
     read: isRead,
     createdAt: notification.createdAt,
   };

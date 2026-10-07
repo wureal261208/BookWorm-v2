@@ -386,7 +386,7 @@ function AppShell({
                             }}
                             type="button"
                           >
-                            <i className="bi bi-envelope" />
+                            <i className={`bi ${item.conversationId || item.title?.toLowerCase().includes('support') ? 'bi-chat-dots-fill' : 'bi-envelope'}`} />
                             <span className="notification-item-body">
                               <strong>{item.title}</strong>
                               <em>{item.message}</em>
@@ -668,6 +668,14 @@ function formatNotificationTime(isoString) {
 // questions, not "what should I read".
 function ChatWidget({ isPlayerVisible = false }) {
   const [isOpen, setIsOpen] = useState(false)
+
+  useEffect(() => {
+    function handleOpenChat() {
+      setIsOpen(true)
+    }
+    window.addEventListener('open-help-chat', handleOpenChat)
+    return () => window.removeEventListener('open-help-chat', handleOpenChat)
+  }, [])
 
   return (
     <div className={`chat-widget ${isPlayerVisible ? 'docked-above-player' : ''}`}>

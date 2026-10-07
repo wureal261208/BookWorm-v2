@@ -46,8 +46,19 @@ function HelpChatWidget() {
         if (ignore) return
         if (rating) {
           setPendingRating(rating)
-          setPhase('rating')
-          return
+          return apiFetch(`/api/support/conversations/${rating._id}`)
+            .then((conversation) => {
+              if (ignore) return
+              if (conversation) {
+                setConversationId(conversation._id)
+                setMessages(conversation.messages || [])
+                setStatus(conversation.status || 'closed')
+              }
+              setPhase('chat')
+            })
+            .catch(() => {
+              if (!ignore) setPhase('chat')
+            })
         }
         return apiFetch('/api/support/conversations/current').then((conversation) => {
           if (ignore) return
@@ -70,6 +81,39 @@ function HelpChatWidget() {
       ignore = true
     }
   }, [isGuest])
+
+  // Listen for open-help-chat event triggered by clicking a notification
+  useEffect(() => {
+    function handleOpenHelpChat(event) {
+      const convId = event.detail?.conversationId
+      if (convId) {
+        apiFetch(`/api/support/conversations/${convId}`)
+          .then((conversation) => {
+            if (conversation) {
+              setConversationId(conversation._id)
+              setMessages(conversation.messages || [])
+              setStatus(conversation.status || 'ai')
+              setPhase('chat')
+            }
+          })
+          .catch(() => {})
+      } else {
+        apiFetch('/api/support/conversations/current')
+          .then((conversation) => {
+            if (conversation) {
+              setConversationId(conversation._id)
+              setMessages(conversation.messages || [])
+              setStatus(conversation.status || 'ai')
+              setPhase('chat')
+            }
+          })
+          .catch(() => {})
+      }
+    }
+
+    window.addEventListener('open-help-chat', handleOpenHelpChat)
+    return () => window.removeEventListener('open-help-chat', handleOpenHelpChat)
+  }, [])
 
   // Polling for admin replies when escalated
   useEffect(() => {
@@ -94,19 +138,29 @@ function HelpChatWidget() {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
-  }, [messages.length, sending])
+  }, [messages.length, sending, status])
 
   async function submitRating() {
     if (!ratingValue || !pendingRating?._id) return
     setSubmittingRating(true)
     try {
       await apiFetch(`/api/support/conversations/${pendingRating._id}/rate`, { method: 'POST', body: { rating: ratingValue } })
+      setPendingRating(null)
     } catch (err) {
       setError(err.message)
     } finally {
       setSubmittingRating(false)
-      setPhase('chat')
     }
+  }
+
+  function handleStartNewChat() {
+    setConversationId(null)
+    setStatus('ai')
+    setMessages([])
+    setError('')
+    setInput('')
+    setRatingValue(0)
+    setPendingRating(null)
   }
 
   async function send(overrideText) {
@@ -196,21 +250,45 @@ function HelpChatWidget() {
       {/* Dynamic Subheader with Live Status & Quick Handoff */}
       <div className="help-chat-subheader">
         <div className="help-chat-status-pill">
-          <span className={`status-dot ${status === 'escalated' ? 'status-dot-human' : 'status-dot-ai'}`} />
+          <span
+            className={`status-dot ${
+              status === 'escalated'
+                ? 'status-dot-human'
+                : status === 'closed'
+                ? 'status-dot-closed'
+                : 'status-dot-ai'
+            }`}
+          />
           <span className="status-label">
-            {status === 'escalated' ? 'Human Support' : 'BookWorm AI Assistant'}
+            {status === 'escalated'
+              ? 'Human Support'
+              : status === 'closed'
+              ? 'Resolved (Closed)'
+              : 'BookWorm AI Assistant'}
           </span>
         </div>
-        {status !== 'escalated' && !isGuest && (
+        {status === 'closed' ? (
           <button
             className="help-chat-escalate-trigger"
-            onClick={() => send('#Contact with admin')}
-            title="Type #Contact with admin to connect with support"
+            onClick={handleStartNewChat}
+            title="Start a new chat session"
             type="button"
           >
-            <i className="bi bi-headset" />
-            <span>Contact admin</span>
+            <i className="bi bi-chat-plus" />
+            <span>New chat</span>
           </button>
+        ) : (
+          status !== 'escalated' && !isGuest && (
+            <button
+              className="help-chat-escalate-trigger"
+              onClick={() => send('#Contact with admin')}
+              title="Type #Contact with admin to connect with support"
+              type="button"
+            >
+              <i className="bi bi-headset" />
+              <span>Contact admin</span>
+            </button>
+          )
         )}
       </div>
 
@@ -296,11 +374,63 @@ function HelpChatWidget() {
           </div>
         )}
 
+        {status === 'closed' && (
+          <div className="help-chat-closed-banner" role="status">
+            <div className="help-chat-closed-badge">
+              <i className="bi bi-info-circle-fill" />
+              <span>Conversation Closed</span>
+            </div>
+            <p className="help-chat-closed-text">
+              This conversation has been closed. If you have further questions, feel free to start a new chat.
+            </p>
+
+            {pendingRating && (
+              <div className="help-chat-inline-rating">
+                <p>
+                  How would you rate your experience with <strong>{pendingRating.closedBy?.name || 'our support team'}</strong>?
+                </p>
+                <div className="help-chat-rating-stars">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                      className={value <= ratingValue ? 'active' : ''}
+                      key={value}
+                      onClick={() => setRatingValue(value)}
+                      type="button"
+                    >
+                      <i className={`bi ${value <= ratingValue ? 'bi-star-fill' : 'bi-star'}`} />
+                    </button>
+                  ))}
+                </div>
+                {ratingValue > 0 && (
+                  <button
+                    className="primary-button help-chat-submit-rating-btn"
+                    disabled={submittingRating}
+                    onClick={submitRating}
+                    type="button"
+                  >
+                    {submittingRating ? 'Submitting...' : 'Submit rating'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              className="primary-button help-chat-new-chat-btn"
+              onClick={handleStartNewChat}
+              type="button"
+            >
+              <i className="bi bi-chat-plus-fill" />
+              <span>Start a new chat</span>
+            </button>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* Quick Action Suggestion Chips */}
-      {status !== 'escalated' && messages.length <= 4 && (
+      {status !== 'escalated' && status !== 'closed' && messages.length <= 4 && (
         <div className="help-chat-chips-row" aria-label="Suggested questions">
           {QUICK_ACTIONS.map((action, i) => (
             <button
@@ -324,30 +454,50 @@ function HelpChatWidget() {
       )}
 
       {/* Input Row */}
-      <form
-        className="ai-chat-input-row"
-        onSubmit={(event) => {
-          event.preventDefault()
-          send()
-        }}
-      >
-        <input
-          aria-label="Chat input"
-          disabled={sending}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder={status === 'escalated' ? 'Send a reply to support admin...' : 'Ask a question or #Contact with admin...'}
-          type="text"
-          value={input}
-        />
-        <button
-          aria-label="Send message"
-          className="primary-button help-chat-send-btn"
-          disabled={!input.trim() || sending}
-          type="submit"
+      {status === 'closed' ? (
+        <div className="help-chat-closed-footer">
+          <div className="help-chat-closed-footer-hint">
+            <i className="bi bi-lock-fill" />
+            <span>This conversation is closed.</span>
+          </div>
+          <button
+            className="primary-button help-chat-new-chat-btn-small"
+            onClick={handleStartNewChat}
+            type="button"
+          >
+            <i className="bi bi-chat-plus" /> Start a new chat
+          </button>
+        </div>
+      ) : (
+        <form
+          className="ai-chat-input-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            send()
+          }}
         >
-          <i className={sending ? 'bi bi-arrow-repeat spin' : 'bi bi-send-fill'} />
-        </button>
-      </form>
+          <input
+            aria-label="Chat input"
+            disabled={sending}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder={
+              status === 'escalated'
+                ? 'Send a reply to support admin...'
+                : 'Ask a question or #Contact with admin...'
+            }
+            type="text"
+            value={input}
+          />
+          <button
+            aria-label="Send message"
+            className="primary-button help-chat-send-btn"
+            disabled={!input.trim() || sending}
+            type="submit"
+          >
+            <i className={sending ? 'bi bi-arrow-repeat spin' : 'bi bi-send-fill'} />
+          </button>
+        </form>
+      )}
     </div>
   )
 }

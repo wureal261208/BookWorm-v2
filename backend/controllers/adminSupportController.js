@@ -62,6 +62,7 @@ const replyToConversation = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
     audience: 'single-customer',
     targetUser: conversation.user,
+    conversation: conversation._id,
   });
 
   return success(res, 200, 'Reply sent.', conversation);
@@ -77,6 +78,16 @@ const closeConversation = asyncHandler(async (req, res) => {
     { new: true },
   );
   if (!conversation) return fail(res, 404, 'Conversation not found.');
+
+  await Notification.create({
+    title: 'Support conversation closed',
+    message: 'This conversation has been closed. If you have further questions, feel free to start a new chat.',
+    createdBy: req.user._id,
+    audience: 'single-customer',
+    targetUser: conversation.user,
+    conversation: conversation._id,
+  });
+
   return success(res, 200, 'Conversation closed.', conversation);
 });
 

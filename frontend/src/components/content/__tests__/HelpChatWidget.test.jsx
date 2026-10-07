@@ -131,4 +131,86 @@ describe('HelpChatWidget', () => {
 
     expect(await screen.findByText('Most books have 10-15 chapters.')).toBeInTheDocument()
   })
+
+  test('displays dialogue and white banner when conversation is closed, and allows starting new chat', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('pending-rating')) {
+        return Promise.resolve({
+          _id: 'conv-closed-1',
+          closedBy: { name: 'Support Admin John' },
+        })
+      }
+      if (url.includes('conversations/conv-closed-1')) {
+        return Promise.resolve({
+          _id: 'conv-closed-1',
+          status: 'closed',
+          messages: [
+            { role: 'user', text: 'I need help with my purchase' },
+            { role: 'admin', text: 'Hello! I have resolved your account issue.' },
+          ],
+        })
+      }
+      return Promise.resolve(null)
+    })
+
+    render(<HelpChatWidget />)
+
+    // Verify messages from customer and admin are visible
+    expect(await screen.findByText('I need help with my purchase')).toBeInTheDocument()
+    expect(screen.getByText('Hello! I have resolved your account issue.')).toBeInTheDocument()
+    expect(screen.getAllByText(/Support Admin/i).length).toBeGreaterThan(0)
+
+    // Verify the white closed conversation banner in English
+    expect(screen.getByText('Conversation Closed')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This conversation has been closed. If you have further questions, feel free to start a new chat.'
+      )
+    ).toBeInTheDocument()
+
+    // Verify "Start a new chat" button
+    const newChatBtns = screen.getAllByRole('button', { name: /Start a new chat/i })
+    expect(newChatBtns.length).toBeGreaterThan(0)
+
+    // Click start a new chat
+    fireEvent.click(newChatBtns[0])
+
+    // Should return to fresh AI chat session
+    expect(await screen.findByText(/Welcome to BookWorm Help/i)).toBeInTheDocument()
+  })
+
+  test('loads conversation when open-help-chat event is dispatched', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('pending-rating')) return Promise.resolve(null)
+      if (url.includes('conversations/current')) {
+        return Promise.resolve({ _id: 'conv-101', status: 'ai', messages: [] })
+      }
+      if (url.includes('conversations/conv-target-99')) {
+        return Promise.resolve({
+          _id: 'conv-target-99',
+          status: 'escalated',
+          messages: [
+            { role: 'user', text: 'Previous question to admin' },
+            { role: 'admin', text: 'Admin response from ticket' },
+          ],
+        })
+      }
+      return Promise.resolve(null)
+    })
+
+    render(<HelpChatWidget />)
+
+    expect(await screen.findByText(/Welcome to BookWorm Help/i)).toBeInTheDocument()
+
+    // Fire open-help-chat event as if user clicked notification
+    fireEvent(
+      window,
+      new CustomEvent('open-help-chat', {
+        detail: { conversationId: 'conv-target-99' },
+      })
+    )
+
+    expect(await screen.findByText('Previous question to admin')).toBeInTheDocument()
+    expect(screen.getByText('Admin response from ticket')).toBeInTheDocument()
+  })
 })
