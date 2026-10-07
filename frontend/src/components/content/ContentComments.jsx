@@ -157,11 +157,11 @@ function ContentComments({ contentId, account, onComment }) {
   }
 
   function handleInsertBold() {
-    setText((prev) => (prev ? `${prev} **in đậm**` : '**in đậm**'))
+    setText((prev) => (prev ? `${prev} **bold**` : '**bold**'))
   }
 
   function handleInsertItalic() {
-    setText((prev) => (prev ? `${prev} *in nghiêng*` : '*in nghiêng*'))
+    setText((prev) => (prev ? `${prev} *italic*` : '*italic*'))
   }
 
   function handleInsertQuote() {
@@ -221,7 +221,7 @@ function ContentComments({ contentId, account, onComment }) {
                 submitComment()
               }
             }}
-            placeholder="Chia sẻ cảm nhận, góc nhìn hoặc trích dẫn tâm đắc của bạn về cuốn sách này... (Ctrl + Enter để đăng)"
+            placeholder="Share your thoughts, reflections, or favorite quotes about this book... (Ctrl + Enter to submit)"
             rows={4}
             value={text}
           />
@@ -236,34 +236,34 @@ function ContentComments({ contentId, account, onComment }) {
               <button
                 className="comment-tool-btn"
                 onClick={handleInsertBold}
-                title="In đậm (**văn bản**)"
+                title="Bold (**text**)"
                 type="button"
               >
-                <i className="bi bi-type-bold" /> In đậm
+                <i className="bi bi-type-bold" /> Bold
               </button>
               <button
                 className="comment-tool-btn"
                 onClick={handleInsertItalic}
-                title="In nghiêng (*văn bản*)"
+                title="Italic (*text*)"
                 type="button"
               >
-                <i className="bi bi-type-italic" /> In nghiêng
+                <i className="bi bi-type-italic" /> Italic
               </button>
               <button
                 className="comment-tool-btn"
                 onClick={handleInsertQuote}
-                title="Thêm trích dẫn (> trích dẫn)"
+                title="Quote (> quote)"
                 type="button"
               >
-                <i className="bi bi-quote" /> Trích dẫn
+                <i className="bi bi-quote" /> Quote
               </button>
               <button
                 className="comment-tool-btn"
                 onClick={handleInsertBullet}
-                title="Gạch đầu dòng (• danh sách)"
+                title="Bullet list (• list)"
                 type="button"
               >
-                <i className="bi bi-list-ul" /> Gạch đầu dòng
+                <i className="bi bi-list-ul" /> Bullet list
               </button>
             </div>
 
@@ -277,16 +277,16 @@ function ContentComments({ contentId, account, onComment }) {
           <div className="comment-form-actions">
             <small className="comment-shortcut-hint">
               <i className="bi bi-keyboard" style={{ marginRight: '4px' }} />
-              Phím tắt: Ctrl + Enter (hoặc ⌘ + Enter) để đăng nhanh
+              Shortcut: Ctrl + Enter (or ⌘ + Enter) to submit
             </small>
             <button className="primary-button comment-submit-btn" disabled={!text.trim() || posting} type="submit">
               {posting ? (
                 <>
-                  <span className="admin-spin-small" /> Đang đăng...
+                  <span className="admin-spin-small" /> Posting...
                 </>
               ) : (
                 <>
-                  <i className="bi bi-send-fill" /> Đăng bình luận
+                  <i className="bi bi-send-fill" /> Post comment
                 </>
               )}
             </button>
@@ -318,7 +318,7 @@ function ContentComments({ contentId, account, onComment }) {
                   <div className="comment-item-header">
                     <div className="comment-item-author-wrap">
                       <strong className="comment-item-author">{comment.author?.name || 'Reader'}</strong>
-                      {isAuthor && <span className="comment-you-badge">Bạn</span>}
+                      {isAuthor && <span className="comment-you-badge">You</span>}
                       <span className="comment-role-badge">
                         {formatRoleBadge(comment.author?.role)}
                       </span>

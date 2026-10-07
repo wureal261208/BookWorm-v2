@@ -131,10 +131,10 @@ describe('BookDetailPage', () => {
 
     expect(await screen.findByText('Reader comments')).toBeInTheDocument()
     expect(screen.getByText('Community discussion')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /In đậm/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /In nghiêng/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Trích dẫn/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Gạch đầu dòng/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bold/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Italic/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Quote/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bullet list/i })).toBeInTheDocument()
     expect(await screen.findByText('Tuyệt tác kinh điển không thể bỏ qua!')).toBeInTheDocument()
   })
 
@@ -153,7 +153,7 @@ describe('BookDetailPage', () => {
     // Should fetch and display similar books
     const matches = await screen.findAllByText('Hounds of Baskerville')
     expect(matches.length).toBeGreaterThan(0)
-    expect(screen.getByText(/Thể loại: Mystery · Nhiều lượt xem nhất/i)).toBeInTheDocument()
+    expect(screen.getByText(/Category: Mystery · Most viewed/i)).toBeInTheDocument()
   })
 
   test('handles audiobook detail page with audiobook recommendations and listen button', async () => {
@@ -175,6 +175,6 @@ describe('BookDetailPage', () => {
     // More books for audiobook
     const audioMatches = await screen.findAllByText(/Frankenstein \(Audiobook\)/i)
     expect(audioMatches.length).toBeGreaterThan(0)
-    expect(screen.getByText(/Audiobooks cùng thể loại bạn có thể thích/i)).toBeInTheDocument()
+    expect(screen.getByText(/Related audiobooks you may like/i)).toBeInTheDocument()
   })
 })

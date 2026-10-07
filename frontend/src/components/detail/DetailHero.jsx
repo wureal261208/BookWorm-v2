@@ -128,9 +128,9 @@ function DetailHero({
         <div className="detail-rating-interactive">
           <span className="rating-interactive-label">
             {userScore ? (
-              <span><i className="bi bi-check-circle-fill" style={{ color: 'var(--app-accent)', marginRight: '4px' }} />Đánh giá của bạn: <strong>{userScore} <i className="bi bi-star-fill" style={{ color: '#f59e0b', fontSize: '0.9em' }} /></strong></span>
+              <span><i className="bi bi-check-circle-fill" style={{ color: 'var(--app-accent)', marginRight: '4px' }} />Your rating: <strong>{userScore} <i className="bi bi-star-fill" style={{ color: '#f59e0b', fontSize: '0.9em' }} /></strong></span>
             ) : (
-              <span>Chấm điểm sách:</span>
+              <span>Rate this book:</span>
             )}
           </span>
           <div className="star-rating-buttons" role="radiogroup" aria-label="1 to 5 star rating">
@@ -150,7 +150,7 @@ function DetailHero({
                   }}
                   onMouseEnter={() => setHoverStar(star)}
                   onMouseLeave={() => setHoverStar(0)}
-                  title={`Đánh giá ${star} sao`}
+                  title={`Rate ${star} ${star === 1 ? 'star' : 'stars'}`}
                   type="button"
                 >
                   <i className={`bi ${isFilled ? 'bi-star-fill' : 'bi-star'}`} />
@@ -272,12 +272,12 @@ function DetailHero({
               />
               <span>
                 {currentShelfStatus === 'reading'
-                  ? 'Đang đọc'
+                  ? 'Reading'
                   : currentShelfStatus === 'finished'
-                  ? 'Đã đọc xong'
+                  ? 'Finished'
                   : currentShelfStatus === 'want_to_read'
-                  ? 'Muốn đọc'
-                  : 'Thêm vào kệ'}
+                  ? 'Want to read'
+                  : 'Add to shelf'}
               </span>
               <i className="bi bi-chevron-down shelf-caret" />
             </button>
@@ -292,8 +292,8 @@ function DetailHero({
                 >
                   <i className="bi bi-book-half" />
                   <div>
-                    <strong>Đang đọc</strong>
-                    <small>Theo dõi tiến độ đọc sách</small>
+                    <strong>Reading</strong>
+                    <small>Track reading progress</small>
                   </div>
                 </button>
                 <button
@@ -304,8 +304,8 @@ function DetailHero({
                 >
                   <i className="bi bi-bookmark-plus" />
                   <div>
-                    <strong>Muốn đọc</strong>
-                    <small>Lưu lại để đọc sau</small>
+                    <strong>Want to read</strong>
+                    <small>Save to read later</small>
                   </div>
                 </button>
                 <button
@@ -316,8 +316,8 @@ function DetailHero({
                 >
                   <i className="bi bi-check-circle-fill" />
                   <div>
-                    <strong>Đã đọc xong</strong>
-                    <small>Đã hoàn thành cuốn này</small>
+                    <strong>Finished</strong>
+                    <small>Mark as completed</small>
                   </div>
                 </button>
                 {currentShelfStatus && (
@@ -329,8 +329,8 @@ function DetailHero({
                   >
                     <i className="bi bi-trash3" />
                     <div>
-                      <strong>Xóa khỏi kệ</strong>
-                      <small>Bỏ sách khỏi kệ cá nhân</small>
+                      <strong>Remove from shelf</strong>
+                      <small>Remove from your library</small>
                     </div>
                   </button>
                 )}

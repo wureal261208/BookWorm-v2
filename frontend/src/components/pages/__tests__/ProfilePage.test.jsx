@@ -52,10 +52,10 @@ describe('ProfilePage', () => {
       />
     )
 
-    expect(screen.getByText('Hồ sơ thành viên')).toBeInTheDocument()
+    expect(screen.getByText('Member profile')).toBeInTheDocument()
     expect(screen.getAllByText('Member').length).toBeGreaterThan(0)
     expect(screen.getByText('BW-0099')).toBeInTheDocument()
-    expect(screen.getByText('Khám phá viên Mới')).toBeInTheDocument()
+    expect(screen.getByText('New Explorer')).toBeInTheDocument()
   })
 
   test('renders reading stats and streak correctly', () => {
@@ -75,10 +75,10 @@ describe('ProfilePage', () => {
       />
     )
 
-    expect(screen.getByText('Hoạt động & Mục tiêu đọc')).toBeInTheDocument()
-    expect(screen.getAllByText('Đang đọc').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Đã đọc xong').length).toBeGreaterThan(0)
-    expect(screen.getByText('Ngày liên tiếp')).toBeInTheDocument()
+    expect(screen.getByText('Reading activity & goals')).toBeInTheDocument()
+    expect(screen.getAllByText('Reading').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Finished').length).toBeGreaterThan(0)
+    expect(screen.getByText('Day streak')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument() // 2 consecutive days
   })
 
@@ -94,10 +94,10 @@ describe('ProfilePage', () => {
       />
     )
 
-    expect(screen.getByText('Sách đang đọc gần nhất')).toBeInTheDocument()
-    expect(screen.getAllByText('55% hoàn thành').length).toBeGreaterThan(0)
+    expect(screen.getByText('Recently read')).toBeInTheDocument()
+    expect(screen.getAllByText('55% completed').length).toBeGreaterThan(0)
 
-    const continueBtn = screen.getByRole('button', { name: /Đọc tiếp ngay/i })
+    const continueBtn = screen.getByRole('button', { name: /Resume reading/i })
     fireEvent.click(continueBtn)
     expect(onRead).toHaveBeenCalledWith(expect.objectContaining({ title: 'Sherlock Holmes' }))
   })
@@ -112,16 +112,16 @@ describe('ProfilePage', () => {
       />
     )
 
-    const editGoalBtn = screen.getByRole('button', { name: /Đổi mục tiêu/i })
+    const editGoalBtn = screen.getByRole('button', { name: /Edit goal/i })
     fireEvent.click(editGoalBtn)
 
-    const goalInput = screen.getByLabelText(/Số cuốn muốn đọc/i)
+    const goalInput = screen.getByLabelText(/Target books this year/i)
     fireEvent.change(goalInput, { target: { value: '25' } })
 
-    const saveBtn = screen.getByRole('button', { name: /Lưu/i })
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i })
     fireEvent.click(saveBtn)
 
-    expect(screen.getByText(/1 \/ 25 cuốn/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 \/ 25 books/i)).toBeInTheDocument()
   })
 
   test('renders authored books tab and supports navigating to write page', async () => {
@@ -136,12 +136,12 @@ describe('ProfilePage', () => {
       />
     )
 
-    const authoredTab = screen.getByRole('tab', { name: /Sách đã đăng/i })
+    const authoredTab = screen.getByRole('tab', { name: /Authored/i })
     expect(authoredTab).toBeInTheDocument()
     fireEvent.click(authoredTab)
 
-    expect(await screen.findByText(/Bạn chưa sáng tác hoặc đăng cuốn sách nào/i)).toBeInTheDocument()
-    const writeBtn = screen.getByRole('button', { name: /Sáng tác \/ Đăng sách ngay/i })
+    expect(await screen.findByText(/You have not written or published any books yet/i)).toBeInTheDocument()
+    const writeBtn = screen.getByRole('button', { name: /Write \/ Publish now/i })
     fireEvent.click(writeBtn)
     expect(onNavigate).toHaveBeenCalledWith('write')
   })
@@ -159,11 +159,11 @@ describe('ProfilePage', () => {
       />
     )
 
-    const finishedMetricBtn = screen.getByRole('button', { name: /Xem danh mục Đã đọc xong trong Kệ sách/i })
+    const finishedMetricBtn = screen.getByRole('button', { name: /View Finished books in bookshelf/i })
     expect(finishedMetricBtn).toBeInTheDocument()
     fireEvent.click(finishedMetricBtn)
 
-    const finishedTab = screen.getByRole('tab', { name: /Đã đọc xong/i })
+    const finishedTab = screen.getByRole('tab', { name: /Finished/i })
     expect(finishedTab).toHaveAttribute('aria-selected', 'true')
   })
 })

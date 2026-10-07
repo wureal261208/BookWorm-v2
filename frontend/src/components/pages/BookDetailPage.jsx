@@ -98,6 +98,7 @@ function BookDetailPage({
     if (!currentBook) return
     const targetId = currentBook._id || currentBook.id
     if (!targetId) return
+    setFetchedChapters([])
     if (currentBook.chapters?.length > 0) return
 
     let ignore = false
@@ -241,8 +242,8 @@ function BookDetailPage({
     ? fetchedChapters
     : getBookChapters(currentBook, totalPages)
   const totalChapters = detailChapters.length
-  const hasChapters = fetchedChapters.length > 0 || hasExplicitChapters(currentBook)
-  const effectiveDetailTab = !hasChapters && activeDetailTab === 'chapters' ? 'comments' : activeDetailTab
+  const hasChapters = totalChapters > 0
+  const effectiveDetailTab = activeDetailTab
   const language = Array.isArray(currentBook.languages)
     ? currentBook.languages.join(', ').toUpperCase()
     : (currentBook.language?.toUpperCase() || 'EN')

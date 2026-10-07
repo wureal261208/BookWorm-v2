@@ -791,10 +791,10 @@ function ContentReaderPage() {
 
             {/* In-Book Text Search trigger */}
             <button
-              aria-label={isSearchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm trong nội dung'}
+              aria-label={isSearchOpen ? 'Close search' : 'Search in chapter'}
               className={`ghost-button reader-bar-icon-btn reader-search-trigger ${isSearchOpen ? 'active' : ''}`}
               onClick={() => setIsSearchOpen((v) => !v)}
-              title="Tìm kiếm từ khóa, nhân vật trong chương (Ctrl+F)"
+              title="Search keywords or characters in chapter (Ctrl+F)"
               type="button"
             >
               <i className="bi bi-search" />
@@ -1062,7 +1062,7 @@ function ContentReaderPage() {
 
       {/* Floating In-Book Search Drawer */}
       {isSearchOpen && (
-        <aside aria-label="Tìm kiếm nội dung" className="reader-search-drawer" role="search">
+        <aside aria-label="Search content" className="reader-search-drawer" role="search">
           <div className="reader-search-inner">
             <i className="bi bi-search reader-search-icon" />
             <input
@@ -1082,44 +1082,44 @@ function ContentReaderPage() {
                   }
                 }
               }}
-              placeholder="Tìm từ khóa, tên nhân vật trong chương..."
+              placeholder="Search keywords, characters in chapter..."
               type="text"
               value={searchQuery}
             />
             {searchQuery && (
               <span className="reader-search-count">
-                {totalSearchMatches > 0 ? `${searchMatchIndex + 1} / ${totalSearchMatches}` : '0 kết quả'}
+                {totalSearchMatches > 0 ? `${searchMatchIndex + 1} / ${totalSearchMatches}` : '0 results'}
               </span>
             )}
             <div className="reader-search-nav-btns">
               <button
-                aria-label="Kết quả trước"
+                aria-label="Previous match"
                 className="ghost-button search-nav-btn"
                 disabled={totalSearchMatches <= 1}
                 onClick={() => setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev - 1 + totalSearchMatches) % totalSearchMatches : 0))}
-                title="Kết quả trước (Shift+Enter)"
+                title="Previous match (Shift+Enter)"
                 type="button"
               >
                 <i className="bi bi-chevron-up" />
               </button>
               <button
-                aria-label="Kết quả tiếp theo"
+                aria-label="Next match"
                 className="ghost-button search-nav-btn"
                 disabled={totalSearchMatches <= 1}
                 onClick={() => setSearchMatchIndex((prev) => (totalSearchMatches > 0 ? (prev + 1) % totalSearchMatches : 0))}
-                title="Kết quả tiếp theo (Enter)"
+                title="Next match (Enter)"
                 type="button"
               >
                 <i className="bi bi-chevron-down" />
               </button>
               <button
-                aria-label="Đóng tìm kiếm"
+                aria-label="Close search"
                 className="ghost-button search-close-btn"
                 onClick={() => {
                   setIsSearchOpen(false)
                   setSearchQuery('')
                 }}
-                title="Đóng tìm kiếm (Esc)"
+                title="Close search (Esc)"
                 type="button"
               >
                 <i className="bi bi-x-lg" />

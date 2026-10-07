@@ -22,21 +22,21 @@ function DetailRecommendations({
         <div>
           <p className="mono-eyebrow">
             <i className="bi bi-fire" style={{ marginRight: '6px', color: '#ea580c' }} />
-            {displayCategory ? `Thể loại: ${displayCategory} · Nhiều lượt xem nhất` : 'Được xem nhiều nhất'}
+            {displayCategory ? `Category: ${displayCategory} · Most viewed` : 'Most viewed'}
           </p>
-          <h2>{isAudio ? 'Audiobooks cùng thể loại bạn có thể thích' : 'Sách cùng thể loại bạn có thể thích'}</h2>
+          <h2>{isAudio ? 'Related audiobooks you may like' : 'Related books you may like'}</h2>
         </div>
         {books.length > 0 && (
           <span className="comments-count-pill">
             <i className="bi bi-collection" style={{ marginRight: '4px' }} />
-            {books.length} {isAudio ? 'audiobooks' : 'cuốn'}
+            {books.length} {isAudio ? (books.length === 1 ? 'audiobook' : 'audiobooks') : (books.length === 1 ? 'title' : 'titles')}
           </span>
         )}
       </div>
 
       {loading && !books.length ? (
         <div className="empty-state" style={{ minHeight: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-          <span className="admin-spin-small" /> Đang tải gợi ý sách liên quan...
+          <span className="admin-spin-small" /> Loading related titles...
         </div>
       ) : books.length > 0 ? (
         <BookGrid
@@ -51,7 +51,7 @@ function DetailRecommendations({
       ) : (
         <div className="empty-state">
           <i className="bi bi-book-half" style={{ fontSize: '1.8rem', color: 'var(--app-muted)', marginBottom: '8px', display: 'block' }} />
-          <p>Chưa có sách cùng thể loại nào khác trong danh mục này.</p>
+          <p>No other titles found in this category yet.</p>
         </div>
       )}
     </section>

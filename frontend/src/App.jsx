@@ -926,8 +926,8 @@ function App() {
       })
       if (Array.isArray(res?.shelf)) setShelf(res.shelf)
       if (Array.isArray(res?.favorites)) setFavorites(res.favorites)
-      const label = status === 'reading' ? 'Đang đọc' : status === 'finished' ? 'Đã đọc xong' : 'Muốn đọc'
-      setToast({ type: 'success', message: `Đã thêm vào mục "${label}".` })
+      const label = status === 'reading' ? 'Reading' : status === 'finished' ? 'Finished' : 'Want to read'
+      setToast({ type: 'success', message: `Saved to "${label}".` })
     } catch (err) {
       setToast({ type: 'error', message: err.message || 'Failed to update shelf' })
     }
@@ -945,7 +945,7 @@ function App() {
       })
       if (Array.isArray(res?.shelf)) setShelf(res.shelf)
       if (Array.isArray(res?.favorites)) setFavorites(res.favorites)
-      setToast({ type: 'success', message: 'Đã xóa khỏi kệ sách.' })
+      setToast({ type: 'success', message: 'Removed from bookshelf.' })
     } catch (err) {
       setToast({ type: 'error', message: err.message || 'Failed to remove from shelf' })
     }

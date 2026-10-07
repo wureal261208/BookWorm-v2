@@ -298,15 +298,15 @@ function ProfileSettings({
   const readerRank = useMemo(() => {
     const finishedCount = finishedList.length
     if (finishedCount >= 15) {
-      return { title: 'Độc giả Uyên bác', icon: 'bi-mortarboard-fill', level: 'Level 4' }
+      return { title: 'Scholar Reader', icon: 'bi-mortarboard-fill', level: 'Level 4' }
     }
     if (finishedCount >= 5) {
-      return { title: 'Mọt sách Chăm chỉ', icon: 'bi-award-fill', level: 'Level 3' }
+      return { title: 'Avid Bookworm', icon: 'bi-award-fill', level: 'Level 3' }
     }
     if (finishedCount >= 1) {
-      return { title: 'Bạn đọc Tích cực', icon: 'bi-bookmark-star-fill', level: 'Level 2' }
+      return { title: 'Active Reader', icon: 'bi-bookmark-star-fill', level: 'Level 2' }
     }
-    return { title: 'Khám phá viên Mới', icon: 'bi-compass-fill', level: 'Level 1' }
+    return { title: 'New Explorer', icon: 'bi-compass-fill', level: 'Level 1' }
   }, [finishedList.length])
 
   const readingStreak = useMemo(() => {
@@ -373,7 +373,7 @@ function ProfileSettings({
           })
         } catch (_) {}
       }
-      onToast?.({ type: 'success', message: `Đã cập nhật mục tiêu đọc ${parsed} cuốn sách.` })
+      onToast?.({ type: 'success', message: `Updated reading goal to ${parsed} books.` })
     }
   }
 
@@ -508,7 +508,7 @@ function ProfileSettings({
 
       <div className="settings-layout">
         <div className="account-settings-card account-overview-card">
-          <SettingsHeading icon="bi-person-badge" kicker="Tài khoản" title="Hồ sơ thành viên" />
+          <SettingsHeading icon="bi-person-badge" kicker="Account" title="Member profile" />
           <div className="account-overview">
             <div className="account-overview-main">
               <div className="account-overview-name">
@@ -526,15 +526,15 @@ function ProfileSettings({
                 <strong>{safeMaskedEmail}</strong>
               </div>
               <div>
-                <span>Vai trò</span>
+                <span>Role</span>
                 <strong>{roleLabel}</strong>
               </div>
               <div>
-                <span>Mã thành viên</span>
+                <span>Member ID</span>
                 <strong>{account?.displayId || '—'}</strong>
               </div>
               <div>
-                <span>Hạng bạn đọc</span>
+                <span>Reader rank</span>
                 <strong className="reader-rank-badge">
                   <i className={`bi ${readerRank.icon}`} />
                   <span>{readerRank.title}</span>
@@ -545,7 +545,7 @@ function ProfileSettings({
         </div>
 
         <div className="account-settings-card quick-resume-card">
-          <SettingsHeading icon="bi-bookmark-check" kicker="Tiếp tục đọc" title="Sách đang đọc gần nhất" />
+          <SettingsHeading icon="bi-bookmark-check" kicker="Jump back in" title="Recently read" />
           {resumeBookItem ? (
             <div className="quick-resume-content">
               <img
@@ -569,7 +569,7 @@ function ProfileSettings({
                     />
                   </div>
                   <span className="quick-resume-pct">
-                    {Math.round(effectiveProgress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0)}% hoàn thành
+                    {Math.round(effectiveProgress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0)}% completed
                   </span>
                 </div>
                 <div className="quick-resume-actions">
@@ -579,7 +579,7 @@ function ProfileSettings({
                     type="button"
                   >
                     <i className="bi bi-play-circle-fill" />
-                    <span>Đọc tiếp ngay</span>
+                    <span>Resume reading</span>
                   </button>
                   <button
                     className="ghost-button quick-resume-btn"
@@ -587,7 +587,7 @@ function ProfileSettings({
                     type="button"
                   >
                     <i className="bi bi-info-circle" />
-                    <span>Chi tiết</span>
+                    <span>Details</span>
                   </button>
                 </div>
               </div>
@@ -595,14 +595,14 @@ function ProfileSettings({
           ) : (
             <div className="quick-resume-empty">
               <i className="bi bi-journal-plus" />
-              <p>Chưa có sách nào đang đọc dở. Hãy chọn sách từ Kệ hoặc Trang chủ để bắt đầu!</p>
+              <p>No books currently in progress. Pick a title from your bookshelf or home to begin!</p>
               <button
                 className="ghost-button"
                 onClick={() => setActiveShelfTab('want_to_read')}
                 type="button"
               >
                 <i className="bi bi-bookmark-plus" />
-                <span>Xem sách muốn đọc</span>
+                <span>View want to read</span>
               </button>
             </div>
           )}
@@ -610,7 +610,7 @@ function ProfileSettings({
 
         <div className="account-settings-card reading-stats-card">
           <div className="reading-stats-header">
-            <SettingsHeading icon="bi-graph-up-arrow" kicker="Thống kê" title="Hoạt động & Mục tiêu đọc" />
+            <SettingsHeading icon="bi-graph-up-arrow" kicker="Statistics" title="Reading activity & goals" />
             {!isEditingGoal && (
               <button
                 className="ghost-button edit-goal-btn"
@@ -621,7 +621,7 @@ function ProfileSettings({
                 type="button"
               >
                 <i className="bi bi-pencil-square" />
-                <span>Đổi mục tiêu</span>
+                <span>Edit goal</span>
               </button>
             )}
           </div>
@@ -629,7 +629,7 @@ function ProfileSettings({
           <div className="reading-metrics-grid">
             <button
               type="button"
-              aria-label="Xem danh mục Đang đọc trong Kệ sách"
+              aria-label="View Reading books in bookshelf"
               className={`metric-item metric-interactive-btn ${activeShelfTab === 'reading' ? 'active-shelf-metric' : ''}`}
               onClick={() => {
                 setActiveShelfTab('reading')
@@ -638,21 +638,21 @@ function ProfileSettings({
                   el.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
               }}
-              title="Xem danh mục Đang đọc trong Kệ sách"
+              title="View Reading books in bookshelf"
             >
               <div className="metric-icon-box metric-reading">
                 <i className="bi bi-book-half" />
               </div>
               <div className="metric-text">
                 <span className="metric-value">{readingList.length}</span>
-                <span className="metric-label">Đang đọc</span>
+                <span className="metric-label">Reading</span>
               </div>
               <i className="bi bi-arrow-right-short metric-action-arrow" />
             </button>
 
             <button
               type="button"
-              aria-label="Xem danh mục Muốn đọc trong Kệ sách"
+              aria-label="View Want to read books in bookshelf"
               className={`metric-item metric-interactive-btn ${activeShelfTab === 'want_to_read' ? 'active-shelf-metric' : ''}`}
               onClick={() => {
                 setActiveShelfTab('want_to_read')
@@ -661,21 +661,21 @@ function ProfileSettings({
                   el.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
               }}
-              title="Xem danh mục Muốn đọc trong Kệ sách"
+              title="View Want to read books in bookshelf"
             >
               <div className="metric-icon-box metric-want">
                 <i className="bi bi-bookmark-plus" />
               </div>
               <div className="metric-text">
                 <span className="metric-value">{wantToReadList.length}</span>
-                <span className="metric-label">Muốn đọc</span>
+                <span className="metric-label">Want to read</span>
               </div>
               <i className="bi bi-arrow-right-short metric-action-arrow" />
             </button>
 
             <button
               type="button"
-              aria-label="Xem danh mục Đã đọc xong trong Kệ sách"
+              aria-label="View Finished books in bookshelf"
               className={`metric-item metric-interactive-btn ${activeShelfTab === 'finished' ? 'active-shelf-metric' : ''}`}
               onClick={() => {
                 setActiveShelfTab('finished')
@@ -684,14 +684,14 @@ function ProfileSettings({
                   el.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
               }}
-              title="Xem danh mục Đã đọc xong trong Kệ sách"
+              title="View Finished books in bookshelf"
             >
               <div className="metric-icon-box metric-finished">
                 <i className="bi bi-check2-circle" />
               </div>
               <div className="metric-text">
                 <span className="metric-value">{finishedList.length}</span>
-                <span className="metric-label">Đã đọc xong</span>
+                <span className="metric-label">Finished</span>
               </div>
               <i className="bi bi-arrow-right-short metric-action-arrow" />
             </button>
@@ -702,7 +702,7 @@ function ProfileSettings({
               </div>
               <div className="metric-text">
                 <span className="metric-value">{readingStreak}</span>
-                <span className="metric-label">Ngày liên tiếp</span>
+                <span className="metric-label">Day streak</span>
               </div>
             </div>
           </div>
@@ -711,10 +711,10 @@ function ProfileSettings({
             <div className="reading-goal-top">
               <div className="goal-title-wrap">
                 <i className="bi bi-flag-fill" />
-                <strong>Mục tiêu đọc sách năm {new Date().getFullYear()}</strong>
+                <strong>Reading goal {new Date().getFullYear()}</strong>
               </div>
               <span className="goal-progress-text">
-                {finishedList.length} / {readingGoal} cuốn ({goalPercentage}%)
+                {finishedList.length} / {readingGoal} books ({goalPercentage}%)
               </span>
             </div>
 
@@ -724,7 +724,7 @@ function ProfileSettings({
 
             {isEditingGoal && (
               <form className="edit-goal-form" onSubmit={handleSaveGoal}>
-                <label htmlFor="goal-input">Số cuốn muốn đọc trong năm:</label>
+                <label htmlFor="goal-input">Target books this year:</label>
                 <input
                   id="goal-input"
                   type="number"
@@ -736,7 +736,7 @@ function ProfileSettings({
                 />
                 <button className="primary-button btn-sm" type="submit">
                   <i className="bi bi-check-lg" />
-                  <span>Lưu</span>
+                  <span>Save</span>
                 </button>
                 <button
                   className="ghost-button btn-sm"
@@ -744,7 +744,7 @@ function ProfileSettings({
                   onClick={() => setIsEditingGoal(false)}
                 >
                   <i className="bi bi-x-lg" />
-                  <span>Hủy</span>
+                  <span>Cancel</span>
                 </button>
               </form>
             )}
@@ -785,9 +785,9 @@ function ProfileSettings({
         </form>
 
         <div className="account-settings-card profile-shelf-card" id="personal-shelf-card">
-          <SettingsHeading icon="bi-bookshelf" kicker="Tủ sách của tôi" title="Kệ sách cá nhân" />
+          <SettingsHeading icon="bi-bookshelf" kicker="My library" title="Personal bookshelf" />
 
-          <div className="shelf-tab-nav" role="tablist" aria-label="Phân loại kệ sách">
+          <div className="shelf-tab-nav" role="tablist" aria-label="Bookshelf categories">
             <button
               type="button"
               role="tab"
@@ -796,7 +796,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('reading')}
             >
               <i className="bi bi-book-half" />
-              <span>Đang đọc</span>
+              <span>Reading</span>
               <span className="shelf-count-pill">{readingList.length}</span>
             </button>
             <button
@@ -807,7 +807,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('want_to_read')}
             >
               <i className="bi bi-bookmark-plus" />
-              <span>Muốn đọc</span>
+              <span>Want to read</span>
               <span className="shelf-count-pill">{wantToReadList.length}</span>
             </button>
             <button
@@ -818,7 +818,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('finished')}
             >
               <i className="bi bi-check-circle-fill" />
-              <span>Đã đọc xong</span>
+              <span>Finished</span>
               <span className="shelf-count-pill">{finishedList.length}</span>
             </button>
             <button
@@ -829,7 +829,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('authored')}
             >
               <i className="bi bi-journal-arrow-up" />
-              <span>Sách đã đăng</span>
+              <span>Authored</span>
               <span className="shelf-count-pill">{myBooks.length}</span>
             </button>
           </div>
@@ -838,7 +838,7 @@ function ProfileSettings({
             {activeShelfTab === 'reading' && (
               <ShelfBookList
                 items={readingList}
-                emptyText="Bạn chưa có cuốn sách nào trong mục Đang đọc. Hãy mở một cuốn sách từ Trang chủ để bắt đầu đọc!"
+                emptyText="No books currently in your Reading shelf. Pick a book from Home to start reading!"
                 emptyIcon="bi-journal-richtext"
                 progress={effectiveProgress}
                 onRead={onRead}
@@ -850,7 +850,7 @@ function ProfileSettings({
             {activeShelfTab === 'want_to_read' && (
               <ShelfBookList
                 items={wantToReadList}
-                emptyText="Chưa có sách nào trong danh sách Muốn đọc. Khi lướt xem sách, chọn 'Muốn đọc' để lưu vào đây nhé."
+                emptyText="No books in your Want to read shelf yet. Save books here while exploring our library."
                 emptyIcon="bi-bookmark-heart"
                 progress={effectiveProgress}
                 onRead={onRead}
@@ -862,7 +862,7 @@ function ProfileSettings({
             {activeShelfTab === 'finished' && (
               <ShelfBookList
                 items={finishedList}
-                emptyText="Chưa có cuốn sách nào được đánh dấu Đã đọc xong. Chúc bạn có những trải nghiệm đọc tuyệt vời!"
+                emptyText="No books marked as Finished yet. Happy reading journeys ahead!"
                 emptyIcon="bi-award"
                 progress={effectiveProgress}
                 onRead={onRead}
@@ -1041,7 +1041,7 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                   <div className="shelf-item-progress-bar">
                     <div className="shelf-item-progress-fill" style={{ width: `${Math.min(100, bookProgress)}%` }} />
                   </div>
-                  <small>{bookProgress}% hoàn thành</small>
+                  <small>{bookProgress}% completed</small>
                 </div>
               )}
             </div>
@@ -1053,7 +1053,7 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 type="button"
               >
                 <i className={bookProgress > 0 && bookProgress < 100 ? 'bi bi-play-circle-fill' : status === 'finished' ? 'bi bi-arrow-repeat' : 'bi bi-book-half'} />
-                <span>{bookProgress > 0 && bookProgress < 100 ? 'Đọc tiếp' : status === 'finished' ? 'Đọc lại' : 'Đọc ngay'}</span>
+                <span>{bookProgress > 0 && bookProgress < 100 ? 'Continue' : status === 'finished' ? 'Re-read' : 'Read now'}</span>
               </button>
 
               <button
@@ -1062,11 +1062,11 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 type="button"
               >
                 <i className="bi bi-info-circle" />
-                <span>Chi tiết</span>
+                <span>Details</span>
               </button>
 
               <select
-                aria-label="Thay đổi trạng thái kệ sách"
+                aria-label="Change bookshelf status"
                 className="shelf-status-select"
                 onChange={(e) => {
                   const val = e.target.value
@@ -1078,10 +1078,10 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 }}
                 value={status || 'want_to_read'}
               >
-                <option value="reading">Đang đọc</option>
-                <option value="want_to_read">Muốn đọc</option>
-                <option value="finished">Đã đọc xong</option>
-                <option value="remove">Xóa khỏi kệ</option>
+                <option value="reading">Reading</option>
+                <option value="want_to_read">Want to read</option>
+                <option value="finished">Finished</option>
+                <option value="remove">Remove from shelf</option>
               </select>
             </div>
           </li>
@@ -1096,7 +1096,7 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
     return (
       <div className="shelf-empty-box">
         <i className="bi bi-arrow-repeat spin" />
-        <p>Đang tải danh sách sách bạn đã đăng...</p>
+        <p>Loading your authored books...</p>
       </div>
     )
   }
@@ -1105,7 +1105,7 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
     return (
       <div className="shelf-empty-box">
         <i className="bi bi-journal-plus" />
-        <p>Bạn chưa sáng tác hoặc đăng cuốn sách nào lên hệ thống.</p>
+        <p>You have not written or published any books yet.</p>
         {onNavigate && (
           <button
             className="primary-button"
@@ -1114,7 +1114,7 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
             style={{ marginTop: '0.75rem' }}
           >
             <i className="bi bi-feather" />
-            <span>Sáng tác / Đăng sách ngay</span>
+            <span>Write / Publish now</span>
           </button>
         )}
       </div>
@@ -1135,12 +1135,12 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
               <div className="shelf-authored-badges">
                 <span className={`authored-status-pill status-${status}`}>
                   <i className={status === 'published' ? 'bi bi-check-circle-fill' : 'bi bi-file-earmark-text'} />
-                  <span>{status === 'published' ? 'Đã xuất bản' : 'Bản nháp'}</span>
+                  <span>{status === 'published' ? 'Published' : 'Draft'}</span>
                 </span>
                 {typeof book.views === 'number' && (
                   <span className="authored-views-pill">
                     <i className="bi bi-eye" />
-                    <span>{book.views} lượt xem</span>
+                    <span>{book.views} views</span>
                   </span>
                 )}
               </div>
@@ -1153,7 +1153,7 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
                 type="button"
               >
                 <i className="bi bi-book-half" />
-                <span>Đọc</span>
+                <span>Read</span>
               </button>
               <button
                 className="ghost-button shelf-action-btn"
@@ -1161,17 +1161,17 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
                 type="button"
               >
                 <i className="bi bi-info-circle" />
-                <span>Chi tiết</span>
+                <span>Details</span>
               </button>
               {onNavigate && (
                 <button
                   className="ghost-button shelf-action-btn"
                   onClick={() => onNavigate('write')}
                   type="button"
-                  title="Chỉnh sửa hoặc viết chương mới"
+                  title="Edit or write new chapters"
                 >
                   <i className="bi bi-pencil-square" />
-                  <span>Viết / Sửa</span>
+                  <span>Write / Edit</span>
                 </button>
               )}
             </div>
