@@ -3214,20 +3214,26 @@ progress {
 
 /* Desktop Chat Panel */
 .chat-widget-panel {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 14px);
-  display: grid;
-  grid-template-rows: auto 1fr;
-  width: min(380px, calc(100vw - 32px));
-  height: min(530px, calc(100vh - 140px));
-  overflow: hidden;
+  position: fixed !important;
+  right: clamp(16px, 3vw, 28px) !important;
+  bottom: calc(clamp(16px, 3vw, 28px) + 56px) !important;
+  width: min(380px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  height: min(530px, calc(100vh - 120px)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
   border: 1px solid var(--app-line, #d8d8d3);
   border-radius: 14px;
   background: var(--app-surface, #ffffff);
   box-shadow: 0 24px 56px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.06);
   animation: chatPanelIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-  z-index: 1011;
+  z-index: 1015 !important;
+}
+
+.chat-widget.docked-above-player .chat-widget-panel {
+  bottom: calc(104px + 56px) !important;
+  height: min(500px, calc(100vh - 180px)) !important;
 }
 
 .app-theme-dark .chat-widget-panel {
@@ -10139,8 +10145,13 @@ progress {
    HelpChatWidget.jsx --- */
 .chat-widget-panel-body {
   display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   padding: 12px;
+  overflow: hidden;
 }
 
 .ai-chat-panel {
@@ -10242,10 +10253,13 @@ progress {
 .ai-chat-input-row {
   display: flex;
   gap: 8px;
+  width: 100%;
+  align-items: center;
 }
 
 .ai-chat-input-row input {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--app-line);
   border-radius: 999px;
   padding: 10px 16px;
@@ -10413,6 +10427,9 @@ progress {
   gap: 10px;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 .help-chat-subheader {
