@@ -4,17 +4,21 @@ import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const POLL_INTERVAL_MS = 6000
 
-// The floating chat bubble's actual content - separate from the AI
-// Suggestions page's book-recommendation chat (AiSuggestionsPage.jsx).
-// Single-use per open, per Wun's call: a plain AI-only conversation never
-// carries over between opens (this component only mounts while the bubble
-// is open, so a fresh instance is a fresh conversation). The one exception
-// is a conversation a human admin is actively handling ('escalated') -
-// that DOES resume on reopen and polls for new admin replies while open,
-// because losing track of an active support conversation would defeat the
-// point of escalating it in the first place. A closed, rated-or-not
-// conversation always starts fresh - see getPendingRating below for the
-// one thing it's still used for (asking for a rating once).
+const QUICK_ACTIONS = [
+  { label: '#Contact with admin', icon: 'bi-headset', query: '#Contact with admin' },
+  { label: 'How to download books?', icon: 'bi-download', query: 'How do I download or read books on BookWorm?' },
+  { label: 'Reading goals guide', icon: 'bi-flag', query: 'How do I set and track my annual reading goal?' },
+  { label: 'Audiobook player tips', icon: 'bi-headphones', query: 'How do I listen to audiobooks and change playback speed?' },
+]
+
+function formatMessageTime(date = new Date()) {
+  try {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
 function HelpChatWidget() {
   const isGuest = !auth.currentUser
   const [phase, setPhase] = useState('loading') // 'loading' | 'rating' | 'chat'
@@ -29,8 +33,7 @@ function HelpChatWidget() {
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
 
-  // Guests skip straight to a blank chat - no account, so no pending
-  // rating and no escalated conversation to resume.
+  // Initial load
   useEffect(() => {
     if (isGuest) {
       setPhase('chat')
@@ -50,8 +53,8 @@ function HelpChatWidget() {
           if (ignore) return
           if (conversation) {
             setConversationId(conversation._id)
-            setMessages(conversation.messages)
-            setStatus(conversation.status)
+            setMessages(conversation.messages || [])
+            setStatus(conversation.status || 'ai')
           }
           setPhase('chat')
         })
@@ -68,30 +71,30 @@ function HelpChatWidget() {
     }
   }, [isGuest])
 
-  // Polls for admin replies while an escalated conversation is open - no
-  // websocket in this app, so a short interval is the simplest way for a
-  // reply to show up without the visitor having to send another message.
+  // Polling for admin replies when escalated
   useEffect(() => {
     if (phase !== 'chat' || status !== 'escalated' || !conversationId) return undefined
 
     const interval = setInterval(() => {
       apiFetch(`/api/support/conversations/${conversationId}`)
         .then((conversation) => {
-          setMessages(conversation.messages)
-          setStatus(conversation.status)
+          if (conversation) {
+            setMessages(conversation.messages || [])
+            setStatus(conversation.status || 'escalated')
+          }
         })
-        .catch(() => {
-          // A transient poll failure isn't worth surfacing as an error -
-          // it'll just try again next tick.
-        })
+        .catch(() => {})
     }, POLL_INTERVAL_MS)
 
     return () => clearInterval(interval)
   }, [phase, status, conversationId])
 
+  // Scroll to bottom on new message or when typing starts
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages.length])
+    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [messages.length, sending])
 
   async function submitRating() {
     if (!ratingValue || !pendingRating?._id) return
@@ -106,31 +109,38 @@ function HelpChatWidget() {
     }
   }
 
-  async function send() {
-    const text = input.trim()
+  async function send(overrideText) {
+    const text = (overrideText || input).trim()
     if (!text || sending) return
 
     setSending(true)
     setError('')
-    setInput('')
-    const nextMessages = [...messages, { role: 'user', text }]
+    if (!overrideText) setInput('')
+
+    const userMsg = { role: 'user', text, createdAt: new Date().toISOString() }
+    const nextMessages = [...messages, userMsg]
     setMessages(nextMessages)
 
     try {
       if (isGuest) {
         const data = await publicApiFetch('/api/support/guest-chat', {
           method: 'POST',
-          body: { messages: nextMessages.map((message) => ({ role: message.role === 'user' ? 'user' : 'assistant', content: message.text })) },
+          body: { messages: nextMessages.map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })) },
         })
-        setMessages([...nextMessages, { role: 'assistant', text: data.reply }])
+        setMessages([...nextMessages, { role: 'assistant', text: data.reply, createdAt: new Date().toISOString() }])
       } else {
-        const data = await apiFetch('/api/support/conversations/current/messages', { method: 'POST', body: { text } })
-        setMessages([...nextMessages, ...data.newMessages])
-        setStatus(data.status)
+        const isContactAdmin = /^\s*#?\s*contact\s+(with\s+)?admin\b/i.test(text)
+        const data = await apiFetch('/api/support/conversations/current/messages', {
+          method: 'POST',
+          body: { text, escalate: isContactAdmin },
+        })
+        const newItems = (data.newMessages || []).map((m) => ({ ...m, createdAt: m.createdAt || new Date().toISOString() }))
+        setMessages([...nextMessages, ...newItems])
+        setStatus(data.status || 'ai')
         if (data.conversationId) setConversationId(data.conversationId)
       }
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Failed to send message.')
     } finally {
       setSending(false)
     }
@@ -139,7 +149,10 @@ function HelpChatWidget() {
   if (phase === 'loading') {
     return (
       <div className="help-chat-widget">
-        <p className="inline-loading"><span className="admin-spin-small" /> Loading...</p>
+        <div className="help-chat-loading-state">
+          <span className="admin-spin-small" />
+          <p>Connecting to BookWorm Help...</p>
+        </div>
       </div>
     )
   }
@@ -147,30 +160,32 @@ function HelpChatWidget() {
   if (phase === 'rating') {
     return (
       <div className="help-chat-widget help-chat-rating">
-        <p>
-          Your conversation with <strong>{pendingRating.closedBy?.name || 'our support team'}</strong> has ended. How would you rate the help you
-          received?
-        </p>
-        <div className="help-chat-rating-stars">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              aria-label={`${value} star${value === 1 ? '' : 's'}`}
-              className={value <= ratingValue ? 'active' : ''}
-              key={value}
-              onClick={() => setRatingValue(value)}
-              type="button"
-            >
-              <i className={`bi ${value <= ratingValue ? 'bi-star-fill' : 'bi-star'}`} />
+        <div className="help-chat-rating-card">
+          <i className="bi bi-chat-heart-fill rating-heart-icon" />
+          <p>
+            Your conversation with <strong>{pendingRating.closedBy?.name || 'our support team'}</strong> has ended. How would you rate your experience?
+          </p>
+          <div className="help-chat-rating-stars">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                className={value <= ratingValue ? 'active' : ''}
+                key={value}
+                onClick={() => setRatingValue(value)}
+                type="button"
+              >
+                <i className={`bi ${value <= ratingValue ? 'bi-star-fill' : 'bi-star'}`} />
+              </button>
+            ))}
+          </div>
+          <div className="admin-row-actions">
+            <button className="primary-button" disabled={!ratingValue || submittingRating} onClick={submitRating} type="button">
+              {submittingRating ? 'Submitting...' : 'Submit review'}
             </button>
-          ))}
-        </div>
-        <div className="admin-row-actions">
-          <button className="primary-button" disabled={!ratingValue || submittingRating} onClick={submitRating} type="button">
-            Submit
-          </button>
-          <button className="ghost-button" onClick={() => setPhase('chat')} type="button">
-            Skip
-          </button>
+            <button className="ghost-button" onClick={() => setPhase('chat')} type="button">
+              Skip
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -178,31 +193,137 @@ function HelpChatWidget() {
 
   return (
     <div className="help-chat-widget">
-      <div className="ai-chat-messages">
-        {messages.length === 0 && <p className="empty-state">Hi! Ask us anything about BookWorm.</p>}
-        {messages.map((message, index) => (
-          <div
-            className={`ai-chat-bubble ${
-              message.role === 'user'
-                ? 'ai-chat-bubble-user'
-                : message.role === 'system'
-                  ? 'ai-chat-bubble-system'
-                  : message.role === 'admin'
-                    ? 'ai-chat-bubble-admin'
-                    : 'ai-chat-bubble-assistant'
-            }`}
-            key={index}
+      {/* Dynamic Subheader with Live Status & Quick Handoff */}
+      <div className="help-chat-subheader">
+        <div className="help-chat-status-pill">
+          <span className={`status-dot ${status === 'escalated' ? 'status-dot-human' : 'status-dot-ai'}`} />
+          <span className="status-label">
+            {status === 'escalated' ? 'Human Support' : 'BookWorm AI Assistant'}
+          </span>
+        </div>
+        {status !== 'escalated' && !isGuest && (
+          <button
+            className="help-chat-escalate-trigger"
+            onClick={() => send('#Contact with admin')}
+            title="Type #Contact with admin to connect with support"
+            type="button"
           >
-            {message.role === 'admin' && <span className="ai-chat-role-label">Support</span>}
-            <p>{message.text}</p>
+            <i className="bi bi-headset" />
+            <span>Contact admin</span>
+          </button>
+        )}
+      </div>
+
+      {/* Messages Scroll Area */}
+      <div className="ai-chat-messages" role="log" aria-live="polite">
+        {messages.length === 0 && (
+          <div className="help-chat-welcome-box">
+            <div className="welcome-avatar-icon">
+              <i className="bi bi-stars" />
+            </div>
+            <strong>Welcome to BookWorm Help</strong>
+            <p>Ask anything about reading, finding books, or your account.</p>
+            <p className="welcome-hint">
+              <i className="bi bi-info-circle" /> Need a human? Type <code>#Contact with admin</code> anytime.
+            </p>
           </div>
-        ))}
-        {status === 'escalated' && <p className="help-chat-status">Waiting for an admin to reply...</p>}
+        )}
+
+        {messages.map((message, index) => {
+          const isUser = message.role === 'user'
+          const isAdmin = message.role === 'admin'
+          const isSystem = message.role === 'system'
+
+          return (
+            <div
+              className={`ai-chat-bubble ${
+                isUser
+                  ? 'ai-chat-bubble-user'
+                  : isSystem
+                  ? 'ai-chat-bubble-system'
+                  : isAdmin
+                  ? 'ai-chat-bubble-admin'
+                  : 'ai-chat-bubble-assistant'
+              }`}
+              key={message._id || index}
+            >
+              {!isUser && !isSystem && (
+                <span className="ai-chat-role-label">
+                  <i className={`bi ${isAdmin ? 'bi-person-badge-fill' : 'bi-robot'}`} />
+                  {isAdmin ? ' Support Admin' : ' BookWorm AI'}
+                </span>
+              )}
+
+              {isSystem ? (
+                <div className="system-notice-content">
+                  <i className="bi bi-shield-check" />
+                  <span>{message.text}</span>
+                </div>
+              ) : (
+                <p>{message.text}</p>
+              )}
+
+              <span className="ai-chat-timestamp">
+                {formatMessageTime(message.createdAt)}
+              </span>
+            </div>
+          )
+        })}
+
+        {/* Animated Typing Indicator */}
+        {sending && (
+          <div className="ai-chat-bubble ai-chat-bubble-assistant ai-typing-bubble" aria-label="BookWorm is typing...">
+            <span className="ai-chat-role-label">
+              <i className="bi bi-robot" /> BookWorm AI
+            </span>
+            <div className="typing-dots-wrap">
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </div>
+          </div>
+        )}
+
+        {status === 'escalated' && (
+          <div className="help-chat-escalated-alert">
+            <div className="escalated-pulse-icon">
+              <i className="bi bi-headset" />
+            </div>
+            <div>
+              <strong>Support Ticket Active</strong>
+              <p>An admin has been notified and will reply right here soon.</p>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
+      {/* Quick Action Suggestion Chips */}
+      {status !== 'escalated' && messages.length <= 4 && (
+        <div className="help-chat-chips-row" aria-label="Suggested questions">
+          {QUICK_ACTIONS.map((action, i) => (
+            <button
+              className="help-chat-action-chip"
+              disabled={sending}
+              key={i}
+              onClick={() => send(action.query)}
+              type="button"
+            >
+              <i className={`bi ${action.icon}`} />
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
+      {error && (
+        <p className="admin-validation-error">
+          <i className="bi bi-exclamation-circle" /> {error}
+        </p>
+      )}
+
+      {/* Input Row */}
       <form
         className="ai-chat-input-row"
         onSubmit={(event) => {
@@ -210,9 +331,21 @@ function HelpChatWidget() {
           send()
         }}
       >
-        <input onChange={(event) => setInput(event.target.value)} placeholder="Type a message..." type="text" value={input} />
-        <button className="primary-button" disabled={!input.trim() || sending} type="submit">
-          <i className="bi bi-send" />
+        <input
+          aria-label="Chat input"
+          disabled={sending}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder={status === 'escalated' ? 'Send a reply to support admin...' : 'Ask a question or #Contact with admin...'}
+          type="text"
+          value={input}
+        />
+        <button
+          aria-label="Send message"
+          className="primary-button help-chat-send-btn"
+          disabled={!input.trim() || sending}
+          type="submit"
+        >
+          <i className={sending ? 'bi bi-arrow-repeat spin' : 'bi bi-send-fill'} />
         </button>
       </form>
     </div>

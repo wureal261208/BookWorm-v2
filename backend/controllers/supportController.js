@@ -94,10 +94,14 @@ const sendMessage = asyncHandler(async (req, res) => {
     return success(res, 200, 'Message sent.', { status: conversation.status, conversationId: conversation._id, newMessages: [] });
   }
 
-  const userMessageCount = conversation.messages.filter((message) => message.role === 'user').length;
+  const isEscalationRequest = Boolean(req.body.escalate) ||
+    /^\s*#?\s*contact\s+(with\s+)?admin\b/i.test(text);
 
-  if (userMessageCount >= ESCALATION_THRESHOLD) {
-    const systemMessage = { role: 'system', text: "You're now connected with our support team - an admin will reply here soon." };
+  if (isEscalationRequest) {
+    const systemMessage = {
+      role: 'system',
+      text: "You have requested human support (#Contact with admin). You are now connected with our support team - an admin will reply here soon.",
+    };
     conversation.status = 'escalated';
     conversation.messages.push(systemMessage);
     await conversation.save();
@@ -150,6 +154,13 @@ const guestChat = asyncHandler(async (req, res) => {
 
   if (!messages.length) {
     return fail(res, 400, 'messages must include at least one message with content.');
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage && /^\s*#?\s*contact\s+(with\s+)?admin\b/i.test(lastMessage.content)) {
+    return success(res, 200, 'Guest support notice.', {
+      reply: 'To connect directly with our human support team, please log in or create a BookWorm account so our team can follow up with your ticket.',
+    });
   }
 
   try {
