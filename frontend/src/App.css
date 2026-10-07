@@ -5405,15 +5405,343 @@ progress {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-width: 84px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: var(--app-surface-soft);
+  background: var(--app-surface);
+  border: 1px solid var(--app-line);
   color: var(--app-accent);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.account-role-pill.role-admin {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #dc2626;
+}
+
+.account-role-pill.role-member {
+  background: rgba(22, 160, 154, 0.08);
+  border-color: rgba(22, 160, 154, 0.25);
+  color: var(--app-accent, #16a09a);
+}
+
+.reader-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-accent, #16a09a);
+}
+
+/* Quick Resume Card */
+.quick-resume-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quick-resume-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-line, #e2e0da);
+  border-radius: 8px;
+}
+
+.quick-resume-cover {
+  width: 64px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.quick-resume-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quick-resume-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--app-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-resume-author {
+  margin: 0;
+  font-size: 13px;
+  color: var(--app-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-resume-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.quick-resume-progress-bar {
+  flex: 1;
+  max-width: 140px;
+  height: 7px;
+  background: var(--app-line, #e2e0da);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.quick-resume-progress-fill {
+  height: 100%;
+  background: var(--app-accent, #16a09a);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.quick-resume-pct {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--app-accent, #16a09a);
+}
+
+.quick-resume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.quick-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.quick-resume-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--app-surface, #ffffff);
+  border: 1px dashed var(--app-line, #e2e0da);
+  border-radius: 8px;
+}
+
+.quick-resume-empty i {
+  font-size: 32px;
+  color: var(--app-accent, #16a09a);
+  opacity: 0.8;
+}
+
+.quick-resume-empty p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--app-muted);
+  max-width: 320px;
+}
+
+/* Reading Stats & Goal Card */
+.reading-stats-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+
+.reading-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.edit-goal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.reading-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-line, #e2e0da);
+  border-radius: 8px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.metric-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.metric-icon-box {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.metric-icon-box.metric-reading {
+  background: rgba(22, 160, 154, 0.1);
+  color: #16a09a;
+}
+
+.metric-icon-box.metric-want {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.metric-icon-box.metric-finished {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.metric-icon-box.metric-streak {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.metric-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-value {
+  font-size: 20px;
+  font-weight: 850;
+  color: var(--app-text);
+  line-height: 1.1;
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--app-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Reading Goal Box */
+.reading-goal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-line, #e2e0da);
+  border-radius: 8px;
+}
+
+.reading-goal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.goal-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.goal-title-wrap i {
+  color: var(--app-accent, #16a09a);
+}
+
+.goal-progress-text {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--app-accent, #16a09a);
+}
+
+.goal-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--app-line, #e2e0da);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--app-accent, #16a09a), #34d399);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.edit-goal-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--app-line, #e2e0da);
+}
+
+.edit-goal-form label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.edit-goal-form input {
+  width: 80px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 6px;
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.shelf-action-btn i {
+  font-size: 14px;
 }
 
 .account-overview-meta {
@@ -5494,6 +5822,10 @@ progress {
   .account-overview-meta {
     grid-template-columns: 1fr;
   }
+
+  .reading-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 560px) {
@@ -5512,6 +5844,23 @@ progress {
 
   .account-overview-main {
     align-items: flex-start;
+  }
+
+  .reading-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-resume-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .quick-resume-progress-wrap {
+    width: 100%;
+  }
+
+  .quick-resume-progress-bar {
+    max-width: 100%;
   }
 }
 
@@ -15908,4 +16257,25 @@ progress {
   .reader-search-drawer {
     padding: 6px 10px;
   }
+}
+
+/* Dark Theme Support for Profile Widgets */
+.app-theme-dark .quick-resume-content,
+.app-theme-dark .metric-item,
+.app-theme-dark .reading-goal-box,
+.app-theme-dark .quick-resume-empty {
+  background: var(--app-surface-soft, #1e1e1e);
+  border-color: var(--app-line, #333333);
+}
+
+.app-theme-dark .quick-resume-title,
+.app-theme-dark .metric-value,
+.app-theme-dark .goal-title-wrap strong {
+  color: var(--app-text, #f0ede6);
+}
+
+.app-theme-dark .edit-goal-form input {
+  background: var(--app-surface, #181818);
+  border-color: var(--app-line, #383838);
+  color: var(--app-text, #f0ede6);
 }

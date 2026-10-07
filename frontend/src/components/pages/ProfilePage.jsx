@@ -15,6 +15,7 @@ function ProfilePage({
   account,
   books = [],
   favorites = [],
+  history = [],
   shelf = [],
   onChangePassword,
   onDetail,
@@ -25,6 +26,7 @@ function ProfilePage({
   onUpdateShelfStatus,
   onRemoveShelfBook,
   progress = {},
+  readingDays = [],
   readerFontSize,
   readerTheme,
   setReaderFontSize,
@@ -45,7 +47,8 @@ function ProfilePage({
               <h2>Reading preferences</h2>
             </div>
             <button className="ghost-button" onClick={() => setShowPreferences(true)} type="button">
-              Update preferences
+              <i className="bi bi-sliders" />
+              <span>Update preferences</span>
             </button>
           </div>
         </section>
@@ -57,6 +60,8 @@ function ProfilePage({
         account={account}
         books={books}
         favorites={favorites}
+        history={history}
+        readingDays={readingDays}
         shelf={shelf}
         onChangePassword={onChangePassword}
         onDetail={onDetail}
@@ -82,7 +87,9 @@ function ProfileSettings({
   account,
   books = [],
   favorites = [],
+  history = [],
   shelf = [],
+  readingDays = [],
   onChangePassword,
   onDetail,
   onFavorite,
@@ -113,6 +120,19 @@ function ProfileSettings({
   const [localShelf, setLocalShelf] = useState(shelf)
   const [activeShelfTab, setActiveShelfTab] = useState('reading')
   const [fetchedShelfBooks, setFetchedShelfBooks] = useState({})
+
+  const accountKey = account?.id || account?.email || 'guest'
+  const goalStorageKey = `bookworm_reading_goal_${accountKey}`
+  const [readingGoal, setReadingGoal] = useState(() => {
+    try {
+      const saved = localStorage.getItem(goalStorageKey)
+      return saved ? Math.max(1, parseInt(saved, 10) || 10) : 10
+    } catch {
+      return 10
+    }
+  })
+  const [isEditingGoal, setIsEditingGoal] = useState(false)
+  const [goalInput, setGoalInput] = useState(readingGoal)
 
   useEffect(() => {
     setLocalShelf(shelf)
@@ -217,6 +237,85 @@ function ProfileSettings({
   const safeEmail = account?.email || 'No email linked yet'
   const safeMaskedEmail = safeEmail === 'No email linked yet' ? safeEmail : maskEmail(safeEmail)
   const safeAvatar = avatarPreview || account?.avatar || ''
+
+  const role = normalizeRole(account?.role)
+  const roleLabel = role === 'admin' ? 'Admin' : role === 'guest' ? 'Guest' : 'Member'
+
+  const readerRank = useMemo(() => {
+    const finishedCount = finishedList.length
+    if (finishedCount >= 15) {
+      return { title: 'Độc giả Uyên bác', icon: 'bi-mortarboard-fill', level: 'Level 4' }
+    }
+    if (finishedCount >= 5) {
+      return { title: 'Mọt sách Chăm chỉ', icon: 'bi-award-fill', level: 'Level 3' }
+    }
+    if (finishedCount >= 1) {
+      return { title: 'Bạn đọc Tích cực', icon: 'bi-bookmark-star-fill', level: 'Level 2' }
+    }
+    return { title: 'Khám phá viên Mới', icon: 'bi-compass-fill', level: 'Level 1' }
+  }, [finishedList.length])
+
+  const readingStreak = useMemo(() => {
+    if (!Array.isArray(readingDays) || readingDays.length === 0) return 0
+    const uniqueDays = Array.from(new Set(readingDays)).sort().reverse()
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+    const hasToday = uniqueDays.includes(todayStr)
+    const hasYesterday = uniqueDays.includes(yesterday)
+    if (!hasToday && !hasYesterday) return 0
+
+    let streak = 0
+    let cur = hasToday ? new Date() : new Date(Date.now() - 86400000)
+
+    for (let i = 0; i < 90; i += 1) {
+      const dStr = cur.toISOString().slice(0, 10)
+      if (uniqueDays.includes(dStr)) {
+        streak += 1
+        cur.setDate(cur.getDate() - 1)
+      } else {
+        break
+      }
+    }
+    return streak
+  }, [readingDays])
+
+  const resumeBookItem = useMemo(() => {
+    if (Array.isArray(history) && history.length > 0) {
+      for (const hId of history) {
+        const match = resolvedShelfBooks.find(
+          (item) => String(item.book?.id || item.book?._id) === String(hId)
+        )
+        if (match) {
+          const bId = match.book?.id || match.book?._id
+          const p = progress[bId] || 0
+          if (p > 0 && p < 100) return match
+        }
+      }
+    }
+    if (readingList.length > 0) return readingList[0]
+    const anyProgress = resolvedShelfBooks.find((item) => {
+      const bId = item.book?.id || item.book?._id
+      const p = progress[bId] || 0
+      return p > 0 && p < 100
+    })
+    return anyProgress || null
+  }, [history, resolvedShelfBooks, readingList, progress])
+
+  function handleSaveGoal(e) {
+    e.preventDefault()
+    const parsed = parseInt(goalInput, 10)
+    if (parsed && parsed > 0 && parsed <= 500) {
+      setReadingGoal(parsed)
+      try {
+        localStorage.setItem(goalStorageKey, String(parsed))
+      } catch {}
+      setIsEditingGoal(false)
+      onToast?.({ type: 'success', message: `Đã cập nhật mục tiêu đọc ${parsed} cuốn sách.` })
+    }
+  }
+
+  const goalPercentage = Math.min(100, Math.round((finishedList.length / (readingGoal || 1)) * 100))
 
   useEffect(() => {
     if (!settingsSuccess) return undefined
@@ -347,14 +446,17 @@ function ProfileSettings({
 
       <div className="settings-layout">
         <div className="account-settings-card account-overview-card">
-          <SettingsHeading icon="bi-person-badge" kicker="Account" title="Your profile" />
+          <SettingsHeading icon="bi-person-badge" kicker="Tài khoản" title="Hồ sơ thành viên" />
           <div className="account-overview">
             <div className="account-overview-main">
               <div className="account-overview-name">
                 <strong>{safeName}</strong>
                 <p>{safeMaskedEmail}</p>
               </div>
-              <span className="account-role-pill">{roleLabel}</span>
+              <span className={`account-role-pill role-${role || 'member'}`}>
+                <i className={role === 'admin' ? 'bi bi-shield-lock-fill' : 'bi bi-person-check-fill'} />
+                <span>{roleLabel}</span>
+              </span>
             </div>
             <div className="account-overview-meta">
               <div>
@@ -362,20 +464,190 @@ function ProfileSettings({
                 <strong>{safeMaskedEmail}</strong>
               </div>
               <div>
-                <span>Role</span>
+                <span>Vai trò</span>
                 <strong>{roleLabel}</strong>
               </div>
               <div>
-                <span>Account ID</span>
+                <span>Mã thành viên</span>
                 <strong>{account?.displayId || '—'}</strong>
               </div>
               <div>
-                <span>Status</span>
-                <strong>{account?.email ? 'Active' : 'Guest'}</strong>
+                <span>Hạng bạn đọc</span>
+                <strong className="reader-rank-badge">
+                  <i className={`bi ${readerRank.icon}`} />
+                  <span>{readerRank.title}</span>
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="account-settings-card quick-resume-card">
+          <SettingsHeading icon="bi-bookmark-check" kicker="Tiếp tục đọc" title="Sách đang đọc gần nhất" />
+          {resumeBookItem ? (
+            <div className="quick-resume-content">
+              <img
+                alt={resumeBookItem.book?.title || ''}
+                className="quick-resume-cover"
+                src={getCover(resumeBookItem.book)}
+              />
+              <div className="quick-resume-info">
+                <h4 className="quick-resume-title">{resumeBookItem.book?.title || 'Untitled'}</h4>
+                <p className="quick-resume-author">
+                  <i className="bi bi-pen" />
+                  <span>{getAuthor(resumeBookItem.book)}</span>
+                </p>
+                <div className="quick-resume-progress-wrap">
+                  <div className="quick-resume-progress-bar">
+                    <div
+                      className="quick-resume-progress-fill"
+                      style={{
+                        width: `${Math.min(100, Math.round(progress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0))}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="quick-resume-pct">
+                    {Math.round(progress[resumeBookItem.book?.id || resumeBookItem.book?._id] || 0)}% hoàn thành
+                  </span>
+                </div>
+                <div className="quick-resume-actions">
+                  <button
+                    className="primary-button quick-resume-btn"
+                    onClick={() => onRead?.(resumeBookItem.book)}
+                    type="button"
+                  >
+                    <i className="bi bi-play-circle-fill" />
+                    <span>Đọc tiếp ngay</span>
+                  </button>
+                  <button
+                    className="ghost-button quick-resume-btn"
+                    onClick={() => (onDetail ? onDetail(resumeBookItem.book) : onRead?.(resumeBookItem.book))}
+                    type="button"
+                  >
+                    <i className="bi bi-info-circle" />
+                    <span>Chi tiết</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="quick-resume-empty">
+              <i className="bi bi-journal-plus" />
+              <p>Chưa có sách nào đang đọc dở. Hãy chọn sách từ Kệ hoặc Trang chủ để bắt đầu!</p>
+              <button
+                className="ghost-button"
+                onClick={() => setActiveShelfTab('want_to_read')}
+                type="button"
+              >
+                <i className="bi bi-bookmark-plus" />
+                <span>Xem sách muốn đọc</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="account-settings-card reading-stats-card">
+          <div className="reading-stats-header">
+            <SettingsHeading icon="bi-graph-up-arrow" kicker="Thống kê" title="Hoạt động & Mục tiêu đọc" />
+            {!isEditingGoal && (
+              <button
+                className="ghost-button edit-goal-btn"
+                onClick={() => {
+                  setGoalInput(readingGoal)
+                  setIsEditingGoal(true)
+                }}
+                type="button"
+              >
+                <i className="bi bi-pencil-square" />
+                <span>Đổi mục tiêu</span>
+              </button>
+            )}
+          </div>
+
+          <div className="reading-metrics-grid">
+            <div className="metric-item">
+              <div className="metric-icon-box metric-reading">
+                <i className="bi bi-book-half" />
+              </div>
+              <div className="metric-text">
+                <span className="metric-value">{readingList.length}</span>
+                <span className="metric-label">Đang đọc</span>
+              </div>
+            </div>
+
+            <div className="metric-item">
+              <div className="metric-icon-box metric-want">
+                <i className="bi bi-bookmark-plus" />
+              </div>
+              <div className="metric-text">
+                <span className="metric-value">{wantToReadList.length}</span>
+                <span className="metric-label">Muốn đọc</span>
+              </div>
+            </div>
+
+            <div className="metric-item">
+              <div className="metric-icon-box metric-finished">
+                <i className="bi bi-check2-circle" />
+              </div>
+              <div className="metric-text">
+                <span className="metric-value">{finishedList.length}</span>
+                <span className="metric-label">Đã đọc xong</span>
+              </div>
+            </div>
+
+            <div className="metric-item">
+              <div className="metric-icon-box metric-streak">
+                <i className="bi bi-fire" />
+              </div>
+              <div className="metric-text">
+                <span className="metric-value">{readingStreak}</span>
+                <span className="metric-label">Ngày liên tiếp</span>
               </div>
             </div>
           </div>
 
+          <div className="reading-goal-box">
+            <div className="reading-goal-top">
+              <div className="goal-title-wrap">
+                <i className="bi bi-flag-fill" />
+                <strong>Mục tiêu đọc sách năm {new Date().getFullYear()}</strong>
+              </div>
+              <span className="goal-progress-text">
+                {finishedList.length} / {readingGoal} cuốn ({goalPercentage}%)
+              </span>
+            </div>
+
+            <div className="goal-progress-bar">
+              <div className="goal-progress-fill" style={{ width: `${goalPercentage}%` }} />
+            </div>
+
+            {isEditingGoal && (
+              <form className="edit-goal-form" onSubmit={handleSaveGoal}>
+                <label htmlFor="goal-input">Số cuốn muốn đọc trong năm:</label>
+                <input
+                  id="goal-input"
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={goalInput}
+                  onChange={(e) => setGoalInput(e.target.value)}
+                  autoFocus
+                />
+                <button className="primary-button btn-sm" type="submit">
+                  <i className="bi bi-check-lg" />
+                  <span>Lưu</span>
+                </button>
+                <button
+                  className="ghost-button btn-sm"
+                  type="button"
+                  onClick={() => setIsEditingGoal(false)}
+                >
+                  <i className="bi bi-x-lg" />
+                  <span>Hủy</span>
+                </button>
+              </form>
+            )}
+          </div>
         </div>
 
         <form className="account-settings-card profile-card-large" onSubmit={saveProfile}>
@@ -659,7 +931,8 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 onClick={() => onRead?.(book)}
                 type="button"
               >
-                {bookProgress > 0 && bookProgress < 100 ? 'Đọc tiếp' : status === 'finished' ? 'Đọc lại' : 'Đọc ngay'}
+                <i className={bookProgress > 0 && bookProgress < 100 ? 'bi bi-play-circle-fill' : status === 'finished' ? 'bi bi-arrow-repeat' : 'bi bi-book-half'} />
+                <span>{bookProgress > 0 && bookProgress < 100 ? 'Đọc tiếp' : status === 'finished' ? 'Đọc lại' : 'Đọc ngay'}</span>
               </button>
 
               <button
@@ -667,7 +940,8 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 onClick={() => (onDetail ? onDetail(book) : onRead?.(book))}
                 type="button"
               >
-                Chi tiết
+                <i className="bi bi-info-circle" />
+                <span>Chi tiết</span>
               </button>
 
               <select
@@ -683,10 +957,10 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 }}
                 value={status || 'want_to_read'}
               >
-                <option value="reading">📖 Đang đọc</option>
-                <option value="want_to_read">🔖 Muốn đọc</option>
-                <option value="finished">✅ Đã đọc xong</option>
-                <option value="remove">✕ Xóa khỏi kệ</option>
+                <option value="reading">Đang đọc</option>
+                <option value="want_to_read">Muốn đọc</option>
+                <option value="finished">Đã đọc xong</option>
+                <option value="remove">Xóa khỏi kệ</option>
               </select>
             </div>
           </li>
