@@ -1465,14 +1465,14 @@ function ContentReaderPage() {
             )}
           </div>
         </section>
-
-        {/* Comments Section (discrete in zen mode) */}
-        {!zenMode && (
-          <section style={{ marginTop: '48px' }}>
-            <ContentComments contentId={item._id || item.id || id} />
-          </section>
-        )}
       </main>
+
+      {/* Reader Comments (Dedicated spacious container on Laptop / Desktop, discrete in zen mode) */}
+      {!zenMode && (
+        <aside aria-label="Reader discussions" className="reader-comments-container">
+          <ContentComments contentId={item._id || item.id || id} />
+        </aside>
+      )}
 
       {/* Floating Bookmark Feedback Toast */}
       {toastMsg && (

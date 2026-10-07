@@ -150,6 +150,14 @@ function ContentComments({ contentId }) {
     }
   }
 
+  function handleInsertQuote() {
+    setText((prev) => (prev ? `${prev}\n> ` : '> '))
+  }
+
+  function handleInsertEmoji(emoji) {
+    setText((prev) => `${prev}${emoji} `)
+  }
+
   const visibleComments = showAll ? comments : comments.slice(0, PREVIEW_LIMIT)
   const isGuest = !auth.currentUser
 
@@ -192,6 +200,7 @@ function ContentComments({ contentId }) {
           </div>
           <textarea
             id="content-comment-input"
+            maxLength={1000}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -199,8 +208,8 @@ function ContentComments({ contentId }) {
                 submitComment()
               }
             }}
-            placeholder="Share your thoughts, perspectives, or favorite quotes about this title... (Ctrl+Enter to post)"
-            rows={3}
+            placeholder="Chia sẻ cảm nhận, góc nhìn hoặc trích dẫn tâm đắc của bạn về cuốn sách này... (Ctrl + Enter để đăng)"
+            rows={4}
             value={text}
           />
           {error && (
@@ -208,16 +217,52 @@ function ContentComments({ contentId }) {
               <i className="bi bi-x-circle" /> {error}
             </p>
           )}
+
+          <div className="comment-form-toolbar">
+            <div className="comment-tools-left">
+              <button
+                className="comment-tool-btn"
+                onClick={handleInsertQuote}
+                title="Thêm trích dẫn"
+                type="button"
+              >
+                <i className="bi bi-quote" /> Trích dẫn
+              </button>
+              <div aria-label="Biểu cảm nhanh" className="comment-quick-emojis">
+                {['📖', '⭐', '💡', '❤️', '👏'].map((emoji) => (
+                  <button
+                    className="comment-emoji-btn"
+                    key={emoji}
+                    onClick={() => handleInsertEmoji(emoji)}
+                    title={`Chèn ${emoji}`}
+                    type="button"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="comment-tools-right">
+              <span className={`comment-char-counter ${text.length > 900 ? 'near-limit' : ''}`}>
+                {text.length} / 1000
+              </span>
+            </div>
+          </div>
+
           <div className="comment-form-actions">
-            <small className="comment-shortcut-hint">Tip: Press Ctrl + Enter to submit</small>
-            <button className="primary-button" disabled={!text.trim() || posting} type="submit">
+            <small className="comment-shortcut-hint">
+              <i className="bi bi-keyboard" style={{ marginRight: '4px' }} />
+              Phím tắt: Ctrl + Enter (hoặc ⌘ + Enter) để đăng nhanh
+            </small>
+            <button className="primary-button comment-submit-btn" disabled={!text.trim() || posting} type="submit">
               {posting ? (
                 <>
-                  <span className="admin-spin-small" /> Posting...
+                  <span className="admin-spin-small" /> Đang đăng...
                 </>
               ) : (
                 <>
-                  <i className="bi bi-send-fill" /> Post comment
+                  <i className="bi bi-send-fill" /> Đăng bình luận
                 </>
               )}
             </button>
@@ -249,6 +294,7 @@ function ContentComments({ contentId }) {
                   <div className="comment-item-header">
                     <div className="comment-item-author-wrap">
                       <strong className="comment-item-author">{comment.author?.name || 'Reader'}</strong>
+                      {isAuthor && <span className="comment-you-badge">Bạn</span>}
                       <span className="comment-role-badge">
                         {formatRoleBadge(comment.author?.role)}
                       </span>
