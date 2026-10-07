@@ -10,6 +10,7 @@ function ContentReaderPage() {
   const { navigateTo } = useNavigation()
   const [searchParams] = useSearchParams()
   const id = searchParams.get('id')
+  const queryChapter = searchParams.get('chapter')
 
   const [item, setItem] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -99,9 +100,9 @@ function ContentReaderPage() {
     return () => clearTimeout(timer)
   }, [toastMsg])
 
-  // Restore saved chapter progress from MongoDB (signed-in user only)
+  // Restore saved chapter progress from MongoDB (signed-in user only, when not requesting explicit chapter)
   useEffect(() => {
-    if (!id || !auth.currentUser) {
+    if (!id || !auth.currentUser || queryChapter !== null) {
       setSavedResume(null)
       setShowResumeBanner(false)
       return undefined
@@ -159,6 +160,26 @@ function ContentReaderPage() {
       ignore = true
     }
   }, [id])
+
+  // Support chapter sync when MarginNotesReader generates virtualChapters
+  const handleChaptersGenerated = useCallback((generated) => {
+    setChapters((prev) => (prev.length === 0 ? generated : prev))
+  }, [])
+
+  // Jump to chapter from query params once chapters are available
+  useEffect(() => {
+    if (queryChapter === null || !chapters.length) return
+    const num = Number(queryChapter)
+    if (Number.isNaN(num)) return
+
+    let targetIdx = chapters.findIndex((c, i) => c.order === num || c.number === num || i === num)
+    if (targetIdx === -1 && num >= 0 && num < chapters.length) {
+      targetIdx = num
+    }
+    if (targetIdx >= 0) {
+      setActiveChapterIndex(targetIdx)
+    }
+  }, [queryChapter, chapters])
 
   // Engagement tracking: increment view count in MongoDB and sync UI immediately
   useEffect(() => {
@@ -1093,6 +1114,7 @@ function ContentReaderPage() {
             chapters={chapters}
             contentId={item._id || id}
             onChapterChange={setActiveChapterIndex}
+            onChaptersGenerated={handleChaptersGenerated}
             onParagraphsLoaded={handleParagraphsLoaded}
             textAlign={textAlign}
             ttsActiveIndex={isTtsActive ? chapterStartParagraphIndex + ttsLocalIndex : null}

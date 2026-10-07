@@ -182,7 +182,11 @@ function BookDetailPage({
     }
 
     if (currentBook.type === 'audiobook' || currentBook.source === 'LibriVox') {
-      onListen(currentBook)
+      if (onListen) {
+        onListen(currentBook, chapter)
+      } else {
+        onRead(currentBook)
+      }
     } else if (onChapter) {
       onChapter(currentBook, chapter)
     } else {

@@ -135,9 +135,6 @@ function HomePage({
   }, [isGuest])
 
   const newBooks = books.slice(0, 16)
-  const continueReading = isGuest
-    ? []
-    : books.filter((book) => (progress[book.id] || 0) > 0 && (progress[book.id] || 0) < 100).slice(0, 4)
   const savedBooksList = !isGuest && Array.isArray(favorites) && favorites.length > 0
     ? books.filter((book) => favorites.includes(book.id) || favorites.includes(book._id))
     : []
@@ -170,17 +167,20 @@ function HomePage({
         ))}
       </nav>
 
-      {/* Continue Reading / Listening (Recent active reads - Signed-in only) */}
+      {/* Continue Reading / Listening (Recent active reads from MongoDB - Signed-in only) */}
       {!isGuest && recentItems.length > 0 && (
         <section className="section-block">
           <div className="section-heading">
             <div>
-              <p className="mono-eyebrow">Pick up again</p>
+              <p className="mono-eyebrow">Pick up where you left off</p>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <i className="bi bi-book-half" style={{ color: 'var(--app-accent)' }} />
-                Continue reading
+                Continue reading & listening
               </h2>
             </div>
+            <button className="ghost-button" onClick={() => setPage?.('profile')} type="button">
+              View all history
+            </button>
           </div>
           <div className="home-recent-resume-grid">
             {recentItems.map((item) => (
@@ -188,10 +188,10 @@ function HomePage({
                 <img src={getCover(item)} alt="" className="resume-card-cover" loading="lazy" />
                 <div className="resume-card-info">
                   <span className="mono-eyebrow">
-                    {item.type === 'ebook' ? 'Ebook' : 'Audiobook'} · {item.percent}% read
+                    {item.type === 'ebook' ? 'Ebook' : 'Audiobook'} · {item.percent}% completed
                   </span>
                   <h4 title={item.title}>{item.title}</h4>
-                  <small>{item.author}</small>
+                  <small>{item.chapterTitle || item.author}</small>
                   <div className="resume-card-bar">
                     <div className="resume-card-fill" style={{ width: `${item.percent}%` }} />
                   </div>
@@ -199,7 +199,10 @@ function HomePage({
                 <button
                   type="button"
                   className="primary-button resume-card-btn"
-                  onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item.id}` })}
+                  onClick={() => {
+                    const chQuery = typeof item.chapterIndex === 'number' && item.chapterIndex > 0 ? `&chapter=${item.chapterIndex}` : ''
+                    navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item.id}${chQuery}` })
+                  }}
                 >
                   Resume <i className="bi bi-arrow-right" />
                 </button>
@@ -230,35 +233,6 @@ function HomePage({
             onDetail={onDetail}
             onFavorite={onFavorite}
             onRead={onRead}
-            viewCounts={viewCounts}
-            viewerCounts={viewerCounts}
-          />
-        </section>
-      )}
-
-      {/* Continue Reading shelf (User catalog books with progress - Signed-in only) */}
-      {!isGuest && continueReading.length > 0 && (
-        <section className="section-block">
-          <div className="section-heading">
-            <div>
-              <p className="mono-eyebrow">From your library</p>
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="bi bi-bookmark-check" style={{ color: 'var(--app-accent)' }} />
-                In-progress books
-              </h2>
-            </div>
-            <button className="ghost-button" onClick={() => setPage('profile')} type="button">
-              My progress
-            </button>
-          </div>
-          <BookGrid
-            books={continueReading}
-            favorites={favorites}
-            onDetail={onDetail}
-            onFavorite={onFavorite}
-            onRead={onRead}
-            progress={progress}
-            variant="read"
             viewCounts={viewCounts}
             viewerCounts={viewerCounts}
           />

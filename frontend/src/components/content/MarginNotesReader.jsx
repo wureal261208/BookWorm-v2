@@ -12,6 +12,7 @@ function MarginNotesReader({
   ttsActiveIndex = null,
   textAlign = 'justify',
   onParagraphsLoaded,
+  onChaptersGenerated,
 }) {
   const isGuest = !auth.currentUser
   const [paragraphs, setParagraphs] = useState([])
@@ -98,6 +99,12 @@ function MarginNotesReader({
     }
     return list
   }, [chapters, paragraphs])
+
+  useEffect(() => {
+    if ((!chapters || chapters.length === 0) && virtualChapters.length > 0 && onChaptersGenerated) {
+      onChaptersGenerated(virtualChapters)
+    }
+  }, [chapters, virtualChapters, onChaptersGenerated])
 
   const effectiveChapters = chapters.length > 0 ? chapters : virtualChapters
   const currentChapter = effectiveChapters[activeChapterIndex] || effectiveChapters[0]

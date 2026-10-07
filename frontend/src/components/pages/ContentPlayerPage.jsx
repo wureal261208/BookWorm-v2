@@ -25,6 +25,7 @@ function ContentPlayerPage() {
   const { navigateTo } = useNavigation()
   const [searchParams] = useSearchParams()
   const id = searchParams.get('id')
+  const queryChapter = searchParams.get('chapter')
 
   const [item, setItem] = useState(null)
   const [pageChapters, setPageChapters] = useState([])
@@ -60,9 +61,9 @@ function ContentPlayerPage() {
   const [savedResume, setSavedResume] = useState(null)
   const [showResumeBanner, setShowResumeBanner] = useState(false)
 
-  // Restore saved audio progress from MongoDB (authenticated user only)
+  // Restore saved audio progress from MongoDB (authenticated user only, when not jumping to explicit chapter)
   useEffect(() => {
-    if (!id || !auth.currentUser) {
+    if (!id || !auth.currentUser || queryChapter !== null) {
       setSavedResume(null)
       setShowResumeBanner(false)
       return undefined
@@ -156,10 +157,18 @@ function ContentPlayerPage() {
         const chList = Array.isArray(chaptersData?.chapters) ? chaptersData.chapters : []
         if (chList.length > 0) {
           setPageChapters(chList)
-          if (!isCurrentTrackLoaded) {
+          if (!isCurrentTrackLoaded || queryChapter !== null) {
             setItem((current) => {
               if (current) {
-                loadAudiobook(current, chList, 0, 0, false)
+                let targetIdx = 0
+                if (queryChapter !== null) {
+                  const num = Number(queryChapter)
+                  if (!Number.isNaN(num)) {
+                    const found = chList.findIndex((c, i) => c.order === num || i === num)
+                    if (found >= 0) targetIdx = found
+                  }
+                }
+                loadAudiobook(current, chList, targetIdx, 0, false)
               }
               return current
             })

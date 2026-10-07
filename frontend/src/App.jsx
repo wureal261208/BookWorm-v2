@@ -49,7 +49,6 @@ const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
 const RandomPage = lazy(() => import('./components/pages/RandomPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
-const ReaderPage = lazy(() => import('./components/pages/ReaderPage'))
 const WritePage = lazy(() => import('./components/pages/WritePage'))
 
 const emptyAuthForm = { name: '', email: '', password: '' }
@@ -87,7 +86,7 @@ const PAGE_PATHS = {
   random: '/random',
   write: '/write',
   detail: '/book',
-  reader: '/reader',
+  reader: '/read',
   profile: '/profile',
   requests: '/requests',
   admin: '/admin',
@@ -956,15 +955,16 @@ function App() {
     navigateTo('detail', { query: `id=${book._id || book.id}` })
   }
 
-  function openBook(book, startPage = null) {
+  function openBook(book, startPage = null, chapter = null) {
     const bookId = book?._id || book?.id
     setSelectedBook(book)
     const isAudio = book?.type === 'audiobook' || book?.category === 'Audiobook' || (book?.title && book?.title.toLowerCase().includes('(audiobook)'))
+    const chapterQuery = chapter !== null && chapter !== undefined ? `&chapter=${encodeURIComponent(chapter)}` : ''
     if (isAudio) {
-      navigateTo('listen', { query: `id=${bookId}` })
+      navigateTo('listen', { query: `id=${bookId}${chapterQuery}` })
     } else {
       setReaderStartPage(startPage)
-      navigateTo('read', { query: `id=${bookId}` })
+      navigateTo('read', { query: `id=${bookId}${chapterQuery}` })
     }
     if (account.role !== 'guest' && bookId) {
       setHistory((current) => [bookId, ...current.filter((id) => id !== bookId)].slice(0, 20))
@@ -973,12 +973,14 @@ function App() {
   }
 
   function openChapter(book, chapter) {
-    if (account.role === 'guest' && chapter.number > 3) {
+    const num = chapter?.order || chapter?.number || 1
+    if (account.role === 'guest' && num > 3) {
       setToast({ type: 'error', message: 'BookWorm membership is required to read beyond chapter 3.' })
       return
     }
 
-    openBook(book, chapter.startPage)
+    const chapterParam = chapter?.order ?? chapter?.number ?? chapter?.index ?? 0
+    openBook(book, chapter?.startPage, chapterParam)
   }
 
   function recordReadingDay() {
@@ -1301,9 +1303,10 @@ function App() {
             }
           }
         }}
-        onListen={(targetBook) => {
+        onListen={(targetBook, targetChapter) => {
           const b = targetBook || selectedBook
-          navigateTo('listen', { query: `id=${b?.pairedContent?.id || b?.audiobookId || b?._id || b?.id}` })
+          const ch = targetChapter ? `&chapter=${encodeURIComponent(targetChapter.order ?? targetChapter.number ?? targetChapter.index ?? 0)}` : ''
+          navigateTo('listen', { query: `id=${b?.pairedContent?.id || b?.audiobookId || b?._id || b?.id}${ch}` })
         }}
         viewCount={selectedBook ? viewCounts[selectedBook._id || selectedBook.id] || 0 : 0}
         viewCounts={viewCounts}
@@ -1311,29 +1314,7 @@ function App() {
         viewerCounts={getViewerCounts(bookReaders)}
       />
     ),
-    reader: (
-      <ReaderPage
-        key={`${selectedBook?.id || 'empty-reader'}-${readerStartPage || 'checkpoint'}`}
-        book={selectedBook}
-        account={account}
-        canPersistReaderState={account.role !== 'guest' && userDataReady}
-        checkpoints={checkpoints}
-        comments={comments[selectedBook?.id] || []}
-        favorites={favorites}
-        onBack={() => navigateTo('detail')}
-        onComment={addComment}
-        onFavorite={toggleFavorite}
-        onHome={() => navigateTo('home')}
-        onLoginRequired={goAuth}
-        readerFontSize={readerFontSize}
-        readerTheme={readerTheme}
-        startPage={readerStartPage}
-        setCheckpoints={setCheckpoints}
-        setProgress={setProgress}
-        setReaderFontSize={setReaderFontSize}
-        setReaderTheme={setReaderTheme}
-      />
-    ),
+    reader: <ContentReaderPage />,
     profile: account.role === 'guest' ? (
       <HomePage
         account={account}

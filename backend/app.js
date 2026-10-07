@@ -135,7 +135,7 @@ app.get('/api/health/db', async (req, res) => {
 
   return success(res, 200, 'Database diagnostic.', {
     mongoose: states[mongoose.connection.readyState] || 'unknown',
-    frontendUrlConfigured: allowedFrontendOrigin || '(not set - CORS is open to all origins)',
+    frontendUrlConfigured: rawFrontendUrls || '(not set - CORS is open to all origins)',
     envPresent: {
       MONGODB_URI: Boolean(process.env.MONGODB_URI),
       FIREBASE_SERVICE_ACCOUNT_JSON: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
