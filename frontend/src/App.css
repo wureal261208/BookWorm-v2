@@ -5615,6 +5615,42 @@ progress {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+.metric-item.metric-interactive-btn {
+  cursor: pointer;
+  border: 1px solid var(--app-line, #e2e0da);
+  font-family: inherit;
+  text-align: left;
+  position: relative;
+  width: 100%;
+}
+
+.metric-item.metric-interactive-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--app-accent, #16a09a);
+  box-shadow: 0 6px 18px rgba(22, 160, 154, 0.12);
+}
+
+.metric-item.metric-interactive-btn.active-shelf-metric {
+  border-color: var(--app-accent, #16a09a);
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 8%, var(--app-surface, #ffffff));
+  box-shadow: 0 4px 14px rgba(22, 160, 154, 0.14);
+}
+
+.metric-action-arrow {
+  margin-left: auto;
+  font-size: 20px;
+  color: var(--app-muted, #888880);
+  opacity: 0.5;
+  transition: transform 0.18s ease, opacity 0.18s ease, color 0.18s ease;
+}
+
+.metric-item.metric-interactive-btn:hover .metric-action-arrow,
+.metric-item.metric-interactive-btn.active-shelf-metric .metric-action-arrow {
+  opacity: 1;
+  color: var(--app-accent, #16a09a);
+  transform: translateX(3px);
+}
+
 .metric-icon-box {
   display: grid;
   place-items: center;
@@ -16326,4 +16362,13 @@ progress {
   background: var(--app-surface, #181818);
   border-color: var(--app-line, #383838);
   color: var(--app-text, #f0ede6);
+}
+
+.app-theme-dark .metric-item.metric-interactive-btn.active-shelf-metric {
+  background: rgba(22, 160, 154, 0.16);
+  border-color: var(--app-accent, #16a09a);
+}
+
+.app-theme-dark .metric-action-arrow {
+  color: #a3a39e;
 }

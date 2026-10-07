@@ -47,9 +47,9 @@ function ContentComments({ contentId, account, onComment }) {
   const [currentUserId, setCurrentUserId] = useState(null)
 
   const userAccount = account && account.role !== 'guest' ? account : null
-  const isGuest = !auth.currentUser && !userAccount
+  const isGuest = !auth?.currentUser && !userAccount
   const activeUserId = currentUserId || userAccount?.id || userAccount?._id
-  const activeUserName = auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || userAccount?.name || 'Reader'
+  const activeUserName = auth?.currentUser?.displayName || auth?.currentUser?.email?.split('@')[0] || userAccount?.name || 'Reader'
 
   // Edit comment state
   const [editingCommentId, setEditingCommentId] = useState(null)
@@ -58,7 +58,7 @@ function ContentComments({ contentId, account, onComment }) {
   const [editError, setEditError] = useState('')
 
   useEffect(() => {
-    if (auth.currentUser) {
+    if (auth?.currentUser) {
       publicApiFetch('/api/auth/me')
         .then((res) => {
           const userObj = res?.user || res?.data?.user
@@ -68,7 +68,7 @@ function ContentComments({ contentId, account, onComment }) {
     } else {
       setCurrentUserId(null)
     }
-  }, [auth.currentUser])
+  }, [auth?.currentUser?.uid, userAccount?.id])
 
   useEffect(() => {
     if (!contentId) {

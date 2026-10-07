@@ -220,6 +220,31 @@ const updateMyProgress = asyncHandler(async (req, res) => {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
+  // Auto-sync status to user's MongoDB shelf
+  try {
+    let shelf = Array.isArray(req.user.shelvedBooks) ? [...req.user.shelvedBooks] : [];
+    const existingIdx = shelf.findIndex((s) => String(s.bookId) === String(contentId));
+    if (update.percent >= 100) {
+      if (existingIdx >= 0) {
+        shelf[existingIdx] = { ...shelf[existingIdx], status: 'finished', updatedAt: new Date() };
+      } else {
+        shelf.push({ bookId: String(contentId), status: 'finished', updatedAt: new Date() });
+      }
+      await User.findByIdAndUpdate(req.user._id, {
+        $set: { shelvedBooks: shelf },
+        $addToSet: { savedBooks: String(contentId) },
+      });
+      req.user.shelvedBooks = shelf;
+    } else if (update.percent > 0 && existingIdx < 0) {
+      shelf.push({ bookId: String(contentId), status: 'reading', updatedAt: new Date() });
+      await User.findByIdAndUpdate(req.user._id, {
+        $set: { shelvedBooks: shelf },
+        $addToSet: { savedBooks: String(contentId) },
+      });
+      req.user.shelvedBooks = shelf;
+    }
+  } catch (_) {}
+
   return success(res, 200, 'Progress updated.', { progress: item });
 });
 
@@ -267,6 +292,7 @@ const getMyShelf = asyncHandler(async (req, res) => {
   return success(res, 200, 'Shelf retrieved.', {
     shelf: req.user.shelvedBooks || [],
     favorites: req.user.savedBooks || [],
+    readingGoal: req.user.readingGoal || 10,
   });
 });
 
@@ -302,6 +328,7 @@ const updateShelfStatus = asyncHandler(async (req, res) => {
   return success(res, 200, 'Book shelf status updated.', {
     shelf: req.user.shelvedBooks,
     favorites: req.user.savedBooks,
+    readingGoal: req.user.readingGoal || 10,
   });
 });
 
@@ -326,6 +353,23 @@ const removeShelfBook = asyncHandler(async (req, res) => {
   return success(res, 200, 'Book removed from shelf.', {
     shelf: req.user.shelvedBooks,
     favorites: req.user.savedBooks,
+    readingGoal: req.user.readingGoal || 10,
+  });
+});
+
+// @route PATCH /api/users/me/goal
+// @desc  Updates user annual reading goal in MongoDB
+const updateReadingGoal = asyncHandler(async (req, res) => {
+  const goal = parseInt(req.body.goal ?? req.body.readingGoal, 10);
+  if (!goal || goal < 1 || goal > 500) {
+    return fail(res, 400, 'Reading goal must be a number between 1 and 500.');
+  }
+
+  req.user.readingGoal = goal;
+  await req.user.save();
+
+  return success(res, 200, 'Reading goal updated successfully.', {
+    readingGoal: req.user.readingGoal,
   });
 });
 
@@ -341,4 +385,5 @@ module.exports = {
   getMyShelf,
   updateShelfStatus,
   removeShelfBook,
+  updateReadingGoal,
 };

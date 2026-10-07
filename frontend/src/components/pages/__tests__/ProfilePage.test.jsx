@@ -145,4 +145,25 @@ describe('ProfilePage', () => {
     fireEvent.click(writeBtn)
     expect(onNavigate).toHaveBeenCalledWith('write')
   })
+
+  test('clicking an interactive metric button switches the active shelf tab', () => {
+    render(
+      <ProfilePage
+        account={mockAccount}
+        books={mockBooks}
+        shelf={[
+          { bookId: 'book-1', status: 'reading' },
+          { bookId: 'book-2', status: 'finished' },
+        ]}
+        progress={{ 'book-1': 45, 'book-2': 100 }}
+      />
+    )
+
+    const finishedMetricBtn = screen.getByRole('button', { name: /Xem danh mục Đã đọc xong trong Kệ sách/i })
+    expect(finishedMetricBtn).toBeInTheDocument()
+    fireEvent.click(finishedMetricBtn)
+
+    const finishedTab = screen.getByRole('tab', { name: /Đã đọc xong/i })
+    expect(finishedTab).toHaveAttribute('aria-selected', 'true')
+  })
 })

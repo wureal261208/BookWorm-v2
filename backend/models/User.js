@@ -59,6 +59,8 @@ const UserSchema = new mongoose.Schema(
     // counts for something even if they never filled in the onboarding
     // step, and vice versa.
     categoryEngagement: { type: Map, of: Number, default: {} },
+    // Reading goal (number of books to read this year)
+    readingGoal: { type: Number, default: 10, min: 1, max: 500 },
     // Array of book/content IDs saved (bookmarked) by this user
     savedBooks: { type: [String], default: [] },
     // Shelved books with status ('reading', 'want_to_read', 'finished')

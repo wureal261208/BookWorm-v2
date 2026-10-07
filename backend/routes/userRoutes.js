@@ -11,6 +11,7 @@ const {
   getMyShelf,
   updateShelfStatus,
   removeShelfBook,
+  updateReadingGoal,
 } = require('../controllers/userController');
 const { getMe, updateMyTheme, updateMyPreferences, recordCategoryEngagement } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
@@ -24,6 +25,7 @@ router.get('/me', getMe);
 router.patch('/me/theme', updateMyTheme);
 router.patch('/me/preferences', updateMyPreferences);
 router.post('/me/engagement', recordCategoryEngagement);
+router.patch('/me/goal', updateReadingGoal);
 
 // Per-user reading & listening progress in MongoDB
 router.get('/me/progress', getMyProgress);

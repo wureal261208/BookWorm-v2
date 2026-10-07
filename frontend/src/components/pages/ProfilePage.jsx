@@ -130,6 +130,7 @@ function ProfileSettings({
   const accountKey = account?.id || account?.email || 'guest'
   const goalStorageKey = `bookworm_reading_goal_${accountKey}`
   const [readingGoal, setReadingGoal] = useState(() => {
+    if (account?.readingGoal && Number(account.readingGoal) > 0) return Number(account.readingGoal)
     try {
       const saved = localStorage.getItem(goalStorageKey)
       return saved ? Math.max(1, parseInt(saved, 10) || 10) : 10
@@ -195,6 +196,9 @@ function ProfileSettings({
       .then((data) => {
         if (!ignore && Array.isArray(data?.shelf)) {
           setLocalShelf(data.shelf)
+        }
+        if (!ignore && data?.readingGoal) {
+          setReadingGoal(Number(data.readingGoal))
         }
       })
       .catch(() => {})
@@ -352,7 +356,7 @@ function ProfileSettings({
     return anyProgress || null
   }, [history, resolvedShelfBooks, readingList, effectiveProgress])
 
-  function handleSaveGoal(e) {
+  async function handleSaveGoal(e) {
     e.preventDefault()
     const parsed = parseInt(goalInput, 10)
     if (parsed && parsed > 0 && parsed <= 500) {
@@ -361,6 +365,14 @@ function ProfileSettings({
         localStorage.setItem(goalStorageKey, String(parsed))
       } catch {}
       setIsEditingGoal(false)
+      if (account && account.role !== 'guest') {
+        try {
+          await apiFetch('/api/users/me/goal', {
+            method: 'PATCH',
+            body: { goal: parsed },
+          })
+        } catch (_) {}
+      }
       onToast?.({ type: 'success', message: `Đã cập nhật mục tiêu đọc ${parsed} cuốn sách.` })
     }
   }
@@ -615,7 +627,19 @@ function ProfileSettings({
           </div>
 
           <div className="reading-metrics-grid">
-            <div className="metric-item">
+            <button
+              type="button"
+              aria-label="Xem danh mục Đang đọc trong Kệ sách"
+              className={`metric-item metric-interactive-btn ${activeShelfTab === 'reading' ? 'active-shelf-metric' : ''}`}
+              onClick={() => {
+                setActiveShelfTab('reading')
+                const el = document.getElementById('personal-shelf-card')
+                if (typeof el?.scrollIntoView === 'function') {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+              title="Xem danh mục Đang đọc trong Kệ sách"
+            >
               <div className="metric-icon-box metric-reading">
                 <i className="bi bi-book-half" />
               </div>
@@ -623,9 +647,22 @@ function ProfileSettings({
                 <span className="metric-value">{readingList.length}</span>
                 <span className="metric-label">Đang đọc</span>
               </div>
-            </div>
+              <i className="bi bi-arrow-right-short metric-action-arrow" />
+            </button>
 
-            <div className="metric-item">
+            <button
+              type="button"
+              aria-label="Xem danh mục Muốn đọc trong Kệ sách"
+              className={`metric-item metric-interactive-btn ${activeShelfTab === 'want_to_read' ? 'active-shelf-metric' : ''}`}
+              onClick={() => {
+                setActiveShelfTab('want_to_read')
+                const el = document.getElementById('personal-shelf-card')
+                if (typeof el?.scrollIntoView === 'function') {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+              title="Xem danh mục Muốn đọc trong Kệ sách"
+            >
               <div className="metric-icon-box metric-want">
                 <i className="bi bi-bookmark-plus" />
               </div>
@@ -633,9 +670,22 @@ function ProfileSettings({
                 <span className="metric-value">{wantToReadList.length}</span>
                 <span className="metric-label">Muốn đọc</span>
               </div>
-            </div>
+              <i className="bi bi-arrow-right-short metric-action-arrow" />
+            </button>
 
-            <div className="metric-item">
+            <button
+              type="button"
+              aria-label="Xem danh mục Đã đọc xong trong Kệ sách"
+              className={`metric-item metric-interactive-btn ${activeShelfTab === 'finished' ? 'active-shelf-metric' : ''}`}
+              onClick={() => {
+                setActiveShelfTab('finished')
+                const el = document.getElementById('personal-shelf-card')
+                if (typeof el?.scrollIntoView === 'function') {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+              title="Xem danh mục Đã đọc xong trong Kệ sách"
+            >
               <div className="metric-icon-box metric-finished">
                 <i className="bi bi-check2-circle" />
               </div>
@@ -643,7 +693,8 @@ function ProfileSettings({
                 <span className="metric-value">{finishedList.length}</span>
                 <span className="metric-label">Đã đọc xong</span>
               </div>
-            </div>
+              <i className="bi bi-arrow-right-short metric-action-arrow" />
+            </button>
 
             <div className="metric-item">
               <div className="metric-icon-box metric-streak">
@@ -733,7 +784,7 @@ function ProfileSettings({
           {settingsSuccess && <p className="settings-success"><i className="bi bi-check-circle" /> {settingsSuccess}</p>}
         </form>
 
-        <div className="account-settings-card profile-shelf-card">
+        <div className="account-settings-card profile-shelf-card" id="personal-shelf-card">
           <SettingsHeading icon="bi-bookshelf" kicker="Tủ sách của tôi" title="Kệ sách cá nhân" />
 
           <div className="shelf-tab-nav" role="tablist" aria-label="Phân loại kệ sách">

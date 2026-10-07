@@ -13,7 +13,8 @@ function DetailRecommendations({
   viewerCounts = {},
   isBottomSection = false,
 }) {
-  const displayCategory = category ? category.replace(/Browsing:\s*/i, '').trim() : ''
+  const rawCat = Array.isArray(category) ? (category[0] || '') : (category || '')
+  const displayCategory = typeof rawCat === 'string' ? rawCat.replace(/Browsing:\s*/i, '').trim() : String(rawCat || '').trim()
 
   return (
     <section className={`section-block recommendations-section ${isBottomSection ? 'detail-bottom-recommendations' : ''}`}>

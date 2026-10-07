@@ -86,6 +86,12 @@ function BookDetailPage({
   }, [queryId, book])
 
   const currentBook = book || fetchedBook
+  const currentCategory = currentBook
+    ? (currentBook.category || (Array.isArray(currentBook.categories) && currentBook.categories[0]) || getCategory(currentBook) || 'Classic')
+    : 'Classic'
+  const isAudio = currentBook
+    ? (currentBook.type === 'audiobook' || currentBook.source === 'LibriVox' || currentBook.category === 'Audiobook')
+    : false
 
   // Fetch chapters for ebooks or audiobooks if they don't have explicit chapters
   useEffect(() => {
@@ -127,42 +133,6 @@ function BookDetailPage({
       ignore = true
     }
   }, [currentBook, queryId])
-
-  if (loading) {
-    return (
-      <section className="detail-page" aria-busy="true">
-        <DetailSkeleton />
-      </section>
-    )
-  }
-
-  if (!currentBook) {
-    return (
-      <div className="empty-state">
-        <p>{error || 'Select a book first.'}</p>
-        <button className="primary-button" onClick={onHome || onBack} type="button">Go home</button>
-      </div>
-    )
-  }
-
-  const baseReads = typeof currentBook.views === 'number' && currentBook.views > 0
-    ? currentBook.views
-    : (currentBook.download_count || currentBook.downloadCount || 0)
-  const totalReads = baseReads + (Number(viewCount) || 0)
-  const totalPages = getTotalPages(currentBook)
-  const detailChapters = fetchedChapters.length > 0
-    ? fetchedChapters
-    : getBookChapters(currentBook, totalPages)
-  const totalChapters = detailChapters.length
-  const hasChapters = fetchedChapters.length > 0 || hasExplicitChapters(currentBook)
-  const effectiveDetailTab = !hasChapters && activeDetailTab === 'chapters' ? 'comments' : activeDetailTab
-  const language = currentBook.languages?.join(', ').toUpperCase() || currentBook.language?.toUpperCase() || 'EN'
-  const readingTime = Math.max(1, Math.round(totalPages * 2.2))
-  const checkpointKey = getCheckpointKey(account, currentBook)
-  const checkpoint = account?.role === 'guest' ? null : checkpoints[checkpointKey]
-  const currentId = currentBook.id || currentBook._id
-  const currentCategory = currentBook.category || (Array.isArray(currentBook.categories) && currentBook.categories[0]) || getCategory(currentBook) || 'Classic'
-  const isAudio = currentBook.type === 'audiobook' || currentBook.source === 'LibriVox' || currentBook.category === 'Audiobook'
 
   useEffect(() => {
     if (!currentBook) return
@@ -218,9 +188,10 @@ function BookDetailPage({
   }, [currentBook?._id, currentBook?.id, currentCategory, isAudio])
 
   const recommendations = useMemo(() => {
+    if (!currentBook) return []
     const pool = [...relatedBooks]
     const seen = new Set(pool.map((b) => String(b._id || b.id)))
-    const currentIdStr = String(currentBook?._id || currentBook?.id || '')
+    const currentIdStr = String(currentBook._id || currentBook.id || '')
     const catLower = String(currentCategory).toLowerCase()
 
     ;(books || []).forEach((b) => {
@@ -243,6 +214,42 @@ function BookDetailPage({
       })
       .slice(0, 8)
   }, [relatedBooks, books, currentBook, currentCategory])
+
+  if (loading) {
+    return (
+      <section className="detail-page" aria-busy="true">
+        <DetailSkeleton />
+      </section>
+    )
+  }
+
+  if (!currentBook) {
+    return (
+      <div className="empty-state">
+        <p>{error || 'Select a book first.'}</p>
+        <button className="primary-button" onClick={onHome || onBack} type="button">Go home</button>
+      </div>
+    )
+  }
+
+  const baseReads = typeof currentBook.views === 'number' && currentBook.views > 0
+    ? currentBook.views
+    : (currentBook.download_count || currentBook.downloadCount || 0)
+  const totalReads = baseReads + (Number(viewCount) || 0)
+  const totalPages = getTotalPages(currentBook)
+  const detailChapters = fetchedChapters.length > 0
+    ? fetchedChapters
+    : getBookChapters(currentBook, totalPages)
+  const totalChapters = detailChapters.length
+  const hasChapters = fetchedChapters.length > 0 || hasExplicitChapters(currentBook)
+  const effectiveDetailTab = !hasChapters && activeDetailTab === 'chapters' ? 'comments' : activeDetailTab
+  const language = Array.isArray(currentBook.languages)
+    ? currentBook.languages.join(', ').toUpperCase()
+    : (currentBook.language?.toUpperCase() || 'EN')
+  const readingTime = Math.max(1, Math.round(totalPages * 2.2))
+  const checkpointKey = getCheckpointKey(account, currentBook)
+  const checkpoint = account?.role === 'guest' ? null : checkpoints[checkpointKey]
+  const currentId = currentBook.id || currentBook._id
 
   const handleSaveBook = () => {
     if (account?.role === 'guest') {
@@ -386,7 +393,7 @@ function BookDetailPage({
 
 function getCheckpointKey(account, book) {
   const accountKey = account?.role === 'guest' ? 'guest' : account?.id || account?.email || 'user'
-  return `${accountKey}:${book.id}`
+  return `${accountKey}:${book?.id || book?._id || 'unknown'}`
 }
 
 function DetailSkeleton() {

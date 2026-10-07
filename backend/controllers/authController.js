@@ -17,6 +17,8 @@ function sanitizeUser(user) {
     preferredCategories: user.preferredCategories || [],
     hasSetPreferences: Boolean(user.hasSetPreferences),
     savedBooks: user.savedBooks || [],
+    shelvedBooks: user.shelvedBooks || [],
+    readingGoal: user.readingGoal || 10,
   };
 }
 
