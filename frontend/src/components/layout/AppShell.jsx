@@ -678,11 +678,14 @@ function ChatWidget({ isPlayerVisible = false }) {
   }, [])
 
   return (
-    <div className={`chat-widget ${isPlayerVisible ? 'docked-above-player' : ''}`}>
+    <div className={`chat-widget ${isPlayerVisible ? 'docked-above-player' : ''} ${isOpen ? 'chat-widget-open' : ''}`}>
       {isOpen && (
-        <div className="chat-widget-panel" role="dialog" aria-label="Chat">
+        <div className="chat-widget-panel" role="dialog" aria-label="BookWorm Help Chat">
           <div className="chat-widget-panel-header">
-            <strong>BookWorm Help</strong>
+            <div className="chat-widget-panel-header-title">
+              <i className="bi bi-chat-heart-fill" />
+              <strong>BookWorm Help</strong>
+            </div>
             <button aria-label="Close chat" onClick={() => setIsOpen(false)} type="button">
               <i className="bi bi-x-lg" />
             </button>
@@ -693,12 +696,13 @@ function ChatWidget({ isPlayerVisible = false }) {
         </div>
       )}
       <button
-        aria-label="Chat with BookWorm"
-        className="chat-widget-bubble"
+        aria-label={isOpen ? 'Close BookWorm Help' : 'Open BookWorm Help'}
+        className={`chat-widget-bubble ${isOpen ? 'is-open' : ''}`}
         onClick={() => setIsOpen((value) => !value)}
         type="button"
       >
         <i className={`bi ${isOpen ? 'bi-x-lg' : 'bi-chat-dots-fill'}`} />
+        <span className="chat-widget-bubble-label">{isOpen ? 'Close' : 'Help'}</span>
       </button>
     </div>
   )
