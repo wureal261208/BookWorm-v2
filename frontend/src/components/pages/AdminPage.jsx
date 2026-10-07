@@ -2205,7 +2205,7 @@ function SupportInboxPanel({ onCountChange, onToast }) {
         ))}
       </div>
 
-      <div className="support-inbox-layout">
+      <div className={`support-inbox-layout ${activeId ? 'has-active-chat' : ''}`}>
         <section className="admin-table support-inbox-list">
           {loading ? (
             <p>Loading...</p>
@@ -2245,6 +2245,16 @@ function SupportInboxPanel({ onCountChange, onToast }) {
           ) : (
             <>
               <div className="support-inbox-header">
+                <button
+                  className="ghost-button support-back-to-list-btn"
+                  onClick={() => {
+                    setActiveId(null)
+                    setDetail(null)
+                  }}
+                  type="button"
+                >
+                  <i className="bi bi-arrow-left" /> Back
+                </button>
                 <div className="support-inbox-customer-meta">
                   <div className="support-customer-avatar">
                     <i className="bi bi-person-circle" />

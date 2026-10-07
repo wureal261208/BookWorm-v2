@@ -3800,17 +3800,19 @@ progress {
 }
 
 .detail-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
   gap: 8px;
   margin-top: 24px;
   padding: 6px;
   border: 1px solid var(--app-line);
   border-radius: 8px;
   background: var(--app-surface);
+  overflow-x: auto;
 }
 
 .detail-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3821,6 +3823,7 @@ progress {
   background: transparent;
   color: var(--app-muted);
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .detail-tabs button.active,
@@ -11199,16 +11202,72 @@ progress {
   color: #94a3b8;
 }
 
+.support-back-to-list-btn {
+  display: none;
+}
+
 @media (max-width: 820px) {
   .support-inbox-layout {
     grid-template-columns: 1fr;
   }
-  .support-inbox-list {
-    max-height: 240px;
-  }
   .support-inbox-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .support-back-to-list-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: var(--app-surface-soft, #f1f5f9);
+    border: 1px solid var(--app-line, #cbd5e1);
+  }
+
+  .support-inbox-layout.has-active-chat .support-inbox-list {
+    display: none;
+  }
+
+  .support-inbox-layout:not(.has-active-chat) .support-inbox-detail {
+    display: none;
+  }
+
+  .support-inbox-list {
+    max-height: 480px;
+  }
+
+  .support-inbox-messages {
+    max-height: 52vh;
+    padding: 10px;
+  }
+
+  .support-bubble-user,
+  .support-bubble-admin,
+  .support-bubble-ai {
+    max-width: 92% !important;
+  }
+
+  .support-inbox-reply-bar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .support-inbox-reply-input {
+    height: 38px;
+    font-size: 0.88rem;
+    padding: 0 10px;
+  }
+
+  .support-inbox-send-btn {
+    height: 38px;
+    padding: 0 14px;
+    font-size: 0.84rem;
   }
 }
 
@@ -11358,8 +11417,14 @@ progress {
   }
 
   .chat-widget-panel {
-    width: calc(100vw - 24px);
-    right: -8px;
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 76px !important;
+    width: auto !important;
+    max-width: calc(100vw - 20px) !important;
+    height: min(500px, calc(100vh - 100px)) !important;
+    border-radius: 12px !important;
   }
 
   .support-inbox-layout {
@@ -17026,6 +17091,35 @@ progress {
   }
   .reader-search-drawer {
     padding: 6px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .comment-form {
+    padding: 14px 12px !important;
+    gap: 10px !important;
+  }
+  .comment-form-toolbar {
+    gap: 6px;
+  }
+  .comment-tool-btn {
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+  .comment-shortcut-hint {
+    display: none;
+  }
+  .comment-submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .detail-tabs button {
+    font-size: 12px;
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .detail-tabs button i {
+    font-size: 12px;
   }
 }
 

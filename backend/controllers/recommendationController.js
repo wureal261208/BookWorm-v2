@@ -38,7 +38,7 @@ const askAi = asyncHandler(async (req, res) => {
       ...librivox.books.slice(0, 5).map((item) => ({ type: 'audiobook', title: item.title, author: item.authors?.map((author) => `${author.first_name || ''} ${author.last_name || ''}`.trim()).join(', ') || 'Unknown', description: item.description || '', categories: [], language: item.language || 'en', cover_image: '', source: 'LibriVox', files: [] })),
     ];
   }
-  const defaultAnswer = fallback ? 'Mình chưa tìm thấy sách phù hợp trong thư viện hiện có, nên đã tìm thêm từ Project Gutenberg và LibriVox.' : 'Mình tìm được các sách phù hợp nhất trong thư viện BookWorm.';
+  const defaultAnswer = fallback ? 'We could not find matching books in the local library, so we fetched additional recommendations from Project Gutenberg and LibriVox.' : 'Here are the best matching books from the BookWorm library.';
   let answer = defaultAnswer;
   try { answer = await generateRecommendationReply(question, books) || defaultAnswer; } catch (error) { console.warn(`AI recommendation unavailable: ${error.message}`); }
   return success(res, 200, answer, { answer, books, fallbackSource: fallback ? ['Gutenberg', 'LibriVox'] : null });
