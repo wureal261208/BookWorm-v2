@@ -11,6 +11,7 @@ const { generateBookMetadataSuggestion, generateBookSummary, OpenRouterConfigErr
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const maskEmail = require('../utils/maskEmail');
 const escapeRegExp = require('../utils/escapeRegExp');
+const { sendBookApprovalEmail, sendBookRejectionEmail } = require('../utils/emailTemplates');
 
 // Broadcasts a "new book" notification to every customer. Only ever called
 // right after a book's status actually becomes 'published' - never for
@@ -408,6 +409,40 @@ const updateBook = asyncHandler(async (req, res) => {
   // edit to a book that was already published, or that isn't published now.
   if (!wasPublished && book.status === 'published') {
     await notifyBookPublished(book, req.user._id);
+
+    // If submitted by an author, dispatch an approval email
+    if (book.createdBy) {
+      User.findById(book.createdBy)
+        .select('name email')
+        .then((authorUser) => {
+          if (authorUser?.email) {
+            sendBookApprovalEmail({
+              to: authorUser.email,
+              authorName: authorUser.name || book.author || 'Author',
+              bookTitle: book.title,
+              bookId: book._id,
+            }).catch((err) => console.warn('Could not dispatch book approval email:', err.message));
+          }
+        })
+        .catch(() => {});
+    }
+  } else if (wasPublished && (book.status === 'hidden' || book.status === 'draft')) {
+    // If unpublished or reverted to draft/hidden, dispatch rejection/revision notice
+    if (book.createdBy) {
+      User.findById(book.createdBy)
+        .select('name email')
+        .then((authorUser) => {
+          if (authorUser?.email) {
+            sendBookRejectionEmail({
+              to: authorUser.email,
+              authorName: authorUser.name || book.author || 'Author',
+              bookTitle: book.title,
+              reason: req.body.reason || 'Book has been set to draft or hidden for editorial review.',
+            }).catch((err) => console.warn('Could not dispatch book rejection email:', err.message));
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   return success(res, 200, 'Book updated successfully.', { book });

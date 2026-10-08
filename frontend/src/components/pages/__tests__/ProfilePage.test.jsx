@@ -166,4 +166,29 @@ describe('ProfilePage', () => {
     const finishedTab = screen.getByRole('tab', { name: /Finished/i })
     expect(finishedTab).toHaveAttribute('aria-selected', 'true')
   })
+
+  test('renders account security card and triggers email password reset', async () => {
+    const onForgotPassword = vi.fn().mockResolvedValue()
+    const onToast = vi.fn()
+
+    render(
+      <ProfilePage
+        account={mockAccount}
+        books={mockBooks}
+        shelf={[]}
+        progress={{}}
+        onForgotPassword={onForgotPassword}
+        onToast={onToast}
+      />
+    )
+
+    expect(screen.getByText('Password & protection')).toBeInTheDocument()
+    expect(screen.getByText('Send password reset link')).toBeInTheDocument()
+
+    const sendResetBtn = screen.getByRole('button', { name: /Send reset link/i })
+    expect(sendResetBtn).toBeInTheDocument()
+    fireEvent.click(sendResetBtn)
+
+    expect(onForgotPassword).toHaveBeenCalledWith('alex@example.com')
+  })
 })

@@ -1,6 +1,7 @@
 const Content = require('../models/Content');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
+const { sendBookApprovalEmail, sendBookRejectionEmail } = require('../utils/emailTemplates');
 
 const VALID_STATUSES = ['draft', 'published', 'hidden'];
 
@@ -50,15 +51,38 @@ const getContentDetail = asyncHandler(async (req, res) => {
 // draft/published/hidden already covers both "not reviewed yet" and
 // "reviewed and taken down".
 const updateContentStatus = asyncHandler(async (req, res) => {
-  const { status } = req.body;
+  const { status, reason } = req.body;
   if (!VALID_STATUSES.includes(status)) {
     return fail(res, 400, `status must be one of: ${VALID_STATUSES.join(', ')}`);
   }
 
-  const item = await Content.findByIdAndUpdate(req.params.id, { status }, { new: true });
-  if (!item) return fail(res, 404, 'Content not found.');
+  const existing = await Content.findById(req.params.id).populate('uploadedBy', 'name email');
+  if (!existing) return fail(res, 404, 'Content not found.');
 
-  return success(res, 200, `Status updated to ${status}.`, item);
+  const oldStatus = existing.status;
+  existing.status = status;
+  await existing.save();
+
+  // If item was submitted by a user and status transitioned, dispatch email notification
+  if (existing.uploadedBy?.email && oldStatus !== status) {
+    if (status === 'published') {
+      sendBookApprovalEmail({
+        to: existing.uploadedBy.email,
+        authorName: existing.uploadedBy.name || 'Author',
+        bookTitle: existing.title,
+        bookId: existing._id,
+      }).catch((e) => console.warn('Failed to send book approval email:', e.message));
+    } else if (status === 'hidden' || status === 'draft') {
+      sendBookRejectionEmail({
+        to: existing.uploadedBy.email,
+        authorName: existing.uploadedBy.name || 'Author',
+        bookTitle: existing.title,
+        reason: reason || 'Submission did not meet publication standards or requires revisions before public listing.',
+      }).catch((e) => console.warn('Failed to send book rejection email:', e.message));
+    }
+  }
+
+  return success(res, 200, `Status updated to ${status}.`, existing);
 });
 
 const getContentStats = asyncHandler(async (req, res) => {

@@ -18,6 +18,7 @@ function ProfilePage({
   history = [],
   shelf = [],
   onChangePassword,
+  onForgotPassword,
   onDetail,
   onFavorite,
   onNavigate,
@@ -65,6 +66,7 @@ function ProfilePage({
         readingDays={readingDays}
         shelf={shelf}
         onChangePassword={onChangePassword}
+        onForgotPassword={onForgotPassword}
         onDetail={onDetail}
         onFavorite={onFavorite}
         onNavigate={onNavigate}
@@ -93,6 +95,7 @@ function ProfileSettings({
   shelf = [],
   readingDays = [],
   onChangePassword,
+  onForgotPassword,
   onDetail,
   onFavorite,
   onNavigate,
@@ -120,6 +123,8 @@ function ProfileSettings({
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordLoading, setPasswordLoading] = useState(false)
+  const [resetEmailSent, setResetEmailSent] = useState(false)
+  const [resetEmailLoading, setResetEmailLoading] = useState(false)
   const [localShelf, setLocalShelf] = useState(shelf)
   const [activeShelfTab, setActiveShelfTab] = useState('reading')
   const [fetchedShelfBooks, setFetchedShelfBooks] = useState({})
@@ -489,6 +494,26 @@ function ProfileSettings({
       onToast?.({ type: 'error', message })
     } finally {
       setPasswordLoading(false)
+    }
+  }
+
+  async function handleSendResetEmail() {
+    if (!account?.email || role === 'guest') return
+    setResetEmailLoading(true)
+    setPasswordError('')
+    setPasswordSuccess('')
+    try {
+      if (onForgotPassword) {
+        await onForgotPassword(account.email)
+      }
+      setResetEmailSent(true)
+      setPasswordSuccess(`Password recovery email dispatched to ${safeMaskedEmail}. Check your inbox.`)
+      onToast?.({ type: 'success', message: `Reset link sent to ${safeMaskedEmail}.` })
+    } catch {
+      setPasswordError('Could not send password recovery email. Please try again.')
+      onToast?.({ type: 'error', message: 'Could not send recovery email. Please try again.' })
+    } finally {
+      setResetEmailLoading(false)
     }
   }
 
@@ -883,53 +908,105 @@ function ProfileSettings({
           </div>
         </div>
 
-        <form className="account-settings-card" onSubmit={handleChangePassword}>
-          <SettingsHeading icon="bi-shield-lock" kicker="Security" title="Change password" />
-          <p className="settings-copy">Enter your current password, then your new one twice. We'll email {safeMaskedEmail} to confirm the change.</p>
-          <label>
-            Old password
-            <input
-              autoComplete="current-password"
-              onChange={(event) => {
-                setOldPassword(event.target.value)
-                setPasswordError(''); setPasswordSuccess('')
-              }}
-              type="password"
-              value={oldPassword}
-            />
-          </label>
-          <label>
-            New password
-            <input
-              autoComplete="new-password"
-              onChange={(event) => {
-                setNewPassword(event.target.value)
-                setPasswordError(''); setPasswordSuccess('')
-              }}
-              type="password"
-              value={newPassword}
-            />
-            <span className="field-hint">At least 8 characters, with letters and numbers.</span>
-          </label>
-          <label>
-            Confirm new password
-            <input
-              autoComplete="new-password"
-              onChange={(event) => {
-                setConfirmPassword(event.target.value)
-                setPasswordError(''); setPasswordSuccess('')
-              }}
-              type="password"
-              value={confirmPassword}
-            />
-          </label>
-          {passwordError && <p className="settings-error"><i className="bi bi-exclamation-circle" /> {passwordError}</p>}
-          {passwordSuccess && <p className="settings-success"><i className="bi bi-check-circle" /> {passwordSuccess}</p>}
-          <button className="primary-button" disabled={passwordLoading || !oldPassword || !newPassword || !confirmPassword} type="submit">
-            <i className="bi bi-shield-check" />
-            {passwordLoading ? 'Changing...' : 'Change password'}
-          </button>
-        </form>
+        <div className="account-settings-card profile-security-card">
+          <SettingsHeading icon="bi-shield-lock" kicker="Security & Access" title="Password & protection" />
+          <p className="settings-copy">
+            Manage your credentials and recovery options. All changes will dispatch a security confirmation to {safeMaskedEmail}.
+          </p>
+
+          <form className="security-direct-form" onSubmit={handleChangePassword}>
+            <label>
+              Current password
+              <input
+                autoComplete="current-password"
+                onChange={(event) => {
+                  setOldPassword(event.target.value)
+                  setPasswordError(''); setPasswordSuccess('')
+                }}
+                type="password"
+                value={oldPassword}
+                placeholder="Enter current password"
+              />
+            </label>
+            <label>
+              New password
+              <input
+                autoComplete="new-password"
+                onChange={(event) => {
+                  setNewPassword(event.target.value)
+                  setPasswordError(''); setPasswordSuccess('')
+                }}
+                type="password"
+                value={newPassword}
+                placeholder="At least 8 characters"
+              />
+              <span className="field-hint">At least 8 characters, with letters and numbers.</span>
+            </label>
+            <label>
+              Confirm new password
+              <input
+                autoComplete="new-password"
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value)
+                  setPasswordError(''); setPasswordSuccess('')
+                }}
+                type="password"
+                value={confirmPassword}
+                placeholder="Confirm new password"
+              />
+            </label>
+
+            {passwordError && (
+              <p className="settings-error" role="alert">
+                <i className="bi bi-exclamation-circle" /> {passwordError}
+              </p>
+            )}
+            {passwordSuccess && (
+              <p className="settings-success" role="status">
+                <i className="bi bi-check-circle" /> {passwordSuccess}
+              </p>
+            )}
+
+            <button
+              className="primary-button security-submit-btn"
+              disabled={passwordLoading || !oldPassword || !newPassword || !confirmPassword}
+              type="submit"
+            >
+              <i className="bi bi-shield-check" />
+              <span>{passwordLoading ? 'Updating password...' : 'Update password'}</span>
+            </button>
+          </form>
+
+          {role !== 'guest' && (
+            <div className="security-recovery-section">
+              <div className="security-recovery-divider">
+                <span>or reset via email</span>
+              </div>
+              <div className="security-recovery-box">
+                <div className="security-recovery-content">
+                  <div className="recovery-icon-badge">
+                    <i className="bi bi-envelope-at" />
+                  </div>
+                  <div className="recovery-text">
+                    <strong>Send password reset link</strong>
+                    <p>
+                      Forgot your current password or prefer a one-click reset link? We will send instructions directly to {safeMaskedEmail}.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button recovery-send-btn"
+                  disabled={resetEmailLoading}
+                  onClick={handleSendResetEmail}
+                >
+                  <i className={resetEmailLoading ? 'bi bi-hourglass-split' : 'bi bi-send'} />
+                  <span>{resetEmailLoading ? 'Sending link...' : resetEmailSent ? 'Resend reset link' : 'Send reset link to email'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="account-settings-card reader-preview-card">
           <SettingsHeading icon="bi-book" kicker="Reader" title="Preview mode" />

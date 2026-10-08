@@ -4,6 +4,11 @@ const Book = require('../models/Book');
 const maskEmail = require('../utils/maskEmail');
 const escapeRegExp = require('../utils/escapeRegExp');
 const { sendMail } = require('../utils/mailer');
+const {
+  sendBanNotificationEmail,
+  sendUnbanNotificationEmail,
+  sendPasswordChangedEmail,
+} = require('../utils/emailTemplates');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 
@@ -130,6 +135,15 @@ const banCustomer = asyncHandler(async (req, res) => {
   // before this app can show the reader the restriction reason and expiry.
   // The protect middleware blocks every authenticated app request instead.
 
+  // Automated Moderation Notice via Bot "Worm"
+  sendBanNotificationEmail({
+    to: target.email,
+    userName: target.name || 'Reader',
+    reason,
+    days,
+    expiresAt: target.banExpiresAt,
+  }).catch((err) => console.warn('Could not dispatch ban email via Bot Worm:', err.message));
+
   return success(res, 200, 'Customer account banned successfully.', { user: sanitizeUser(target) });
 });
 
@@ -153,6 +167,12 @@ const unbanCustomer = asyncHandler(async (req, res) => {
   target.bannedAt = null;
   await target.save();
 
+  // Automated Unban Notice via Bot "Worm"
+  sendUnbanNotificationEmail({
+    to: target.email,
+    userName: target.name || 'Reader',
+  }).catch((err) => console.warn('Could not dispatch unban email via Bot Worm:', err.message));
+
   return success(res, 200, 'Customer account unbanned successfully.', { user: sanitizeUser(target) });
 });
 
@@ -167,16 +187,11 @@ const notifyPasswordChanged = asyncHandler(async (req, res) => {
   await req.user.save();
 
   const when = req.user.passwordChangedAt.toUTCString();
-  await sendMail({
+  sendPasswordChangedEmail({
     to: req.user.email,
-    subject: 'Your BookWorm password was changed',
-    html: `
-      <p>Hi ${req.user.name || 'there'},</p>
-      <p>This is a confirmation that the password for your BookWorm account (${req.user.email}) was changed on ${when}.</p>
-      <p>If you made this change, no action is needed.</p>
-      <p>If you did <strong>not</strong> make this change, please contact an admin right away and reset your password from the Login page.</p>
-    `,
-  });
+    userName: req.user.name || 'Reader',
+    when,
+  }).catch((err) => console.warn('Could not dispatch password change security alert:', err.message));
 
   return success(res, 200, 'Password change recorded.', { passwordChangedAt: req.user.passwordChangedAt });
 });

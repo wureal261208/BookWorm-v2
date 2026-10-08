@@ -1294,6 +1294,7 @@ function App() {
         onProfileUpdate={updateAccountProfile}
         onRead={openBook}
         onChangePassword={changeAccountPassword}
+        onForgotPassword={handleForgotPassword}
         onToast={setToast}
         progress={progress}
         readingDays={readingActivity[getAccountKey(account)] || []}

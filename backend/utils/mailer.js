@@ -36,14 +36,15 @@ function getTransporter() {
 // @param {string} to
 // @param {string} subject
 // @param {string} html
+// @param {string} [from]
 // @returns {Promise<boolean>} true if the email was actually sent.
-async function sendMail({ to, subject, html }) {
+async function sendMail({ to, subject, html, from }) {
   const activeTransporter = getTransporter();
   if (!activeTransporter || !to) return false;
 
   try {
     await activeTransporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: from || process.env.SMTP_FROM || process.env.SMTP_USER || '"BookWorm" <noreply@bookworm.app>',
       to,
       subject,
       html,
