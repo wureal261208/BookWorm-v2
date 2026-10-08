@@ -152,7 +152,7 @@ function AdminPage({
     canPushBooks && { id: 'book', label: 'Book Management', icon: 'bi-collection' },
     canManageUsers && {
       id: 'contributions',
-      label: 'User Contributions',
+      label: 'User Management',
       icon: 'bi-people',
       badge: pendingSupportCount > 0 ? pendingSupportCount : null,
     },
@@ -594,7 +594,7 @@ function AdminPage({
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
-          <div className="admin-filter-bar admin-book-management-tabs" aria-label="User Contributions view">
+          <div className="admin-filter-bar admin-book-management-tabs" aria-label="User Management view">
             <button
               className={contributionsTab === 'submissions' ? 'active' : ''}
               onClick={() => setContributionsTab('submissions')}
@@ -1549,7 +1549,7 @@ function UserSubmissionsPanel({ onToast }) {
     <section className="admin-workspace admin-book-toolbar">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">User Contributions</p>
+          <p className="mono-eyebrow">User Management</p>
           <h2>Customer submissions</h2>
         </div>
         <span>Review written stories and community narrations submitted by readers. Approve to publish to the catalog, or reject/hide.</span>
@@ -2011,7 +2011,7 @@ function UsersDirectoryPanel({ banBusyId, onBan, onToast, onUnban, refreshTick =
     <section className="admin-workspace">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">User Contributions</p>
+          <p className="mono-eyebrow">User Management</p>
           <h2>User directory</h2>
         </div>
         <span>Customer accounts only - display name and masked email, ranked by how many books they've pushed.</span>
@@ -2178,7 +2178,7 @@ function SupportInboxPanel({ onCountChange, onToast }) {
     <section className="admin-workspace">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">User Contributions</p>
+          <p className="mono-eyebrow">User Management</p>
           <h2>Help chat inbox</h2>
         </div>
         <span>Conversations the AI couldn't finish - the visitor's account is notified as soon as you reply.</span>
@@ -2520,7 +2520,7 @@ function CommentsModerationPanel({ onBanUser, onToast }) {
     <section className="admin-workspace">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">User Contributions</p>
+          <p className="mono-eyebrow">User Management</p>
           <h2>Comments & reviews moderation</h2>
         </div>
         <span className="admin-count-pill">{total} total</span>
@@ -2865,7 +2865,7 @@ function SystemBroadcastPanel({ onToast }) {
     <section className="admin-workspace">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">User Contributions</p>
+          <p className="mono-eyebrow">User Management</p>
           <h2>System broadcast & announcements</h2>
         </div>
         <span className="admin-count-pill">{broadcasts.length} sent</span>

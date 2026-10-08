@@ -39,6 +39,14 @@ function ContentReaderPage() {
   const [currentChapterParagraphs, setCurrentChapterParagraphs] = useState([])
   const [chapterStartParagraphIndex, setChapterStartParagraphIndex] = useState(0)
   const [ttsLocalIndex, setTtsLocalIndex] = useState(0)
+  const [availableVoices, setAvailableVoices] = useState([])
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => {
+    try {
+      return localStorage.getItem('bookworm_tts_voice') || ''
+    } catch (_) {
+      return ''
+    }
+  })
   const ttsUtteranceRef = useRef(null)
 
   // Text selection floating quick-actions
@@ -339,8 +347,38 @@ function ContentReaderPage() {
     setIsTtsActive(false)
   }, [])
 
+  // Load available speech synthesis voices and handle voice changes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+
+    function loadVoices() {
+      const voices = window.speechSynthesis.getVoices() || []
+      if (voices.length > 0) {
+        setAvailableVoices(voices)
+        setSelectedVoiceURI((curr) => {
+          if (curr && voices.some((v) => v.voiceURI === curr || v.name === curr)) {
+            return curr
+          }
+          // Default to Vietnamese if present, or English, or first voice
+          const viVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
+          const enVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
+          return viVoice ? viVoice.voiceURI : (enVoice ? enVoice.voiceURI : voices[0]?.voiceURI || '')
+        })
+      }
+    }
+
+    loadVoices()
+    window.speechSynthesis.onvoiceschanged = loadVoices
+
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null
+      }
+    }
+  }, [])
+
   const playParagraphTts = useCallback(
-    (index, paragraphs = currentChapterParagraphs, speed = ttsSpeed) => {
+    (index, paragraphs = currentChapterParagraphs, speed = ttsSpeed, voiceURI = selectedVoiceURI) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
         setToastMsg('Browser does not support Web Speech API for reading aloud.')
         return
@@ -355,7 +393,7 @@ function ContentReaderPage() {
       if (!text || !text.trim()) {
         if (index + 1 < paragraphs.length) {
           setTtsLocalIndex(index + 1)
-          playParagraphTts(index + 1, paragraphs, speed)
+          playParagraphTts(index + 1, paragraphs, speed, voiceURI)
         } else {
           stopTts()
         }
@@ -364,16 +402,25 @@ function ContentReaderPage() {
 
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.rate = speed
-      const voices = window.speechSynthesis.getVoices()
-      const viVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
-      if (viVoice) {
-        utterance.voice = viVoice
+      const voices = availableVoices.length > 0 ? availableVoices : (window.speechSynthesis.getVoices() || [])
+      let chosenVoice = null
+      if (voiceURI) {
+        chosenVoice = voices.find((v) => v.voiceURI === voiceURI || v.name === voiceURI)
+      }
+      if (!chosenVoice) {
+        chosenVoice = voices.find((v) => v.lang && v.lang.toLowerCase().includes('vi'))
+          || voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
+          || voices[0]
+      }
+      if (chosenVoice) {
+        utterance.voice = chosenVoice
+        utterance.lang = chosenVoice.lang
       }
 
       utterance.onend = () => {
         if (index + 1 < paragraphs.length) {
           setTtsLocalIndex(index + 1)
-          playParagraphTts(index + 1, paragraphs, speed)
+          playParagraphTts(index + 1, paragraphs, speed, voiceURI)
         } else {
           stopTts()
           setToastMsg('Finished reading this chapter aloud.')
@@ -396,8 +443,23 @@ function ContentReaderPage() {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     },
-    [currentChapterParagraphs, ttsSpeed, chapterStartParagraphIndex, stopTts]
+    [currentChapterParagraphs, ttsSpeed, selectedVoiceURI, availableVoices, chapterStartParagraphIndex, stopTts]
   )
+
+  function handleVoiceChange(e) {
+    const newVoice = e.target.value
+    setSelectedVoiceURI(newVoice)
+    try {
+      localStorage.setItem('bookworm_tts_voice', newVoice)
+    } catch (_) {}
+
+    if (isTtsActive) {
+      window.speechSynthesis.cancel()
+      if (isTtsPlaying) {
+        playParagraphTts(ttsLocalIndex, currentChapterParagraphs, ttsSpeed, newVoice)
+      }
+    }
+  }
 
   function handleStartTts() {
     if (!currentChapterParagraphs.length) {
@@ -415,7 +477,7 @@ function ContentReaderPage() {
       return
     }
     setTtsLocalIndex(0)
-    playParagraphTts(0, currentChapterParagraphs, ttsSpeed)
+    playParagraphTts(0, currentChapterParagraphs, ttsSpeed, selectedVoiceURI)
     setToastMsg('Starting AI reading aloud for this chapter...')
   }
 
@@ -428,7 +490,7 @@ function ContentReaderPage() {
         window.speechSynthesis.resume()
         setIsTtsPlaying(true)
       } else {
-        playParagraphTts(ttsLocalIndex, currentChapterParagraphs, ttsSpeed)
+        playParagraphTts(ttsLocalIndex, currentChapterParagraphs, ttsSpeed, selectedVoiceURI)
       }
     }
   }
@@ -437,7 +499,7 @@ function ContentReaderPage() {
     if (ttsLocalIndex > 0) {
       const prev = ttsLocalIndex - 1
       setTtsLocalIndex(prev)
-      playParagraphTts(prev, currentChapterParagraphs, ttsSpeed)
+      playParagraphTts(prev, currentChapterParagraphs, ttsSpeed, selectedVoiceURI)
     }
   }
 
@@ -445,7 +507,7 @@ function ContentReaderPage() {
     if (ttsLocalIndex < currentChapterParagraphs.length - 1) {
       const next = ttsLocalIndex + 1
       setTtsLocalIndex(next)
-      playParagraphTts(next, currentChapterParagraphs, ttsSpeed)
+      playParagraphTts(next, currentChapterParagraphs, ttsSpeed, selectedVoiceURI)
     }
   }
 
@@ -455,7 +517,7 @@ function ContentReaderPage() {
     const nextSpeed = speeds[(curIdx + 1) % speeds.length]
     setTtsSpeed(nextSpeed)
     if (isTtsActive && isTtsPlaying) {
-      playParagraphTts(ttsLocalIndex, currentChapterParagraphs, nextSpeed)
+      playParagraphTts(ttsLocalIndex, currentChapterParagraphs, nextSpeed, selectedVoiceURI)
     }
   }
 
@@ -801,17 +863,31 @@ function ContentReaderPage() {
               <span className="reader-btn-label">Search</span>
             </button>
 
-            {/* Text-to-Speech (AI TTS) trigger */}
-            <button
-              aria-label={isTtsPlaying ? 'Pause reading aloud' : 'Read aloud with AI voice'}
-              className={`ghost-button reader-bar-icon-btn reader-tts-trigger ${isTtsActive ? 'active' : ''}`}
-              onClick={handleStartTts}
-              title={isTtsActive ? (isTtsPlaying ? 'Reading aloud... Click to pause' : 'Reading aloud paused') : 'Read entire chapter aloud with AI voice (Web Speech)'}
-              type="button"
-            >
-              <i className={`bi ${isTtsPlaying ? 'bi-volume-up-fill' : 'bi-volume-up'}`} />
-              <span className="reader-btn-label">Read aloud</span>
-            </button>
+            {/* Text-to-Speech (AI TTS) trigger & stop */}
+            <div className="reader-tts-bar-actions">
+              <button
+                aria-label={isTtsPlaying ? 'Pause reading aloud' : (isTtsActive ? 'Resume reading aloud' : 'Read aloud with AI voice')}
+                className={`ghost-button reader-bar-icon-btn reader-tts-trigger ${isTtsActive ? 'active' : ''}`}
+                onClick={isTtsActive ? handleTtsTogglePlay : handleStartTts}
+                title={isTtsActive ? (isTtsPlaying ? 'Reading aloud... Click to pause' : 'Reading aloud paused. Click to resume') : 'Read entire chapter aloud with AI voice (Web Speech)'}
+                type="button"
+              >
+                <i className={`bi ${isTtsPlaying ? 'bi-volume-up-fill' : (isTtsActive ? 'bi-pause-circle-fill' : 'bi-volume-up')}`} />
+                <span className="reader-btn-label">{isTtsActive ? (isTtsPlaying ? 'Pause' : 'Resume') : 'Read aloud'}</span>
+              </button>
+              {isTtsActive && (
+                <button
+                  aria-label="Stop reading aloud"
+                  className="ghost-button reader-bar-icon-btn reader-tts-stop-btn"
+                  onClick={handleTtsStop}
+                  title="Stop reading aloud and reset"
+                  type="button"
+                >
+                  <i className="bi bi-stop-circle" />
+                  <span className="reader-btn-label">Stop</span>
+                </button>
+              )}
+            </div>
 
             {/* Appearance (Aa) Popover Trigger & Popover Menu */}
             <div className="reader-aa-wrap">
@@ -828,7 +904,14 @@ function ContentReaderPage() {
               </button>
 
               {showAaPopover && (
-                <div className="reader-aa-popover" role="dialog" aria-label="Reading appearance">
+                <>
+                  <button
+                    aria-label="Close reading appearance"
+                    className="reader-aa-backdrop"
+                    onClick={() => setShowAaPopover(false)}
+                    type="button"
+                  />
+                  <div className="reader-aa-popover" role="dialog" aria-label="Reading appearance">
                   <div className="aa-popover-header">
                     <h4>Reading appearance</h4>
                     <button
@@ -970,7 +1053,7 @@ function ContentReaderPage() {
                   {/* 5. Column Width */}
                   <div className="aa-section">
                     <label className="aa-section-label">Page width</label>
-                    <div className="aa-segmented-group">
+                    <div className="aa-segmented-group aa-width-group">
                       <button
                         className={`aa-segment-btn ${pageWidth === 760 ? 'active' : ''}`}
                         onClick={() => setPageWidth(760)}
@@ -1023,6 +1106,34 @@ function ContentReaderPage() {
                     </div>
                   </div>
 
+                  {/* 7. Reading Voice (AI TTS) */}
+                  <div className="aa-section">
+                    <div className="aa-section-row">
+                      <label className="aa-section-label" htmlFor="reader-aa-voice-select">Reading voice (AI TTS)</label>
+                      <span className="aa-value-badge">{availableVoices.length > 0 ? `${availableVoices.length} voices` : 'Default'}</span>
+                    </div>
+                    <div className="aa-voice-select-wrap">
+                      <i className="bi bi-mic-fill" aria-hidden="true" />
+                      <select
+                        id="reader-aa-voice-select"
+                        className="aa-voice-select"
+                        value={selectedVoiceURI}
+                        onChange={handleVoiceChange}
+                        aria-label="Select AI reading voice"
+                      >
+                        {availableVoices.length === 0 ? (
+                          <option value="">Default browser voice</option>
+                        ) : (
+                          availableVoices.map((v) => (
+                            <option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>
+                              {v.name} ({v.lang})
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
                   {/* Zen Mode Button */}
                   <div className="aa-section aa-zen-action">
                     <button
@@ -1039,7 +1150,8 @@ function ContentReaderPage() {
                     </button>
                   </div>
                 </div>
-              )}
+              </>
+            )}
             </div>
 
             {/* Zen Mode Toggle Button */}
@@ -1294,6 +1406,29 @@ function ContentReaderPage() {
                 Paragraph {ttsLocalIndex + 1} / {currentChapterParagraphs.length || 1} • {currentChapterObj?.isIntro ? 'Introduction' : `Chapter ${currentChapterObj?.order || activeChapterIndex}`}
               </small>
             </div>
+
+            {/* Voice Dropdown right in the dock */}
+            <div className="tts-dock-voice-selector" title="Switch reading voice">
+              <i className="bi bi-mic-fill" aria-hidden="true" />
+              <select
+                aria-label="Change reading voice"
+                className="tts-voice-select"
+                onChange={handleVoiceChange}
+                title="Select reading voice"
+                value={selectedVoiceURI}
+              >
+                {availableVoices.length === 0 ? (
+                  <option value="">Default voice</option>
+                ) : (
+                  availableVoices.map((v) => (
+                    <option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>
+                      {v.name.length > 20 ? `${v.name.slice(0, 18)}...` : v.name} ({v.lang})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
             <div className="tts-dock-controls">
               <button
                 aria-label="Previous paragraph"
@@ -1313,6 +1448,16 @@ function ContentReaderPage() {
                 type="button"
               >
                 <i className={`bi ${isTtsPlaying ? 'bi-pause-fill' : 'bi-play-fill'}`} />
+              </button>
+              {/* Dedicated Stop Button */}
+              <button
+                aria-label="Stop reading aloud"
+                className="ghost-button tts-dock-btn tts-dock-stop-action-btn"
+                onClick={handleTtsStop}
+                title="Stop reading aloud"
+                type="button"
+              >
+                <i className="bi bi-stop-fill" />
               </button>
               <button
                 aria-label="Next paragraph"
@@ -1334,7 +1479,7 @@ function ContentReaderPage() {
                 {ttsSpeed}x
               </button>
               <button
-                aria-label="Stop reading aloud"
+                aria-label="Close reader"
                 className="ghost-button tts-dock-close-btn"
                 onClick={handleTtsStop}
                 title="Close reader"
