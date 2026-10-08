@@ -10572,6 +10572,56 @@ progress {
   gap: 2px;
 }
 
+/* Uniform Search Result Type Tag */
+.search-type-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 98px;
+  min-width: 98px;
+  height: 22px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+
+.search-type-tag i {
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.search-type-tag-ebook {
+  background: #dff5e1;
+  color: #1c6b2d;
+  border: 1px solid #c3ebc7;
+}
+
+.search-type-tag-audiobook {
+  background: #ffe8cc;
+  color: #8a4b00;
+  border: 1px solid #ffd8a8;
+}
+
+.app-theme-dark .search-type-tag-ebook {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.app-theme-dark .search-type-tag-audiobook {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 .search-author-avatar {
   width: 48px;
   height: 48px;

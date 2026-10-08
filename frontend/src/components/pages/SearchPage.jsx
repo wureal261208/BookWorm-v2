@@ -44,7 +44,7 @@ function rememberRecentSearch(term) {
 // profiles to browse, so there was nothing else honest to put there (see
 // backend/controllers/contentController.js's searchAuthors for the same
 // note).
-function SearchPage() {
+function SearchPage({ onDetail }) {
   const { navigateTo } = useNavigation()
   const [searchParams] = useSearchParams()
   const query = searchParams.get('q') || ''
@@ -73,7 +73,7 @@ function SearchPage() {
         {!query ? (
           <SearchEmptyState navigateTo={navigateTo} recentSearches={recentSearches} />
         ) : tab === 'books' ? (
-          <BooksResults navigateTo={navigateTo} query={query} />
+          <BooksResults navigateTo={navigateTo} onDetail={onDetail} query={query} />
         ) : (
           <AuthorsResults
             onSelectAuthor={(author) => {
@@ -179,7 +179,7 @@ function SearchEmptyState({ navigateTo, recentSearches }) {
 // endpoint that already supported them individually (see
 // backend/controllers/contentController.js's listContent) - this is just
 // the first UI to actually combine all three at once.
-function BooksResults({ navigateTo, query }) {
+function BooksResults({ navigateTo, onDetail, query }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -261,7 +261,7 @@ function BooksResults({ navigateTo, query }) {
             <div className="search-result-row search-skeleton-row" key={i}>
               <div className="skeleton-box search-skeleton-thumb" />
               <div className="search-skeleton-info">
-                <div className="skeleton-box" style={{ width: '70px', height: '18px', borderRadius: '4px' }} />
+                <div className="skeleton-box" style={{ width: '98px', height: '22px', borderRadius: '999px' }} />
                 <div className="skeleton-box" style={{ width: '65%', height: '18px' }} />
                 <div className="skeleton-box" style={{ width: '35%', height: '14px' }} />
               </div>
@@ -278,12 +278,21 @@ function BooksResults({ navigateTo, query }) {
             <button
               className="search-result-row"
               key={item._id}
-              onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item._id}` })}
+              onClick={() => {
+                if (onDetail) {
+                  onDetail(item)
+                } else {
+                  navigateTo('detail', { query: `id=${item._id || item.id}` })
+                }
+              }}
               type="button"
             >
               <img alt="" loading="lazy" src={getCover(item)} />
               <span className="search-result-text">
-                <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
+                <span className={`search-type-tag search-type-tag-${item.type} ai-chat-tag ai-chat-tag-${item.type}`}>
+                  <i className={item.type === 'ebook' ? 'bi bi-book' : 'bi bi-headphones'} aria-hidden="true" />
+                  <span>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
+                </span>
                 <strong>{item.title}</strong>
                 <small>{item.author}</small>
               </span>

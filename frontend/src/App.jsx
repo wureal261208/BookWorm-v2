@@ -1222,7 +1222,7 @@ function App() {
       />
     ),
     books: <BooksPage />,
-    search: <SearchPage />,
+    search: <SearchPage onDetail={openDetail} />,
     'ai-suggestions': <AiSuggestionsPage />,
     read: <ContentReaderPage />,
     listen: <ContentPlayerPage />,
