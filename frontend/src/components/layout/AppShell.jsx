@@ -87,6 +87,35 @@ function AppShell({
     setIsMobileNavOpen(false)
   }, [activePage])
 
+  // Lock body scroll and handle Escape key and screen resize when mobile nav is open
+  useEffect(() => {
+    if (!isMobileNavOpen) return
+
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsMobileNavOpen(false)
+      }
+    }
+
+    const handleResize = () => {
+      if (window.innerWidth > 900) {
+        setIsMobileNavOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [isMobileNavOpen])
+
   useEffect(() => {
     let isCurrent = true
 
@@ -143,13 +172,14 @@ function AppShell({
   }, [showWriteMenu])
 
   function handleLogoClick() {
+    setIsMobileNavOpen(false)
     navigateTo('home')
   }
 
   return (
     <div className={`book-app app-theme-${websiteTheme}${isAdminPage ? ' book-app-admin-locked' : ''}`}>
       {!isAdminPage && (
-      <header className="site-header">
+      <header className={`site-header${isMobileNavOpen ? ' mobile-open' : ''}`}>
         <button className="brand-button" onClick={handleLogoClick} type="button">
           <img src={logo} alt="BookWorm logo" />
           <span>BookWorm</span>
@@ -452,6 +482,7 @@ function AppShell({
           aria-label="Close menu"
           className="mobile-nav-backdrop"
           onClick={() => setIsMobileNavOpen(false)}
+          tabIndex={-1}
           type="button"
         />
       )}

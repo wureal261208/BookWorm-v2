@@ -1830,6 +1830,17 @@ progress {
     padding: 10px clamp(12px, 3vw, 22px);
   }
 
+  .site-header.mobile-open {
+    z-index: 1050;
+    background: var(--app-surface);
+  }
+
+  .site-header.mobile-open .mobile-nav-toggle {
+    background: var(--app-surface-soft);
+    border-color: var(--app-accent, #16a09a);
+    color: var(--app-accent, #16a09a);
+  }
+
   .mobile-drawer-account {
     display: flex;
     flex-direction: column;
@@ -1975,13 +1986,15 @@ progress {
 
   .mobile-guest-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
   .mobile-guest-actions button {
-    flex: 1;
+    flex: 1 1 120px;
     min-height: 38px;
     font-size: 13px;
+    white-space: nowrap;
   }
 
   .mobile-drawer-footer {
@@ -2049,20 +2062,21 @@ progress {
     z-index: 30;
     flex-direction: column;
     gap: 12px;
-    max-height: calc(100svh - 60px);
+    max-height: calc(100vh - 60px);
+    max-height: calc(100dvh - 60px);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    padding: 16px clamp(14px, 4vw, 24px) 20px;
+    padding: 16px clamp(14px, 4vw, 24px) max(24px, env(safe-area-inset-bottom, 24px));
     border-bottom: 1px solid var(--app-line);
     border-top: 1px solid var(--app-line);
     background: var(--app-surface);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
   }
 
   .main-nav-group.open {
     display: flex;
-    animation: navSlideDown 0.2s ease-out;
+    animation: navSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .main-nav {
@@ -2118,21 +2132,39 @@ progress {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 25;
+    z-index: 1040;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0;
+    margin: 0;
     border: 0;
-    background: rgba(0, 0, 0, 0.36);
-    backdrop-filter: blur(2px);
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    cursor: pointer;
+    touch-action: manipulation;
+    animation: mobileNavBackdropFadeIn 0.2s ease-out;
   }
 }
 
 @keyframes navSlideDown {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes mobileNavBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -2266,6 +2298,29 @@ progress {
   .main-nav-group .header-search {
     display: block;
     width: 100%;
+  }
+
+  .main-nav-group .write-menu {
+    width: 100%;
+  }
+
+  .main-nav-group .write-menu-toggle {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 15px;
+    border-radius: 8px;
+    justify-content: flex-start;
+    border: 1px solid var(--app-line);
+    background: var(--app-surface-soft);
+  }
+
+  .main-nav-group .write-menu-dropdown {
+    position: static;
+    width: 100%;
+    margin-top: 6px;
+    box-shadow: none;
+    border: 1px solid var(--app-line);
   }
 }
 
