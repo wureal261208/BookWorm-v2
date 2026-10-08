@@ -348,19 +348,24 @@ const updateShelfStatus = asyncHandler(async (req, res) => {
 });
 
 // @route DELETE /api/users/me/shelf/:bookId
-// @desc  Removes book from shelf and saved books
+// @desc  Removes book from shelf, saved books, and clears reading progress
 const removeShelfBook = asyncHandler(async (req, res) => {
   const bookId = String(req.params.bookId || '').trim();
   if (!bookId) {
     return fail(res, 400, 'Book ID is required.');
   }
 
-  await User.findByIdAndUpdate(req.user._id, {
-    $pull: {
-      shelvedBooks: { bookId: bookId },
-      savedBooks: bookId,
-    },
-  });
+  const ReadingProgress = require('../models/ReadingProgress');
+
+  await Promise.all([
+    User.findByIdAndUpdate(req.user._id, {
+      $pull: {
+        shelvedBooks: { bookId: bookId },
+        savedBooks: bookId,
+      },
+    }),
+    ReadingProgress.deleteMany({ user: req.user._id, contentId: bookId }),
+  ]);
 
   req.user.shelvedBooks = (req.user.shelvedBooks || []).filter((s) => String(s.bookId) !== bookId);
   req.user.savedBooks = (req.user.savedBooks || []).filter((id) => String(id) !== bookId);

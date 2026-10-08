@@ -26,7 +26,9 @@ function ContentReaderPage() {
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('bookworm_reader_lineheight')) || 1.85)
   const [pageWidth, setPageWidth] = useState(() => {
     const saved = Number(localStorage.getItem('bookworm_reader_width'))
-    return saved && saved >= 700 ? saved : 1040
+    if (saved === 1260) return 1280
+    if ([760, 920, 1080, 1280].includes(saved)) return saved
+    return 920
   })
   const [textAlign, setTextAlign] = useState(() => localStorage.getItem('bookworm_reader_align') || 'justify')
   const [showAaPopover, setShowAaPopover] = useState(false)
@@ -1025,62 +1027,99 @@ function ContentReaderPage() {
                   {/* 4. Line Spacing */}
                   <div className="aa-section">
                     <label className="aa-section-label">Line spacing</label>
-                    <div className="aa-segmented-group">
+                    <div className="aa-segmented-group aa-spacing-group">
                       <button
+                        aria-label="Compact line spacing (1.6x)"
                         className={`aa-segment-btn ${lineHeight === 1.6 ? 'active' : ''}`}
                         onClick={() => setLineHeight(1.6)}
                         type="button"
                       >
-                        Compact (1.6x)
+                        <span className="aa-btn-title">Compact</span>
+                        <span className="aa-btn-sub">1.6x</span>
                       </button>
                       <button
+                        aria-label="Normal line spacing (1.85x)"
                         className={`aa-segment-btn ${lineHeight === 1.85 ? 'active' : ''}`}
                         onClick={() => setLineHeight(1.85)}
                         type="button"
                       >
-                        Normal (1.85x)
+                        <span className="aa-btn-title">Normal</span>
+                        <span className="aa-btn-sub">1.85x</span>
                       </button>
                       <button
+                        aria-label="Relaxed line spacing (2.1x)"
                         className={`aa-segment-btn ${lineHeight === 2.1 ? 'active' : ''}`}
                         onClick={() => setLineHeight(2.1)}
                         type="button"
                       >
-                        Relaxed (2.1x)
+                        <span className="aa-btn-title">Relaxed</span>
+                        <span className="aa-btn-sub">2.1x</span>
                       </button>
                     </div>
                   </div>
 
                   {/* 5. Column Width */}
                   <div className="aa-section">
-                    <label className="aa-section-label">Page width</label>
+                    <div className="aa-section-row">
+                      <label className="aa-section-label">Page width</label>
+                      <span className="aa-value-badge">{pageWidth}px</span>
+                    </div>
                     <div className="aa-segmented-group aa-width-group">
                       <button
-                        className={`aa-segment-btn ${pageWidth === 760 ? 'active' : ''}`}
+                        aria-label="Compact page width (760px)"
+                        className={`aa-segment-btn aa-width-card ${pageWidth === 760 ? 'active' : ''}`}
                         onClick={() => setPageWidth(760)}
                         type="button"
                       >
-                        Compact (760px)
+                        <div className="aa-width-preview" aria-hidden="true">
+                          <div className="aa-width-bar width-760" />
+                        </div>
+                        <div className="aa-width-info">
+                          <span className="aa-btn-title">Compact</span>
+                          <span className="aa-btn-sub">760px</span>
+                        </div>
                       </button>
                       <button
-                        className={`aa-segment-btn ${pageWidth === 920 ? 'active' : ''}`}
+                        aria-label="Standard page width (920px)"
+                        className={`aa-segment-btn aa-width-card ${pageWidth === 920 ? 'active' : ''}`}
                         onClick={() => setPageWidth(920)}
                         type="button"
                       >
-                        Standard (920px)
+                        <div className="aa-width-preview" aria-hidden="true">
+                          <div className="aa-width-bar width-920" />
+                        </div>
+                        <div className="aa-width-info">
+                          <span className="aa-btn-title">Standard</span>
+                          <span className="aa-btn-sub">920px</span>
+                        </div>
                       </button>
                       <button
-                        className={`aa-segment-btn ${pageWidth === 1080 ? 'active' : ''}`}
+                        aria-label="Wide page width (1080px)"
+                        className={`aa-segment-btn aa-width-card ${pageWidth === 1080 ? 'active' : ''}`}
                         onClick={() => setPageWidth(1080)}
                         type="button"
                       >
-                        Wide (1080px)
+                        <div className="aa-width-preview" aria-hidden="true">
+                          <div className="aa-width-bar width-1080" />
+                        </div>
+                        <div className="aa-width-info">
+                          <span className="aa-btn-title">Wide</span>
+                          <span className="aa-btn-sub">1080px</span>
+                        </div>
                       </button>
                       <button
-                        className={`aa-segment-btn ${pageWidth === 1260 ? 'active' : ''}`}
-                        onClick={() => setPageWidth(1260)}
+                        aria-label="Immersive page width (1280px)"
+                        className={`aa-segment-btn aa-width-card ${pageWidth === 1280 || pageWidth === 1260 ? 'active' : ''}`}
+                        onClick={() => setPageWidth(1280)}
                         type="button"
                       >
-                        Immersive (1260px)
+                        <div className="aa-width-preview" aria-hidden="true">
+                          <div className="aa-width-bar width-1280" />
+                        </div>
+                        <div className="aa-width-info">
+                          <span className="aa-btn-title">Immersive</span>
+                          <span className="aa-btn-sub">1280px</span>
+                        </div>
                       </button>
                     </div>
                   </div>
@@ -1242,7 +1281,7 @@ function ContentReaderPage() {
       )}
 
       {/* Reader Column Container */}
-      <main className="content-reader-column" style={{ maxWidth: `${pageWidth}px`, width: '100%' }}>
+      <main className="content-reader-column" style={{ maxWidth: `min(100%, ${pageWidth}px)`, width: '100%' }}>
         {/* Resume Banner */}
         {showResumeBanner && savedResume && (
           <aside aria-label="Continue reading" className="reader-resume-banner">

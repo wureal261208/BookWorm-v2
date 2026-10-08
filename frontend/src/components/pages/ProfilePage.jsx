@@ -126,11 +126,26 @@ function ProfileSettings({
   const [resetEmailSent, setResetEmailSent] = useState(false)
   const [resetEmailLoading, setResetEmailLoading] = useState(false)
   const [localShelf, setLocalShelf] = useState(shelf)
+  const [removedBookIds, setRemovedBookIds] = useState(() => new Set())
   const [activeShelfTab, setActiveShelfTab] = useState('reading')
   const [fetchedShelfBooks, setFetchedShelfBooks] = useState({})
   const [mongoProgress, setMongoProgress] = useState({})
   const [myBooks, setMyBooks] = useState([])
   const [myBooksLoading, setMyBooksLoading] = useState(false)
+
+  const handleRemoveShelfBook = (bookId) => {
+    if (!bookId) return
+    const sId = String(bookId)
+    setRemovedBookIds((prev) => new Set([...prev, sId]))
+    setLocalShelf((prev) => (prev || []).filter((item) => String(item.bookId) !== sId))
+    setMongoProgress((prev) => {
+      const next = { ...prev }
+      delete next[sId]
+      delete next[Number(sId)]
+      return next
+    })
+    onRemoveShelfBook?.(bookId)
+  }
 
   const accountKey = account?.id || account?.email || 'guest'
   const goalStorageKey = `bookworm_reading_goal_${accountKey}`
@@ -248,7 +263,7 @@ function ProfileSettings({
 
     ;(localShelf || []).forEach((item) => {
       const bId = String(item.bookId)
-      if (seen.has(bId)) return
+      if (removedBookIds.has(bId) || seen.has(bId)) return
       seen.add(bId)
       const found = books.find((b) => String(b.id || b._id) === bId) || fetchedShelfBooks[bId] || { id: bId, _id: bId, title: 'Book #' + bId }
       list.push({ book: found, status: item.status, updatedAt: item.updatedAt })
@@ -256,14 +271,14 @@ function ProfileSettings({
 
     ;(favorites || []).forEach((favId) => {
       const bId = String(favId)
-      if (seen.has(bId)) return
+      if (removedBookIds.has(bId) || seen.has(bId)) return
       seen.add(bId)
       const found = books.find((b) => String(b.id || b._id) === bId) || fetchedShelfBooks[bId] || { id: bId, _id: bId, title: 'Book #' + bId }
       list.push({ book: found, status: 'want_to_read' })
     })
 
     return list
-  }, [localShelf, favorites, books, fetchedShelfBooks])
+  }, [localShelf, favorites, books, fetchedShelfBooks, removedBookIds])
 
   const readingList = useMemo(() => {
     return resolvedShelfBooks.filter((item) => {
@@ -863,7 +878,7 @@ function ProfileSettings({
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
-                onRemove={onRemoveShelfBook}
+                onRemove={handleRemoveShelfBook}
               />
             )}
             {activeShelfTab === 'want_to_read' && (
@@ -875,7 +890,7 @@ function ProfileSettings({
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
-                onRemove={onRemoveShelfBook}
+                onRemove={handleRemoveShelfBook}
               />
             )}
             {activeShelfTab === 'finished' && (
@@ -887,7 +902,7 @@ function ProfileSettings({
                 onRead={onRead}
                 onDetail={onDetail}
                 onUpdateStatus={onUpdateShelfStatus}
-                onRemove={onRemoveShelfBook}
+                onRemove={handleRemoveShelfBook}
               />
             )}
             {activeShelfTab === 'authored' && (
@@ -1154,6 +1169,16 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
                 <option value="finished">Finished</option>
                 <option value="remove">Remove from shelf</option>
               </select>
+
+              <button
+                type="button"
+                className="ghost-button shelf-remove-btn"
+                onClick={() => onRemove?.(bId)}
+                title="Remove from shelf & goals"
+                aria-label={`Remove ${book.title || 'book'} from shelf`}
+              >
+                <i className="bi bi-trash3" />
+              </button>
             </div>
           </li>
         )

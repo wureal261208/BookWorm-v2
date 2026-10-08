@@ -74,10 +74,12 @@ function HomePage({
   onDetail,
   onFavorite,
   onRead,
+  onRemoveShelfBook,
   onSelectGenre,
   preferenceVersion = 0,
   progress = {},
   setPage,
+  shelf = [],
   viewCounts,
   viewerCounts,
 }) {
@@ -97,6 +99,12 @@ function HomePage({
   const [forYou, forYouLoading] = useExternalRow(`/api/content/for-you?limit=16&v=${preferenceVersion}`)
   const [recentItems, setRecentItems] = useState([])
 
+  const handleDismissRecent = (e, bookId) => {
+    e.stopPropagation()
+    setRecentItems((current) => current.filter((item) => String(item.id) !== String(bookId)))
+    onRemoveShelfBook?.(bookId)
+  }
+
   useEffect(() => {
     if (isGuest) {
       setRecentItems([])
@@ -107,21 +115,36 @@ function HomePage({
     apiFetch('/api/users/me/progress')
       .then((data) => {
         if (!ignore && Array.isArray(data?.progress)) {
-          const mapped = data.progress.map((p) => ({
-            id: p.contentId,
-            _id: p.contentId,
-            title: p.title,
-            author: p.author,
-            cover_image: p.cover,
-            cover: p.cover,
-            type: p.type || 'ebook',
-            percent: p.percent || 0,
-            chapterTitle: p.chapterTitle,
-            chapterIndex: p.chapterIndex,
-            currentTime: p.currentTime,
-            duration: p.duration,
-            updatedAt: new Date(p.updatedAt).getTime(),
-          }))
+          const shelfMap = new Map((shelf || []).map((s) => [String(s.bookId), s.status]))
+          const mapped = data.progress
+            .filter((p) => {
+              const contentIdStr = String(p.contentId)
+              if (Array.isArray(shelf) && shelf.length > 0) {
+                const status = shelfMap.get(contentIdStr)
+                if (!status || status === 'finished') return false
+              }
+              if (progress && Object.keys(progress).length > 0 && progress[contentIdStr] === undefined) {
+                return false
+              }
+              const pct = Number(p.percent) || 0
+              if (pct <= 0 || pct >= 100) return false
+              return true
+            })
+            .map((p) => ({
+              id: p.contentId,
+              _id: p.contentId,
+              title: p.title,
+              author: p.author,
+              cover_image: p.cover,
+              cover: p.cover,
+              type: p.type || 'ebook',
+              percent: p.percent || 0,
+              chapterTitle: p.chapterTitle,
+              chapterIndex: p.chapterIndex,
+              currentTime: p.currentTime,
+              duration: p.duration,
+              updatedAt: new Date(p.updatedAt).getTime(),
+            }))
           setRecentItems(mapped.slice(0, 4))
         }
       })
@@ -132,7 +155,7 @@ function HomePage({
     return () => {
       ignore = true
     }
-  }, [isGuest])
+  }, [isGuest, shelf, progress])
 
   const newBooks = books.slice(0, 16)
   const savedBooksList = !isGuest && Array.isArray(favorites) && favorites.length > 0
@@ -196,16 +219,29 @@ function HomePage({
                     <div className="resume-card-fill" style={{ width: `${item.percent}%` }} />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="primary-button resume-card-btn"
-                  onClick={() => {
-                    const chQuery = typeof item.chapterIndex === 'number' && item.chapterIndex > 0 ? `&chapter=${item.chapterIndex}` : ''
-                    navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item.id}${chQuery}` })
-                  }}
-                >
-                  Resume <i className="bi bi-arrow-right" />
-                </button>
+                <div className="resume-card-actions">
+                  <button
+                    type="button"
+                    className="primary-button resume-card-btn"
+                    onClick={() => {
+                      const chQuery = typeof item.chapterIndex === 'number' && item.chapterIndex > 0 ? `&chapter=${item.chapterIndex}` : ''
+                      navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item.id}${chQuery}` })
+                    }}
+                  >
+                    Resume <i className="bi bi-arrow-right" />
+                  </button>
+                  {onRemoveShelfBook && (
+                    <button
+                      type="button"
+                      className="ghost-button resume-card-dismiss-btn"
+                      onClick={(e) => handleDismissRecent(e, item.id)}
+                      title="Remove from reading shelf"
+                      aria-label={`Remove ${item.title || 'book'} from reading shelf`}
+                    >
+                      <i className="bi bi-x-lg" />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

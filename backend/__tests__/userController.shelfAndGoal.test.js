@@ -100,4 +100,28 @@ describe('userController shelf & goal', () => {
     ]);
     expect(res.status).toHaveBeenCalledWith(200);
   });
+
+  test('removeShelfBook removes from user shelf and clears ReadingProgress', async () => {
+    User.findByIdAndUpdate = jest.fn().mockResolvedValue(true);
+    ReadingProgress.deleteMany = jest.fn().mockResolvedValue({ deletedCount: 1 });
+    const req = {
+      user: {
+        _id: 'u-1',
+        shelvedBooks: [{ bookId: 'book-99', status: 'reading' }],
+        savedBooks: ['book-99'],
+        readingGoal: 10,
+      },
+      params: { bookId: 'book-99' },
+    };
+    const res = mockRes();
+
+    removeShelfBook(req, res);
+    await flush();
+
+    expect(User.findByIdAndUpdate).toHaveBeenCalled();
+    expect(ReadingProgress.deleteMany).toHaveBeenCalledWith({ user: 'u-1', contentId: 'book-99' });
+    expect(req.user.shelvedBooks).toEqual([]);
+    expect(req.user.savedBooks).toEqual([]);
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
 });

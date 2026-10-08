@@ -13371,6 +13371,7 @@ progress {
 .content-reader-page {
   width: 100%;
   min-height: 100vh;
+  overflow-x: clip;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -13808,8 +13809,12 @@ progress {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 330px;
+  width: 350px;
   max-width: calc(100vw - 28px);
+  max-height: min(720px, calc(100vh - 75px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
   padding: 18px;
   border-radius: 14px;
   background: var(--app-surface, #ffffff);
@@ -13956,8 +13961,9 @@ progress {
   background: var(--app-surface-soft, #f0f0ed);
   border: 1px solid var(--app-line, #d8d8d3);
   border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
+  padding: 3px;
+  gap: 3px;
+  box-sizing: border-box;
 }
 
 .content-reader-page.reader-theme-sepia .aa-segmented-group {
@@ -13968,6 +13974,21 @@ progress {
 .content-reader-page.reader-theme-dark .aa-segmented-group {
   background: #242428;
   border-color: #38383d;
+}
+
+/* Page width: 2x2 grid on ALL screen sizes */
+.aa-segmented-group.aa-width-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 4px;
+}
+
+/* Line spacing: 3 equal columns on ALL screen sizes */
+.aa-segmented-group.aa-spacing-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
 }
 
 .aa-segment-btn {
@@ -13986,6 +14007,153 @@ progress {
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  box-sizing: border-box;
+  min-height: 38px;
+}
+
+.aa-spacing-group .aa-segment-btn {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  min-width: 0;
+  min-height: 42px;
+}
+
+/* Dedicated High-End Card for Page Width (Desktop and Responsive) */
+.aa-width-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 6px;
+  min-width: 0;
+  min-height: 52px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.aa-width-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.content-reader-page.reader-theme-sepia .aa-width-card:hover {
+  background: rgba(67, 52, 34, 0.06);
+}
+
+.content-reader-page.reader-theme-dark .aa-width-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.aa-width-card.active {
+  background: var(--app-surface, #ffffff);
+  border-color: var(--app-accent, #16a09a);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.content-reader-page.reader-theme-sepia .aa-width-card.active {
+  background: #fbf0d9;
+  border-color: #b86a24;
+}
+
+.content-reader-page.reader-theme-dark .aa-width-card.active {
+  background: #323238;
+  border-color: #2dd4bf;
+}
+
+/* Page Width Miniature Visual Layout Bar */
+.aa-width-preview {
+  width: 38px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: rgba(0, 0, 0, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+  box-sizing: border-box;
+}
+
+.content-reader-page.reader-theme-sepia .aa-width-preview {
+  border-color: #dfcaa2;
+  background: rgba(67, 52, 34, 0.05);
+}
+
+.content-reader-page.reader-theme-dark .aa-width-preview {
+  border-color: #44444a;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.aa-width-bar {
+  height: 6px;
+  border-radius: 2px;
+  background: var(--app-text-muted, #888);
+  transition: all 0.2s ease;
+}
+
+.aa-width-bar.width-760 {
+  width: 44%;
+}
+
+.aa-width-bar.width-920 {
+  width: 64%;
+}
+
+.aa-width-bar.width-1080 {
+  width: 82%;
+}
+
+.aa-width-bar.width-1280 {
+  width: 96%;
+}
+
+.aa-width-card.active .aa-width-bar {
+  background: var(--app-accent, #16a09a);
+}
+
+.content-reader-page.reader-theme-sepia .aa-width-card.active .aa-width-bar {
+  background: #b86a24;
+}
+
+.content-reader-page.reader-theme-dark .aa-width-card.active .aa-width-bar {
+  background: #2dd4bf;
+}
+
+.aa-width-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.aa-btn-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.aa-btn-sub {
+  font-size: 10.5px;
+  font-weight: 500;
+  opacity: 0.72;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.aa-segment-btn.active .aa-btn-sub,
+.aa-width-card.active .aa-btn-sub {
+  opacity: 0.95;
 }
 
 .content-reader-page.reader-theme-sepia .aa-segment-btn {
@@ -14464,9 +14632,10 @@ progress {
 /* Centered Reading Column */
 .content-reader-column {
   width: 100%;
-  max-width: var(--reader-max-width, 1040px);
+  max-width: min(100%, var(--reader-max-width, 920px));
   margin: 0 auto;
   padding: 24px clamp(16px, 2.5vw, 36px) 80px;
+  box-sizing: border-box;
 }
 
 .content-reader-header {
@@ -14756,8 +14925,9 @@ progress {
     bottom: 0;
     left: 0;
     right: 0;
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     border-radius: 20px 20px 0 0;
     border-bottom: none;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
@@ -14777,6 +14947,18 @@ progress {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
+  }
+
+  .aa-spacing-group .aa-segment-btn,
+  .aa-width-group .aa-segment-btn,
+  .aa-width-card {
+    padding: 6px 3px;
+    min-height: 42px;
+    gap: 2px;
+  }
+
+  .aa-width-preview {
+    display: none;
   }
 
   .tts-player-dock {
@@ -15177,11 +15359,40 @@ progress {
   background: var(--app-accent, #16a09a);
 }
 
+.resume-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .resume-card-btn {
   padding: 8px 14px;
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+.resume-card-dismiss-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface, #ffffff);
+  color: var(--app-muted, #71716b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.resume-card-dismiss-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #dc2626;
 }
 
 @media (max-width: 480px) {
@@ -15199,6 +15410,22 @@ progress {
   .resume-card-cover-placeholder {
     width: 44px;
     height: 60px;
+  }
+
+  .resume-card-actions {
+    gap: 6px;
+  }
+
+  .resume-card-btn {
+    padding: 7px 11px;
+    font-size: 11.5px;
+  }
+
+  .resume-card-dismiss-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    font-size: 11px;
   }
 }
 
@@ -17501,6 +17728,28 @@ progress {
   cursor: pointer;
 }
 
+.shelf-remove-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface, #ffffff);
+  color: var(--app-muted, #71716b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.shelf-remove-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #dc2626;
+}
+
 .shelf-authored-badges {
   display: flex;
   align-items: center;
@@ -17756,7 +18005,12 @@ progress {
     gap: 8px;
   }
   .shelf-status-select {
-    width: 100%;
+    flex: 1;
+    min-width: 130px;
+  }
+  .shelf-remove-btn {
+    height: 36px;
+    flex-shrink: 0;
   }
   .write-page-mine-card .table-row {
     flex-direction: column;
@@ -17808,8 +18062,31 @@ progress {
     padding: 0 4px;
     gap: 4px;
   }
-  .detail-tabs button i {
-    font-size: 12px;
+  .reader-aa-popover {
+    padding: 16px 14px max(20px, env(safe-area-inset-bottom, 20px));
+  }
+  .aa-spacing-group .aa-segment-btn,
+  .aa-width-group .aa-segment-btn {
+    padding: 5px 2px;
+    min-height: 40px;
+  }
+  .aa-btn-title {
+    font-size: 11.5px;
+  }
+  .aa-btn-sub {
+    font-size: 9.5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .reader-aa-popover {
+    padding: 14px 10px max(18px, env(safe-area-inset-bottom, 18px));
+  }
+  .aa-btn-title {
+    font-size: 11px;
+  }
+  .aa-btn-sub {
+    font-size: 9px;
   }
 }
 

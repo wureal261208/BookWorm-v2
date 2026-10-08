@@ -948,8 +948,20 @@ function App() {
   const removeShelfBook = useCallback(async (bookId) => {
     if (!bookId || account.role === 'guest') return
 
-    setShelf((current) => current.filter((item) => String(item.bookId) !== String(bookId)))
-    setFavorites((current) => current.filter((id) => String(id) !== String(bookId)))
+    const sId = String(bookId)
+    setShelf((current) => current.filter((item) => String(item.bookId) !== sId))
+    setFavorites((current) => current.filter((id) => String(id) !== sId))
+    setProgress((current) => {
+      const next = { ...current }
+      delete next[sId]
+      return next
+    })
+
+    try {
+      localStorage.removeItem(`bookworm_ebook_pos_${sId}`)
+      localStorage.removeItem(`bookworm_audio_progress_${sId}`)
+      localStorage.removeItem(`bookworm_last_read_prev_${sId}`)
+    } catch (_) {}
 
     try {
       const res = await apiFetch(`/api/users/me/shelf/${encodeURIComponent(bookId)}`, {
@@ -1219,6 +1231,8 @@ function App() {
         viewCounts={viewCounts}
         viewerCounts={getViewerCounts(bookReaders)}
         progress={visibleProgress}
+        shelf={shelf}
+        onRemoveShelfBook={removeShelfBook}
       />
     ),
     books: <BooksPage />,
@@ -1293,6 +1307,8 @@ function App() {
         viewCounts={viewCounts}
         viewerCounts={getViewerCounts(bookReaders)}
         progress={visibleProgress}
+        shelf={shelf}
+        onRemoveShelfBook={removeShelfBook}
       />
     ) : (
       <ProfilePage

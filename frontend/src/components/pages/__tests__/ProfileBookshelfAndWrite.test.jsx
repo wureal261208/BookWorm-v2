@@ -114,4 +114,31 @@ describe('ProfilePage - Personal Bookshelf and Authored Deletion Flow', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('write', { query: 'tab=mine' })
   })
+
+  test('removes book from shelf when remove button is clicked', async () => {
+    const onRemoveShelfBook = vi.fn()
+    render(
+      <ProfilePage
+        account={mockAccount}
+        books={mockBooks}
+        shelf={[{ bookId: 'book-fav-1', status: 'want_to_read' }]}
+        favorites={['book-fav-1']}
+        progress={{}}
+        onRemoveShelfBook={onRemoveShelfBook}
+      />
+    )
+
+    const wantTab = screen.getByRole('tab', { name: /Want to read/i })
+    fireEvent.click(wantTab)
+
+    expect(screen.getAllByText('Saved Fantasy Tale').length).toBeGreaterThan(0)
+
+    const removeBtn = screen.getByRole('button', { name: /Remove Saved Fantasy Tale from shelf/i })
+    expect(removeBtn).toBeInTheDocument()
+    fireEvent.click(removeBtn)
+
+    expect(onRemoveShelfBook).toHaveBeenCalledWith('book-fav-1')
+    expect(screen.queryByText('Saved Fantasy Tale')).not.toBeInTheDocument()
+  })
 })
+
