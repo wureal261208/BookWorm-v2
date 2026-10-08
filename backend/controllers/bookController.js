@@ -388,6 +388,7 @@ const updateBook = asyncHandler(async (req, res) => {
     'status',
     'subjects',
     'language',
+    'rejectionReason',
   ];
 
   allowedFields.forEach((field) => {
@@ -395,6 +396,16 @@ const updateBook = asyncHandler(async (req, res) => {
       book[field] = req.body[field];
     }
   });
+
+  if (req.body.rejectionReason !== undefined) {
+    book.rejectionReason = String(req.body.rejectionReason).trim();
+  } else if (req.body.reason !== undefined) {
+    book.rejectionReason = String(req.body.reason).trim();
+  }
+
+  if (book.status === 'published') {
+    book.rejectionReason = '';
+  }
 
   try {
     await book.save();
@@ -426,9 +437,25 @@ const updateBook = asyncHandler(async (req, res) => {
         })
         .catch(() => {});
     }
-  } else if (wasPublished && (book.status === 'hidden' || book.status === 'draft')) {
-    // If unpublished or reverted to draft/hidden, dispatch rejection/revision notice
+  } else if (book.status === 'hidden' || (wasPublished && book.status === 'draft')) {
+    // If unpublished or rejected/hidden, dispatch in-app notification & rejection email to author
     if (book.createdBy) {
+      const reasonText = book.rejectionReason || req.body.reason || 'Submission did not meet publication standards or requires revisions.';
+      if (!book.rejectionReason) {
+        book.rejectionReason = reasonText;
+        await book.save().catch(() => {});
+      }
+
+      // Create in-app notification for author
+      Notification.create({
+        title: 'Book Submission Review',
+        message: `Admin ignored/rejected "${book.title}". Reason: ${reasonText}`,
+        createdBy: req.user._id,
+        audience: 'user',
+        user: book.createdBy,
+        book: book._id,
+      }).catch((err) => console.warn('Could not create rejection notification for author:', err.message));
+
       User.findById(book.createdBy)
         .select('name email')
         .then((authorUser) => {
@@ -437,7 +464,7 @@ const updateBook = asyncHandler(async (req, res) => {
               to: authorUser.email,
               authorName: authorUser.name || book.author || 'Author',
               bookTitle: book.title,
-              reason: req.body.reason || 'Book has been set to draft or hidden for editorial review.',
+              reason: reasonText,
             }).catch((err) => console.warn('Could not dispatch book rejection email:', err.message));
           }
         })
@@ -498,6 +525,16 @@ const updateMyBook = asyncHandler(async (req, res) => {
     wasPublished ? 'Updated - sent back for admin review before it goes live again.' : 'Book updated.',
     { book },
   );
+});
+
+// @route DELETE /api/books/:id/mine
+// @desc  Allows a customer or author to delete a book THEY created.
+const deleteMyBook = asyncHandler(async (req, res) => {
+  const book = await Book.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
+  if (!book) {
+    return fail(res, 404, 'Book not found or you are not authorized to delete it.');
+  }
+  return success(res, 200, 'Your book has been deleted successfully.', null);
 });
 
 // @route DELETE /api/books/:id
@@ -792,6 +829,7 @@ module.exports = {
   getBook,
   updateBook,
   updateMyBook,
+  deleteMyBook,
   deleteBook,
   getBookReaderText,
   generateBookMetadata,

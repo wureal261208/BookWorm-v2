@@ -1427,6 +1427,7 @@ function UserSubmissionsPanel({ onToast }) {
   const [searchInput, setSearchInput] = useState('')
   const [actionBusyId, setActionBusyId] = useState('')
   const [reviewTarget, setReviewTarget] = useState(null)
+  const [rejectTarget, setRejectTarget] = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const LIMIT = 12
 
@@ -1487,14 +1488,14 @@ function UserSubmissionsPanel({ onToast }) {
     }
   }, [submissionSource, page, statusFilter, searchQuery, refreshTick])
 
-  async function updateStatus(itemId, newStatus) {
+  async function updateStatus(itemId, newStatus, reason = '') {
     setActionBusyId(itemId)
     try {
-      const isCommunity = submissionSource === 'community' || reviewTarget?.source === 'User'
+      const isCommunity = submissionSource === 'community' || reviewTarget?.source === 'User' || rejectTarget?.source === 'User'
       if (isCommunity) {
         await apiFetch(`/api/admin/content/${itemId}/status`, {
           method: 'PATCH',
-          body: { status: newStatus },
+          body: { status: newStatus, reason },
         })
         onToast?.({
           type: 'success',
@@ -1503,7 +1504,7 @@ function UserSubmissionsPanel({ onToast }) {
       } else {
         await apiFetch(`/api/books/${itemId}`, {
           method: 'PATCH',
-          body: { status: newStatus },
+          body: { status: newStatus, rejectionReason: reason, reason },
         })
         onToast?.({
           type: 'success',
@@ -1511,12 +1512,13 @@ function UserSubmissionsPanel({ onToast }) {
         })
       }
       setSubmissions((current) =>
-        current.map((item) => (item.id === itemId || item._id === itemId ? { ...item, status: newStatus } : item))
+        current.map((item) => (item.id === itemId || item._id === itemId ? { ...item, status: newStatus, rejectionReason: reason } : item))
       )
       if (reviewTarget && (reviewTarget.id === itemId || reviewTarget._id === itemId)) {
-        setReviewTarget((curr) => ({ ...curr, status: newStatus }))
+        setReviewTarget((curr) => ({ ...curr, status: newStatus, rejectionReason: reason }))
       }
       setRefreshTick((t) => t + 1)
+      setRejectTarget(null)
     } catch (error) {
       onToast?.({ type: 'error', message: error.message })
     } finally {
@@ -1685,10 +1687,11 @@ function UserSubmissionsPanel({ onToast }) {
                         <button
                           className="danger-button"
                           disabled={isBusy}
-                          onClick={() => updateStatus(bookId, 'hidden')}
+                          onClick={() => setRejectTarget(book)}
                           type="button"
                         >
-                          {isBusy ? 'Hiding...' : 'Reject'}
+                          <i className="bi bi-x-circle" style={{ marginRight: '4px' }} />
+                          {isBusy ? 'Processing...' : 'Reject'}
                         </button>
                       )}
                     </div>
@@ -1712,14 +1715,24 @@ function UserSubmissionsPanel({ onToast }) {
           busy={actionBusyId === (reviewTarget.id || reviewTarget._id)}
           isCommunity={submissionSource === 'community' || reviewTarget.source === 'User'}
           onChangeStatus={updateStatus}
+          onReject={(target) => setRejectTarget(target)}
           onClose={() => setReviewTarget(null)}
+        />
+      )}
+
+      {rejectTarget && (
+        <RejectSubmissionModal
+          busy={actionBusyId === (rejectTarget.id || rejectTarget._id)}
+          item={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onConfirm={(itemId, reason) => updateStatus(itemId, 'hidden', reason)}
         />
       )}
     </section>
   )
 }
 
-function SubmissionReviewModal({ book, busy, isCommunity, onChangeStatus, onClose }) {
+function SubmissionReviewModal({ book, busy, isCommunity, onChangeStatus, onReject, onClose }) {
   const [fullBook, setFullBook] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeChapterIndex, setActiveChapterIndex] = useState(0)
@@ -1818,6 +1831,14 @@ function SubmissionReviewModal({ book, busy, isCommunity, onChangeStatus, onClos
               {targetBook.description && (
                 <div style={{ marginTop: '8px', padding: '10px 14px', background: '#f8f8f6', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6' }}>
                   <strong>Description:</strong> {targetBook.description}
+                </div>
+              )}
+              {targetBook.rejectionReason && (
+                <div style={{ marginTop: '8px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '13px', color: '#991b1b', lineHeight: '1.5' }}>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <i className="bi bi-exclamation-triangle-fill" /> Previous rejection reason:
+                  </strong>
+                  <p style={{ margin: '4px 0 0' }}>{targetBook.rejectionReason}</p>
                 </div>
               )}
             </div>
@@ -1941,14 +1962,141 @@ function SubmissionReviewModal({ book, busy, isCommunity, onChangeStatus, onClos
             <button
               className="danger-button"
               disabled={busy}
-              onClick={() => onChangeStatus(bookId, 'hidden')}
+              onClick={() => (onReject ? onReject(targetBook) : onChangeStatus(bookId, 'hidden'))}
               type="button"
             >
               <i className="bi bi-eye-slash" style={{ marginRight: '6px' }} />
-              {busy ? 'Hiding...' : 'Reject / Hide'}
+              {busy ? 'Processing...' : 'Reject / Hide'}
             </button>
           )}
         </footer>
+      </div>
+    </div>
+  )
+}
+
+function RejectSubmissionModal({ item, busy, onConfirm, onClose }) {
+  const PRESET_REASONS = [
+    'Does not meet editorial or publication standards',
+    'Inappropriate, harmful, or offensive content',
+    'Copyright infringement or duplicate submission',
+    'Incomplete chapters or broken text formatting',
+    'Other (custom reason)',
+  ]
+
+  const [selectedPreset, setSelectedPreset] = useState(PRESET_REASONS[0])
+  const [customReason, setCustomReason] = useState(PRESET_REASONS[0])
+
+  function handlePresetChange(preset) {
+    setSelectedPreset(preset)
+    if (preset === 'Other (custom reason)') {
+      setCustomReason('')
+    } else {
+      setCustomReason(preset)
+    }
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const finalReason = customReason.trim() || selectedPreset
+    onConfirm(item.id || item._id, finalReason)
+  }
+
+  return (
+    <div
+      aria-labelledby="reject-submission-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-book-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-book-modal admin-reject-modal" style={{ maxWidth: '520px', width: '92%' }}>
+        <header className="admin-book-modal-header">
+          <div>
+            <p className="mono-eyebrow">Editorial Review</p>
+            <h2 id="reject-submission-title">Reject submission</h2>
+          </div>
+          <button aria-label="Close" className="admin-book-modal-close" onClick={onClose} type="button">
+            <i className="bi bi-x-lg" />
+          </button>
+        </header>
+
+        <form onSubmit={handleSubmit}>
+          <div className="admin-book-modal-body" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--app-text-muted, #555550)', lineHeight: '1.5' }}>
+              Specify the reason for ignoring or rejecting <strong>"{item?.title}"</strong>. This note will be recorded and sent to the author so they can revise their book.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--app-text, #111)' }}>
+                Select common reason:
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {PRESET_REASONS.map((preset) => (
+                  <label
+                    key={preset}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      background: selectedPreset === preset ? 'rgba(22, 160, 154, 0.08)' : 'transparent',
+                      border: selectedPreset === preset ? '1px solid var(--app-accent, #16a09a)' : '1px solid transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="presetReason"
+                      value={preset}
+                      checked={selectedPreset === preset}
+                      onChange={() => handlePresetChange(preset)}
+                    />
+                    <span>{preset}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label htmlFor="rejection-note-textarea" style={{ fontSize: '13px', fontWeight: '700', color: 'var(--app-text, #111)' }}>
+                Reason details sent to author:
+              </label>
+              <textarea
+                id="rejection-note-textarea"
+                rows={3}
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="Provide details or instructions for the author..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--app-line, #d8d8d3)',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+                required
+              />
+            </div>
+          </div>
+
+          <footer className="admin-book-modal-footer">
+            <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+              Cancel
+            </button>
+            <button className="danger-button" disabled={busy || !customReason.trim()} type="submit">
+              <i className="bi bi-x-circle" style={{ marginRight: '6px' }} />
+              {busy ? 'Rejecting...' : 'Reject & Notify Author'}
+            </button>
+          </footer>
+        </form>
       </div>
     </div>
   )

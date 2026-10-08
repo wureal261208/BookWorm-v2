@@ -6,6 +6,7 @@ const {
   getBook,
   updateBook,
   updateMyBook,
+  deleteMyBook,
   deleteBook,
   getBookReaderText,
   generateBookMetadata,
@@ -64,6 +65,7 @@ router.post('/:id/rate', protect, rateContent);
 // role can hit this, but updateMyBook itself only ever matches a book
 // where createdBy is the caller, so it's really just "edit your own".
 router.patch('/:id/mine', protect, updateMyBook);
+router.delete('/:id/mine', protect, deleteMyBook);
 // AI-assisted description/subjects suggestion for the Edit Book modal -
 // staff-only (same roles as editing itself), never writes to the DB on
 // its own.

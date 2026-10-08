@@ -42,7 +42,13 @@ const AUTOSAVE_DELAY_MS = 800
 //   that hasn't been submitted yet.
 function WritePage({ account, onDetail }) {
   const isGuest = !auth.currentUser
-  const [tab, setTab] = useState('write')
+  const [tab, setTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const paramTab = new URLSearchParams(window.location.search).get('tab')
+      if (paramTab === 'mine') return 'mine'
+    }
+    return 'write'
+  })
   const [form, setForm] = useState(() => ({ ...emptyForm, author: account?.name || '' }))
   const [editingBook, setEditingBook] = useState(null) // { id, status } | null
   const [loadingEdit, setLoadingEdit] = useState(false)
@@ -53,11 +59,40 @@ function WritePage({ account, onDetail }) {
   const [loadingMine, setLoadingMine] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [draftPrompt, setDraftPrompt] = useState(null) // { form, savedAt } | null
+  const [deleteConfirmBook, setDeleteConfirmBook] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const [aiSummarizing, setAiSummarizing] = useState(false)
   const [aiSummaryError, setAiSummaryError] = useState('')
   const textareaRefs = useRef({})
   const autosaveTimer = useRef(null)
   const skipNextAutosave = useRef(true) // don't autosave the very first render
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const paramTab = new URLSearchParams(window.location.search).get('tab')
+      if (paramTab === 'mine') setTab('mine')
+    }
+  }, [])
+
+  async function handleDeleteBook() {
+    if (!deleteConfirmBook) return
+    const bId = deleteConfirmBook.id || deleteConfirmBook._id
+    setDeleting(true)
+    setError('')
+    try {
+      await apiFetch(`/api/books/${bId}/mine`, { method: 'DELETE' })
+      setMyBooks((prev) => prev.filter((b) => (b.id || b._id) !== bId))
+      try {
+        localStorage.removeItem(`bookworm_write_draft_edit_${bId}`)
+      } catch {}
+      setSuccess(`"${deleteConfirmBook.title}" has been deleted.`)
+      setDeleteConfirmBook(null)
+    } catch (err) {
+      setError(err.message || 'Could not delete book')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   async function generateAiSummary() {
     setAiSummarizing(true)
@@ -479,26 +514,114 @@ function WritePage({ account, onDetail }) {
         <p className="inline-loading"><span className="admin-spin-small" /> Loading...</p>
       ) : myBooks.length ? (
         <div className="community-submissions-list">
-          {myBooks.map((book) => (
-            <div className="table-row community-submission-row write-page-mine-row" key={book.id}>
-              <span
-                onClick={() => book.status === 'published' && onDetail?.(book)}
-                style={book.status === 'published' ? { cursor: 'pointer' } : undefined}
-              >
-                {book.title}
-                <em className={`admin-status status-${book.status}`}>{book.status}</em>
-              </span>
-              <small>{book.status === 'published' ? 'Tap title to view' : 'Waiting on admin review'}</small>
-              <div className="admin-row-actions">
-                <button className="edit-button" onClick={() => startEdit(book)} type="button">
-                  <i className="bi bi-pencil-square" /> Edit
-                </button>
+          {myBooks.map((book) => {
+            const bookId = book.id || book._id
+            const isHidden = book.status === 'hidden'
+            const hasRejection = Boolean(book.rejectionReason)
+
+            return (
+              <div className="community-submission-card write-page-mine-card" key={bookId}>
+                <div className="table-row community-submission-row write-page-mine-row">
+                  <span
+                    onClick={() => book.status === 'published' && onDetail?.(book)}
+                    style={book.status === 'published' ? { cursor: 'pointer' } : undefined}
+                  >
+                    {book.title}
+                    <em className={`admin-status status-${book.status || 'draft'}`}>
+                      {isHidden ? 'Rejected / Ignored' : book.status || 'draft'}
+                    </em>
+                  </span>
+                  <small>
+                    {book.status === 'published'
+                      ? 'Published & visible in catalog'
+                      : isHidden
+                      ? 'Ignored by admin (see note below)'
+                      : 'Waiting on admin review'}
+                  </small>
+                  <div className="admin-row-actions">
+                    <button className="edit-button" onClick={() => startEdit(book)} type="button">
+                      <i className="bi bi-pencil-square" /> Edit
+                    </button>
+                    <button
+                      className="danger-button write-delete-btn"
+                      onClick={() => setDeleteConfirmBook(book)}
+                      type="button"
+                    >
+                      <i className="bi bi-trash" /> Delete
+                    </button>
+                  </div>
+                </div>
+
+                {(isHidden || hasRejection) && (
+                  <div className="author-rejection-note">
+                    <div className="rejection-note-header">
+                      <i className="bi bi-exclamation-triangle-fill" />
+                      <strong>Admin note:</strong>
+                    </div>
+                    <p>{book.rejectionReason || 'Admin ignored or rejected this book. You can edit content and re-submit anytime.'}</p>
+                    <span className="rejection-note-hint">Tip: Click "Edit" above to revise your content and re-submit for admin review.</span>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <p className="empty-state">You haven't submitted a book yet.</p>
+      )}
+
+      {deleteConfirmBook && (
+        <div
+          aria-labelledby="delete-authored-title"
+          aria-modal="true"
+          className="reader-modal-backdrop admin-book-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleting) setDeleteConfirmBook(null)
+          }}
+          role="dialog"
+        >
+          <div className="admin-book-modal write-delete-modal" style={{ maxWidth: '440px', width: '92%' }}>
+            <header className="admin-book-modal-header">
+              <div>
+                <p className="mono-eyebrow">Confirm Deletion</p>
+                <h2 id="delete-authored-title">Delete book</h2>
+              </div>
+              <button
+                aria-label="Close"
+                className="admin-book-modal-close"
+                disabled={deleting}
+                onClick={() => setDeleteConfirmBook(null)}
+                type="button"
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </header>
+            <div className="admin-book-modal-body" style={{ padding: '16px 20px' }}>
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--app-text, #222)' }}>
+                Are you sure you want to permanently delete <strong>"{deleteConfirmBook.title}"</strong>? All chapters and draft contents will be permanently removed.
+              </p>
+            </div>
+            <footer className="admin-book-modal-footer">
+              <button
+                className="ghost-button"
+                disabled={deleting}
+                onClick={() => setDeleteConfirmBook(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                disabled={deleting}
+                onClick={handleDeleteBook}
+                type="button"
+              >
+                <i className="bi bi-trash" style={{ marginRight: '6px' }} />
+                {deleting ? 'Deleting...' : 'Delete book'}
+              </button>
+            </footer>
+          </div>
+        </div>
       )}
     </div>
   )

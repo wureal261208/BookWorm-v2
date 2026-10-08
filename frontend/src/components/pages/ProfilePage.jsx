@@ -213,9 +213,10 @@ function ProfileSettings({
   }, [account])
 
   useEffect(() => {
-    const missingIds = (localShelf || [])
-      .map((item) => String(item.bookId))
-      .filter((id) => id && !books.some((b) => String(b.id || b._id) === id) && !fetchedShelfBooks[id])
+    const shelfIds = (localShelf || []).map((item) => String(item.bookId))
+    const favIds = (favorites || []).map((fav) => String(fav?.id || fav?._id || fav))
+    const allIds = Array.from(new Set([...shelfIds, ...favIds]))
+    const missingIds = allIds.filter((id) => id && !books.some((b) => String(b.id || b._id) === id) && !fetchedShelfBooks[id])
     if (!missingIds.length) return
 
     missingIds.forEach((id) => {
@@ -239,7 +240,7 @@ function ProfileSettings({
             .catch(() => {})
         })
     })
-  }, [localShelf, books, fetchedShelfBooks])
+  }, [localShelf, favorites, books, fetchedShelfBooks])
 
   const resolvedShelfBooks = useMemo(() => {
     const list = []
@@ -274,15 +275,8 @@ function ProfileSettings({
   }, [resolvedShelfBooks, effectiveProgress])
 
   const wantToReadList = useMemo(() => {
-    return resolvedShelfBooks.filter((item) => {
-      if (item.status === 'want_to_read') {
-        const bId = item.book.id || item.book._id
-        const p = effectiveProgress[bId] || 0
-        return p === 0 || !p
-      }
-      return false
-    })
-  }, [resolvedShelfBooks, effectiveProgress])
+    return resolvedShelfBooks.filter((item) => item.status === 'want_to_read')
+  }, [resolvedShelfBooks])
 
   const finishedList = useMemo(() => {
     return resolvedShelfBooks.filter((item) => {
@@ -832,7 +826,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('want_to_read')}
             >
               <i className="bi bi-bookmark-plus" />
-              <span>Want to read</span>
+              <span>Want to read (Saved)</span>
               <span className="shelf-count-pill">{wantToReadList.length}</span>
             </button>
             <button
@@ -1203,6 +1197,9 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
       {items.map((book) => {
         const bId = book._id || book.id
         const status = book.status || 'published'
+        const isHidden = status === 'hidden'
+        const hasRejection = Boolean(book.rejectionReason)
+
         return (
           <li key={bId} className="shelf-book-item authored-book-item">
             <img alt={book.title || ''} className="shelf-book-cover" src={getCover(book)} />
@@ -1211,8 +1208,8 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
               <span>{getAuthor(book)}</span>
               <div className="shelf-authored-badges">
                 <span className={`authored-status-pill status-${status}`}>
-                  <i className={status === 'published' ? 'bi bi-check-circle-fill' : 'bi bi-file-earmark-text'} />
-                  <span>{status === 'published' ? 'Published' : 'Draft'}</span>
+                  <i className={status === 'published' ? 'bi bi-check-circle-fill' : isHidden ? 'bi bi-x-circle-fill' : 'bi bi-file-earmark-text'} />
+                  <span>{status === 'published' ? 'Published' : isHidden ? 'Rejected / Ignored' : 'Draft'}</span>
                 </span>
                 {typeof book.views === 'number' && (
                   <span className="authored-views-pill">
@@ -1221,6 +1218,16 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
                   </span>
                 )}
               </div>
+
+              {(isHidden || hasRejection) && (
+                <div className="author-rejection-note authored-shelf-rejection-note">
+                  <div className="rejection-note-header">
+                    <i className="bi bi-exclamation-triangle-fill" />
+                    <strong>Admin note:</strong>
+                  </div>
+                  <p>{book.rejectionReason || 'Admin ignored or rejected this book submission.'}</p>
+                </div>
+              )}
             </div>
 
             <div className="shelf-book-actions">
@@ -1241,15 +1248,26 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
                 <span>Details</span>
               </button>
               {onNavigate && (
-                <button
-                  className="ghost-button shelf-action-btn"
-                  onClick={() => onNavigate('write')}
-                  type="button"
-                  title="Edit or write new chapters"
-                >
-                  <i className="bi bi-pencil-square" />
-                  <span>Write / Edit</span>
-                </button>
+                <>
+                  <button
+                    className="ghost-button shelf-action-btn"
+                    onClick={() => onNavigate('write', { query: 'tab=mine' })}
+                    type="button"
+                    title="Edit or write new chapters"
+                  >
+                    <i className="bi bi-pencil-square" />
+                    <span>Write / Edit</span>
+                  </button>
+                  <button
+                    className="danger-button shelf-action-btn authored-delete-btn"
+                    onClick={() => onNavigate('write', { query: 'tab=mine' })}
+                    type="button"
+                    title="Delete book in writer dashboard"
+                  >
+                    <i className="bi bi-trash" />
+                    <span>Delete</span>
+                  </button>
+                </>
               )}
             </div>
           </li>

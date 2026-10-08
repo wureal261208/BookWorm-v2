@@ -26,6 +26,7 @@ const BookSchema = new mongoose.Schema(
     // books still live in Mongo (so staff can keep editing them) but should
     // be filtered out of the public catalog - see listBooks below.
     status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
+    rejectionReason: { type: String, default: '' },
     subjects: { type: [String], default: [] },
     language: { type: String, default: 'en' },
     // Staff member (admin/manager/employee) OR customer who pushed this

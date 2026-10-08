@@ -1,4 +1,5 @@
 const Content = require('../models/Content');
+const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { sendBookApprovalEmail, sendBookRejectionEmail } = require('../utils/emailTemplates');
@@ -63,22 +64,43 @@ const updateContentStatus = asyncHandler(async (req, res) => {
   existing.status = status;
   await existing.save();
 
-  // If item was submitted by a user and status transitioned, dispatch email notification
-  if (existing.uploadedBy?.email && oldStatus !== status) {
+  // If item was submitted by a user and status transitioned, dispatch in-app and email notifications
+  if (existing.uploadedBy?._id && oldStatus !== status) {
     if (status === 'published') {
-      sendBookApprovalEmail({
-        to: existing.uploadedBy.email,
-        authorName: existing.uploadedBy.name || 'Author',
-        bookTitle: existing.title,
-        bookId: existing._id,
-      }).catch((e) => console.warn('Failed to send book approval email:', e.message));
+      Notification.create({
+        title: 'Submission Approved',
+        message: `Your community submission "${existing.title}" has been approved and published!`,
+        createdBy: req.user._id,
+        audience: 'user',
+        user: existing.uploadedBy._id,
+      }).catch((err) => console.warn('Could not create approval notification:', err.message));
+
+      if (existing.uploadedBy.email) {
+        sendBookApprovalEmail({
+          to: existing.uploadedBy.email,
+          authorName: existing.uploadedBy.name || 'Author',
+          bookTitle: existing.title,
+          bookId: existing._id,
+        }).catch((e) => console.warn('Failed to send book approval email:', e.message));
+      }
     } else if (status === 'hidden' || status === 'draft') {
-      sendBookRejectionEmail({
-        to: existing.uploadedBy.email,
-        authorName: existing.uploadedBy.name || 'Author',
-        bookTitle: existing.title,
-        reason: reason || 'Submission did not meet publication standards or requires revisions before public listing.',
-      }).catch((e) => console.warn('Failed to send book rejection email:', e.message));
+      const reasonText = reason || 'Submission did not meet publication standards or requires revisions before public listing.';
+      Notification.create({
+        title: 'Submission Review',
+        message: `Admin ignored/rejected "${existing.title}". Reason: ${reasonText}`,
+        createdBy: req.user._id,
+        audience: 'user',
+        user: existing.uploadedBy._id,
+      }).catch((err) => console.warn('Could not create rejection notification:', err.message));
+
+      if (existing.uploadedBy.email) {
+        sendBookRejectionEmail({
+          to: existing.uploadedBy.email,
+          authorName: existing.uploadedBy.name || 'Author',
+          bookTitle: existing.title,
+          reason: reasonText,
+        }).catch((e) => console.warn('Failed to send book rejection email:', e.message));
+      }
     }
   }
 
