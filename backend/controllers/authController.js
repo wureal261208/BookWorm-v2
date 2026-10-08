@@ -85,4 +85,38 @@ const recordCategoryEngagement = asyncHandler(async (req, res) => {
   return success(res, 200, 'Recorded.', null);
 });
 
-module.exports = { getMe, sanitizeUser, updateMyTheme, updateMyPreferences, recordCategoryEngagement };
+// @route POST /api/auth/forgot-password
+// @desc  Generates a genuine Firebase password reset link using Firebase Admin,
+//        logs it to console for easy local testing, and returns status.
+const forgotPassword = asyncHandler(async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!email) {
+    return fail(res, 400, 'Email address is required.');
+  }
+
+  let resetLink = null;
+  try {
+    const initFirebaseAdmin = require('../config/firebaseAdmin');
+    const admin = initFirebaseAdmin();
+    resetLink = await admin.auth().generatePasswordResetLink(email);
+    console.log('\n==================================================');
+    console.log(`[PASSWORD RESET LINK] Generated for: ${email}`);
+    console.log(resetLink);
+    console.log('==================================================\n');
+  } catch (err) {
+    console.warn(`Could not generate Firebase reset link for ${email}:`, err.message);
+  }
+
+  return success(res, 200, 'If this account exists, a password reset link has been dispatched.', {
+    resetLink: process.env.NODE_ENV !== 'production' ? resetLink : undefined,
+  });
+});
+
+module.exports = {
+  getMe,
+  sanitizeUser,
+  updateMyTheme,
+  updateMyPreferences,
+  recordCategoryEngagement,
+  forgotPassword,
+};

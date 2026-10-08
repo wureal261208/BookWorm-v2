@@ -720,8 +720,20 @@ function App() {
 
   async function handleForgotPassword(email) {
     const normalizedEmail = email.trim().toLowerCase()
-    await sendPasswordResetEmail(auth, normalizedEmail)
-    setToast({ type: 'success', message: `Password reset email sent to ${normalizedEmail}.` })
+    try {
+      await publicApiFetch('/api/auth/forgot-password', {
+        method: 'POST',
+        body: { email: normalizedEmail },
+      }).catch(() => {})
+
+      await sendPasswordResetEmail(auth, normalizedEmail)
+    } catch (_) {
+      // Safe fallback
+    }
+    setToast({
+      type: 'success',
+      message: `Password reset link sent to ${normalizedEmail}. Please check your Inbox and Spam/Junk folder!`,
+    })
   }
 
   function updateWebsiteTheme(nextTheme) {

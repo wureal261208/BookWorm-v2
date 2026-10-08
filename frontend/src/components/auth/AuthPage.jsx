@@ -114,7 +114,7 @@ function AuthPage({
     setFieldErrors((current) => ({ ...current, email: '' }))
     try {
       await onForgotPassword(email)
-      setForgotStatus(`Reset link sent to ${email}.`)
+      setForgotStatus(`Reset link sent to ${email}. Please check your Inbox and Spam/Junk folder.`)
     } catch {
       setFieldErrors((current) => ({ ...current, email: 'Could not send reset email. Please try again.' }))
     } finally {

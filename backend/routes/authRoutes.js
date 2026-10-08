@@ -1,5 +1,5 @@
 const express = require('express');
-const { getMe } = require('../controllers/authController');
+const { getMe, forgotPassword } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -7,5 +7,6 @@ const router = express.Router();
 // Firebase Auth handles register/login on the frontend. This just returns
 // (and auto-provisions, on first call) the app-side profile + role.
 router.get('/me', protect, getMe);
+router.post('/forgot-password', forgotPassword);
 
 module.exports = router;
