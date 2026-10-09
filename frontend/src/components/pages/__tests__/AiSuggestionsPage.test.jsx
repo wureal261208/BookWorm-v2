@@ -40,27 +40,11 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
     expect(screen.getByRole('button', { name: /Other topic\.\.\./i })).toBeInTheDocument()
   })
 
-  test('clicking "Other topic..." or "Other..." focuses and updates input placeholder', async () => {
-    render(<AiSuggestionsPage />)
-
-    const otherBtn = await screen.findByRole('button', { name: /Other topic\.\.\./i })
-    const input = screen.getByPlaceholderText(/What are you in the mood to read or listen to\?/i)
-
-    fireEvent.click(otherBtn)
-
-    expect(screen.getByPlaceholderText(/Type your own custom topic or question\.\.\./i)).toBeInTheDocument()
-    expect(document.activeElement).toBe(input)
-  })
-
-  test('renders assistant message with Quick Replies and clicking a quick reply sends message', async () => {
-    let messageSentResolve
-    const messageSentPromise = new Promise((resolve) => {
-      messageSentResolve = resolve
-    })
-
+  test('clicking a starter button populates input and submitting sends message', async () => {
+    let sentBody
     apiFetch.mockImplementation((url, options) => {
       if (url === '/api/ai-suggestions/conversations' && options?.method === 'POST') {
-        messageSentResolve(options.body)
+        sentBody = options.body
         return Promise.resolve({
           _id: 'conv-test-1',
           title: options.body.text,
@@ -70,7 +54,7 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
             {
               role: 'assistant',
               text: 'What kind of mood are you looking for?',
-              options: ['Lighthearted & fun', 'Dark & intense', 'Thought-provoking'],
+              options: ['Lighthearted & fun', 'Dark & intense'],
               suggestions: [],
             },
           ],
@@ -85,18 +69,62 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
     render(<AiSuggestionsPage />)
 
     const starterBtn = await screen.findByRole('button', { name: /Something adventurous/i })
-    fireEvent.click(starterBtn)
+    const input = screen.getByRole('textbox')
 
-    // Wait for assistant reply to render
+    // Clicking button populates the chat input
+    fireEvent.click(starterBtn)
+    expect(input.value).toBe('Something adventurous')
+
+    // Submitting with Enter / Send button
+    fireEvent.submit(input.closest('form'))
+
+    await waitFor(() => {
+      expect(sentBody).toEqual({ text: 'Something adventurous' })
+    })
+
+    // Verify AI response rendered
     expect(await screen.findByText('What kind of mood are you looking for?')).toBeInTheDocument()
 
-    // Verify Quick Replies container and chips
-    expect(screen.getByText(/Quick replies:/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Lighthearted & fun/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Dark & intense/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Other\.\.\./i })).toBeInTheDocument()
+    // Verify options are docked on the chat bar
+    expect(screen.getByText(/Suggested choices:/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Lighthearted & fun/i }).length).toBeGreaterThan(0)
+  })
 
-    // Test clicking an option sends that option
+  test('selecting a docked option button loads it into chat bar, then submitting sends it', async () => {
+    apiFetch.mockImplementation((url, options) => {
+      if (url === '/api/ai-suggestions/conversations' && options?.method === 'POST') {
+        return Promise.resolve({
+          _id: 'conv-test-1',
+          title: options.body.text,
+          updatedAt: new Date().toISOString(),
+          messages: [
+            { role: 'user', text: options.body.text },
+            {
+              role: 'assistant',
+              text: 'What kind of mood?',
+              options: ['Lighthearted & fun', 'Dark & intense'],
+              suggestions: [],
+            },
+          ],
+        })
+      }
+      if (url.includes('/api/ai-suggestions/conversations')) {
+        return Promise.resolve([])
+      }
+      return Promise.resolve({})
+    })
+
+    render(<AiSuggestionsPage />)
+
+    // Trigger initial message
+    const starterBtn = await screen.findByRole('button', { name: /Something adventurous/i })
+    const input = screen.getByRole('textbox')
+    fireEvent.click(starterBtn)
+    fireEvent.submit(input.closest('form'))
+
+    // Wait for options to appear
+    await screen.findByText('What kind of mood?')
+
     let followUpSentBody
     apiFetch.mockImplementation((url, options) => {
       if (url.includes('/messages') && options?.method === 'POST') {
@@ -109,18 +137,37 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
             { role: 'user', text: 'Something adventurous' },
             { role: 'assistant', text: 'What kind of mood?' },
             { role: 'user', text: 'Lighthearted & fun' },
-            { role: 'assistant', text: 'Here are some adventurous reads!' },
+            { role: 'assistant', text: 'Great picks for fun!' },
           ],
         })
       }
       return Promise.resolve({})
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /Lighthearted & fun/i }))
+    // Click the docked chip option
+    const optionBtns = screen.getAllByRole('button', { name: /Lighthearted & fun/i })
+    fireEvent.click(optionBtns[0])
+
+    // Verify input contains the chosen option
+    expect(input.value).toBe('Lighthearted & fun')
+
+    // Press Enter or click Send to submit
+    fireEvent.submit(input.closest('form'))
 
     await waitFor(() => {
       expect(followUpSentBody).toEqual({ text: 'Lighthearted & fun' })
     })
+  })
+
+  test('clicking "Other (type below)..." clears option and focuses input for custom typing', async () => {
+    render(<AiSuggestionsPage />)
+
+    const input = await screen.findByRole('textbox')
+    const otherBtn = screen.getByRole('button', { name: /Other topic\.\.\./i })
+
+    fireEvent.click(otherBtn)
+
+    expect(document.activeElement).toBe(input)
   })
 
   test('displays lively thinking state "Worm is..." when request is in flight', async () => {
@@ -138,7 +185,7 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
 
     render(<AiSuggestionsPage />)
 
-    const input = await screen.findByPlaceholderText(/What are you in the mood to read or listen to\?/i)
+    const input = await screen.findByRole('textbox')
     fireEvent.change(input, { target: { value: 'Recommend historical fiction' } })
     fireEvent.submit(input.closest('form'))
 

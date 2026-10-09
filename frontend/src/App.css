@@ -10717,6 +10717,121 @@ progress {
   color: var(--app-muted, #64748b);
 }
 
+/* --- Bottom Dock for Suggestions Above Chat Bar --- */
+.ai-chat-bottom-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.ai-chat-quick-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--app-surface-soft, #f4f4f0) 85%, transparent);
+  border: 1px solid var(--app-line, #d8d8d3);
+  border-radius: 12px;
+  animation: chatDockSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes chatDockSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-chat-quick-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.ai-chat-quick-dock-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--app-accent, #16a09a);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ai-chat-quick-dock-hint {
+  color: var(--app-muted, #78716c);
+  font-style: italic;
+  font-size: 0.7rem;
+}
+
+.ai-chat-quick-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ai-chat-dock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--app-line, #d8d8d3);
+  background: var(--app-surface, #ffffff);
+  color: var(--app-text, #1e293b);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  min-height: 30px;
+}
+
+.ai-chat-dock-chip:hover:not(:disabled) {
+  border-color: var(--app-accent, #16a09a);
+  color: var(--app-accent, #16a09a);
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 8%, var(--app-surface, #ffffff));
+  transform: translateY(-1px);
+}
+
+.ai-chat-dock-chip.active,
+.ai-chat-quick-reply-btn.active,
+.ai-starter-btn.active {
+  border-color: var(--app-accent, #16a09a) !important;
+  background: var(--app-accent, #16a09a) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--app-accent, #16a09a) 30%, transparent);
+}
+
+.ai-chat-dock-chip.active i,
+.ai-chat-quick-reply-btn.active i,
+.ai-starter-btn.active i {
+  color: #ffffff !important;
+}
+
+.ai-chat-dock-chip-other {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--app-text, #1e293b) 30%, var(--app-line, #d8d8d3));
+  color: var(--app-muted, #64748b);
+  background: transparent;
+}
+
+.ai-chat-dock-chip-other:hover:not(:disabled) {
+  border-style: solid;
+  border-color: var(--app-accent, #16a09a);
+  color: var(--app-accent, #16a09a);
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 8%, transparent);
+}
+
 /* --- Input Row & Highlight --- */
 .ai-chat-input-row {
   display: flex;

@@ -46,7 +46,6 @@ function AiSuggestionsPage() {
   const [loadingList, setLoadingList] = useState(true)
   const [loadingConversation, setLoadingConversation] = useState(false)
   const [input, setInput] = useState('')
-  const [inputPlaceholder, setInputPlaceholder] = useState('What are you in the mood to read or listen to?')
   const [inputHighlighted, setInputHighlighted] = useState(false)
   const [sending, setSending] = useState(false)
   const [thinkingIndex, setThinkingIndex] = useState(0)
@@ -85,6 +84,7 @@ function AiSuggestionsPage() {
     setActiveId(id)
     setLoadingConversation(true)
     setError('')
+    setInput('')
     apiFetch(`/api/ai-suggestions/conversations/${id}`)
       .then((data) => setMessages(data.messages || []))
       .catch((err) => setError(err.message))
@@ -95,7 +95,7 @@ function AiSuggestionsPage() {
     setActiveId(null)
     setMessages([])
     setError('')
-    setInputPlaceholder('What are you in the mood to read or listen to?')
+    setInput('')
   }
 
   async function deleteConversation(id, event) {
@@ -109,8 +109,20 @@ function AiSuggestionsPage() {
     }
   }
 
+  // Populate input when an option button is selected; user confirms with Enter or Send button
+  function handleSelectOption(option) {
+    setInput(option)
+    if (inputRef.current) {
+      inputRef.current.focus()
+      const len = option.length
+      inputRef.current.setSelectionRange?.(len, len)
+      inputRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    }
+  }
+
+  // Focus and highlight custom input for free-form query ("Other")
   function handleOtherClick() {
-    setInputPlaceholder('Type your own custom topic or question...')
+    setInput('')
     setInputHighlighted(true)
     setTimeout(() => setInputHighlighted(false), 2000)
     if (inputRef.current) {
@@ -126,7 +138,6 @@ function AiSuggestionsPage() {
     setSending(true)
     setError('')
     setInput('')
-    setInputPlaceholder('What are you in the mood to read or listen to?')
     // Optimistic - show the visitor's own message immediately rather than
     // waiting on the AI round trip before anything appears.
     setMessages((current) => [...current, { role: 'user', text: trimmed }])
@@ -158,6 +169,32 @@ function AiSuggestionsPage() {
       if (messages[i].role === 'assistant') return i
     }
     return -1
+  })()
+
+  const latestAssistantMessage = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : null
+
+  // Active options to present docked directly on the chat bar:
+  // Shows latest assistant's clarifying options or recommendation follow-ups
+  const activeDockOptions = (() => {
+    if (!latestAssistantMessage) return []
+    if (latestAssistantMessage.options?.length > 0) {
+      return latestAssistantMessage.options
+    }
+    if (latestAssistantMessage.suggestions?.length > 0) {
+      return DEFAULT_FOLLOW_UPS
+    }
+    return []
+  })()
+
+  // Dynamic placeholder guiding the user
+  const inputPlaceholderText = (() => {
+    if (activeDockOptions.length > 0) {
+      if (input.trim()) {
+        return 'Press Enter or click Send to submit, or edit text here...'
+      }
+      return 'Pick an option above or type your own here... (Press Enter to send)'
+    }
+    return 'What are you in the mood to read or listen to? (Enter to send)'
   })()
 
   if (isGuest) {
@@ -218,17 +255,19 @@ function AiSuggestionsPage() {
                 <i className="bi bi-stars" />
               </div>
               <h3>Explore BookWorm Library with AI</h3>
-              <p className="empty-state">Tell me what kind of story you're in the mood for, or tap a quick suggestion below to start:</p>
+              <p className="empty-state">Select a topic below to load it into the chat bar, or type your own request:</p>
               <div className="ai-chat-starters">
                 {STARTER_PROMPTS.map((prompt) => (
                   <button
                     key={prompt.label}
-                    className="ai-starter-btn"
+                    className={`ai-starter-btn ${input.trim() === prompt.label ? 'active' : ''}`}
                     disabled={sending}
-                    onClick={() => send(prompt.label)}
+                    onClick={() => handleSelectOption(prompt.label)}
                     type="button"
                   >
-                    <i className={`bi ${prompt.icon}`} /> {prompt.label}
+                    <i className={`bi ${prompt.icon}`} />
+                    <span>{prompt.label}</span>
+                    {input.trim() === prompt.label && <i className="bi bi-check2" />}
                   </button>
                 ))}
                 <button
@@ -237,7 +276,8 @@ function AiSuggestionsPage() {
                   onClick={handleOtherClick}
                   type="button"
                 >
-                  <i className="bi bi-pencil" /> Other topic...
+                  <i className="bi bi-pencil" />
+                  <span>Other topic...</span>
                 </button>
               </div>
             </div>
@@ -245,7 +285,6 @@ function AiSuggestionsPage() {
             messages.map((message, index) => {
               const isAssistant = message.role === 'assistant'
               const isLatestAssistant = index === lastAssistantIndex
-              // Determine active quick replies: explicit options or follow-ups for recommendations
               const quickReplies = message.options?.length > 0
                 ? message.options
                 : (isLatestAssistant && message.suggestions?.length > 0 ? DEFAULT_FOLLOW_UPS : [])
@@ -272,30 +311,34 @@ function AiSuggestionsPage() {
                     </div>
                   )}
 
-                  {/* Active Guided Conversation / Quick Replies (for latest assistant turn) */}
+                  {/* Active Guided Quick Replies inside latest assistant bubble */}
                   {isAssistant && isLatestAssistant && quickReplies.length > 0 && (
                     <div className="ai-chat-quick-replies-wrap">
                       <div className="ai-chat-quick-replies-header">
                         <i className="bi bi-chat-quote" />
-                        <span>Quick replies:</span>
+                        <span>Quick suggestions (Click to load into chat bar):</span>
                       </div>
                       <div className="ai-chat-quick-replies-list">
-                        {quickReplies.map((option) => (
-                          <button
-                            className="ai-chat-quick-reply-btn"
-                            disabled={sending}
-                            key={option}
-                            onClick={() => send(option)}
-                            type="button"
-                          >
-                            <span>{option}</span>
-                          </button>
-                        ))}
+                        {quickReplies.map((option) => {
+                          const isSelected = input.trim() === option.trim()
+                          return (
+                            <button
+                              className={`ai-chat-quick-reply-btn ${isSelected ? 'active' : ''}`}
+                              disabled={sending}
+                              key={option}
+                              onClick={() => handleSelectOption(option)}
+                              type="button"
+                            >
+                              <span>{option}</span>
+                              {isSelected && <i className="bi bi-check2" />}
+                            </button>
+                          )
+                        })}
                         <button
                           className="ai-chat-quick-reply-btn ai-chat-quick-reply-other"
                           disabled={sending}
                           onClick={handleOtherClick}
-                          title="Type your own custom response"
+                          title="Type your own custom response in the chat bar below"
                           type="button"
                         >
                           <i className="bi bi-pencil" />
@@ -343,24 +386,75 @@ function AiSuggestionsPage() {
 
         {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
 
-        <form
-          className={`ai-chat-input-row ${inputHighlighted ? 'input-highlighted' : ''}`}
-          onSubmit={(event) => {
-            event.preventDefault()
-            send(input)
-          }}
-        >
-          <input
-            onChange={(event) => setInput(event.target.value)}
-            placeholder={inputPlaceholder}
-            ref={inputRef}
-            type="text"
-            value={input}
-          />
-          <button className="primary-button" disabled={!input.trim() || sending} type="submit">
-            <i className="bi bi-send" />
-          </button>
-        </form>
+        {/* Docked Suggestion Buttons Directly Above the Chat Bar */}
+        <div className="ai-chat-bottom-dock">
+          {!sending && activeDockOptions.length > 0 && (
+            <div className="ai-chat-quick-dock">
+              <div className="ai-chat-quick-dock-header">
+                <span className="ai-chat-quick-dock-label">
+                  <i className="bi bi-lightbulb" /> Suggested choices:
+                </span>
+                <span className="ai-chat-quick-dock-hint">
+                  Click to select, then press Enter or Send
+                </span>
+              </div>
+              <div aria-label="Suggested reply options" className="ai-chat-quick-dock-chips" role="group">
+                {activeDockOptions.map((option) => {
+                  const isSelected = input.trim() === option.trim()
+                  return (
+                    <button
+                      className={`ai-chat-dock-chip ${isSelected ? 'active' : ''}`}
+                      disabled={sending}
+                      key={option}
+                      onClick={() => handleSelectOption(option)}
+                      type="button"
+                    >
+                      <span>{option}</span>
+                      {isSelected && <i className="bi bi-check2" />}
+                    </button>
+                  )
+                })}
+                <button
+                  className="ai-chat-dock-chip ai-chat-dock-chip-other"
+                  disabled={sending}
+                  onClick={handleOtherClick}
+                  title="Type your own custom request in the input below"
+                  type="button"
+                >
+                  <i className="bi bi-pencil" />
+                  <span>Other (type below)...</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Chat Input Bar - Also serves as the "Other / Custom" input */}
+          <form
+            className={`ai-chat-input-row ${inputHighlighted ? 'input-highlighted' : ''}`}
+            onSubmit={(event) => {
+              event.preventDefault()
+              send(input)
+            }}
+          >
+            <input
+              disabled={sending}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder={inputPlaceholderText}
+              ref={inputRef}
+              type="text"
+              value={input}
+            />
+            <button
+              aria-label="Send message"
+              className="primary-button"
+              disabled={!input.trim() || sending}
+              title="Send message (Enter)"
+              type="submit"
+            >
+              <i className="bi bi-send" />
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )
