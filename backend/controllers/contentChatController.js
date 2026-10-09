@@ -71,7 +71,7 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
   const candidateLookup = new Map(candidates.map((item) => [String(item._id), item]));
 
   try {
-    const { reply, suggestionIds } = await generateChatSuggestion({
+    const { reply, suggestionIds, options } = await generateChatSuggestion({
       messages,
       candidates: candidates.map((item) => ({
         id: String(item._id),
@@ -87,7 +87,7 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
       .filter(Boolean)
       .map((item) => ({ id: String(item._id), title: item.title, author: item.author, type: item.type }));
 
-    return success(res, 200, 'AI reply generated.', { reply, suggestions });
+    return success(res, 200, 'AI reply generated.', { reply, suggestions, options: options || [] });
   } catch (error) {
     if (error instanceof OpenRouterConfigError) {
       return fail(res, 503, error.message);
