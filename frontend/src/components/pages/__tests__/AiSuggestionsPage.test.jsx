@@ -1,5 +1,5 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import AiSuggestionsPage from '../AiSuggestionsPage'
 import { apiFetch } from '../../../utils/apiClient'
 
@@ -207,4 +207,145 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
       expect(screen.queryByText(/Worm is analyzing/i)).not.toBeInTheDocument()
     })
   })
+
+  test('clicking trash icon opens delete confirmation modal, Cancel dismisses, and Confirm deletes conversation', async () => {
+    let deletedId = null
+    apiFetch.mockImplementation((url, options) => {
+      if (url === '/api/ai-suggestions/conversations' && !options?.method) {
+        return Promise.resolve([
+          { id: 'conv-1', title: 'Sci-fi recommendations', updatedAt: new Date().toISOString() },
+        ])
+      }
+      if (url === '/api/ai-suggestions/conversations/conv-1' && options?.method === 'DELETE') {
+        deletedId = 'conv-1'
+        return Promise.resolve({ success: true })
+      }
+      return Promise.resolve({})
+    })
+
+    render(<AiSuggestionsPage />)
+
+    // Wait for conversation to load in sidebar
+    expect(await screen.findByText('Sci-fi recommendations')).toBeInTheDocument()
+
+    // Find and click trash button on sidebar item
+    const trashBtn = screen.getByRole('button', { name: /Delete Sci-fi recommendations/i })
+    fireEvent.click(trashBtn)
+
+    // Modal should be open with confirmation warning
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText(/Confirm Deletion/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Are you sure you want to delete/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/This action cannot be undone/i)).toBeInTheDocument()
+
+    // Clicking Cancel closes modal without deleting
+    const cancelBtn = within(dialog).getByRole('button', { name: /Cancel/i })
+    fireEvent.click(cancelBtn)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(deletedId).toBeNull()
+
+    // Reopen modal and confirm deletion
+    fireEvent.click(trashBtn)
+    const reopenedDialog = screen.getByRole('dialog')
+    const confirmDeleteBtn = within(reopenedDialog).getByRole('button', { name: /Delete conversation/i })
+    fireEvent.click(confirmDeleteBtn)
+
+    await waitFor(() => {
+      expect(deletedId).toBe('conv-1')
+      expect(screen.queryByText('Sci-fi recommendations')).not.toBeInTheDocument()
+    })
+  })
+
+  test('bulk "Clear all history" button opens confirmation modal and clears all conversations', async () => {
+    let bulkDeleteCalled = false
+    apiFetch.mockImplementation((url, options) => {
+      if (url === '/api/ai-suggestions/conversations') {
+        if (options?.method === 'DELETE') {
+          bulkDeleteCalled = true
+          return Promise.resolve({ success: true })
+        }
+        return Promise.resolve([
+          { id: 'conv-1', title: 'Chat One', updatedAt: new Date().toISOString() },
+          { id: 'conv-2', title: 'Chat Two', updatedAt: new Date().toISOString() },
+        ])
+      }
+      return Promise.resolve({})
+    })
+
+    render(<AiSuggestionsPage />)
+
+    expect(await screen.findByText('Chat One')).toBeInTheDocument()
+
+    // Find "Clear all history" button in sidebar footer
+    const clearAllBtn = screen.getByRole('button', { name: /Clear all history/i })
+    fireEvent.click(clearAllBtn)
+
+    // Modal opens with bulk deletion text
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText(/Are you sure you want to permanently delete/i)).toBeInTheDocument()
+
+    // Confirm bulk deletion
+    const confirmClearBtn = within(dialog).getByRole('button', { name: /Clear all history/i })
+    fireEvent.click(confirmClearBtn)
+
+    await waitFor(() => {
+      expect(bulkDeleteCalled).toBe(true)
+      expect(screen.queryByText('Chat One')).not.toBeInTheDocument()
+      expect(screen.queryByText('Chat Two')).not.toBeInTheDocument()
+      expect(screen.getByText(/No conversations yet/i)).toBeInTheDocument()
+    })
+  })
+
+  test('active conversation displays header bar with Delete chat button', async () => {
+    let deletedId = null
+    apiFetch.mockImplementation((url, options) => {
+      if (url === '/api/ai-suggestions/conversations' && !options?.method) {
+        return Promise.resolve([
+          { id: 'conv-42', title: 'Philosophy books', updatedAt: new Date().toISOString() },
+        ])
+      }
+      if (url === '/api/ai-suggestions/conversations/conv-42') {
+        if (options?.method === 'DELETE') {
+          deletedId = 'conv-42'
+          return Promise.resolve({ success: true })
+        }
+        return Promise.resolve({
+          _id: 'conv-42',
+          title: 'Philosophy books',
+          messages: [
+            { role: 'user', text: 'Recommend Stoic reads' },
+            { role: 'assistant', text: 'Here are top Stoic recommendations.' },
+          ],
+        })
+      }
+      return Promise.resolve({})
+    })
+
+    render(<AiSuggestionsPage />)
+
+    // Open conversation from sidebar
+    const convItemBtn = await screen.findByRole('button', { name: 'Philosophy books' })
+    fireEvent.click(convItemBtn)
+
+    // Header bar should show active title and Delete chat button
+    expect(await screen.findByRole('button', { name: /Delete chat/i })).toBeInTheDocument()
+    expect(screen.getByText('Philosophy books', { selector: '.ai-chat-header-title' })).toBeInTheDocument()
+
+    // Clicking Delete chat opens confirmation modal
+    fireEvent.click(screen.getByRole('button', { name: /Delete chat/i }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+
+    // Confirm deletion
+    const confirmBtn = within(dialog).getByRole('button', { name: /Delete conversation/i })
+    fireEvent.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(deletedId).toBe('conv-42')
+      expect(screen.queryByText('Philosophy books')).not.toBeInTheDocument()
+    })
+  })
 })
+

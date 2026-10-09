@@ -50,6 +50,8 @@ function AiSuggestionsPage() {
   const [sending, setSending] = useState(false)
   const [thinkingIndex, setThinkingIndex] = useState(0)
   const [error, setError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null) // { type: 'single' | 'all', conversation?: { id, title } } | null
+  const [deleting, setDeleting] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -80,6 +82,17 @@ function AiSuggestionsPage() {
     messagesEndRef.current?.scrollIntoView?.({ block: 'end' })
   }, [messages.length, sending])
 
+  // Close confirmation modal on Escape key
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && deleteTarget && !deleting) {
+        setDeleteTarget(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [deleteTarget, deleting])
+
   function openConversation(id) {
     setActiveId(id)
     setLoadingConversation(true)
@@ -98,14 +111,36 @@ function AiSuggestionsPage() {
     setInput('')
   }
 
-  async function deleteConversation(id, event) {
-    event.stopPropagation()
+  function requestDeleteConversation(conversation, event) {
+    event?.stopPropagation?.()
+    setDeleteTarget({ type: 'single', conversation })
+  }
+
+  function requestClearAll() {
+    setDeleteTarget({ type: 'all' })
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    setError('')
+
     try {
-      await apiFetch(`/api/ai-suggestions/conversations/${id}`, { method: 'DELETE' })
-      setConversations((current) => current.filter((conversation) => conversation.id !== id))
-      if (activeId === id) startNewChat()
+      if (deleteTarget.type === 'single') {
+        const id = deleteTarget.conversation.id
+        await apiFetch(`/api/ai-suggestions/conversations/${id}`, { method: 'DELETE' })
+        setConversations((current) => current.filter((c) => c.id !== id))
+        if (activeId === id) startNewChat()
+      } else if (deleteTarget.type === 'all') {
+        await apiFetch('/api/ai-suggestions/conversations', { method: 'DELETE' })
+        setConversations([])
+        startNewChat()
+      }
+      setDeleteTarget(null)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Could not delete conversation')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -172,6 +207,7 @@ function AiSuggestionsPage() {
   })()
 
   const latestAssistantMessage = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : null
+  const activeConversation = conversations.find((c) => c.id === activeId) || null
 
   // Active options to present docked directly on the chat bar:
   // Shows latest assistant's clarifying options or recommendation follow-ups
@@ -226,23 +262,65 @@ function AiSuggestionsPage() {
             </div>
           ) : conversations.length ? (
             conversations.map((conversation) => (
-              <button
+              <div
                 className={`ai-suggestions-history-item ${conversation.id === activeId ? 'active' : ''}`}
                 key={conversation.id}
-                onClick={() => openConversation(conversation.id)}
-                type="button"
               >
-                <span>{conversation.title || 'New chat'}</span>
-                <i aria-label="Delete conversation" className="bi bi-trash" onClick={(event) => deleteConversation(conversation.id, event)} />
-              </button>
+                <button
+                  className="ai-suggestions-history-item-btn"
+                  onClick={() => openConversation(conversation.id)}
+                  type="button"
+                >
+                  <span>{conversation.title || 'New chat'}</span>
+                </button>
+                <button
+                  aria-label={`Delete ${conversation.title || 'conversation'}`}
+                  className="ai-suggestions-history-delete-btn"
+                  onClick={(event) => requestDeleteConversation(conversation, event)}
+                  title="Delete conversation"
+                  type="button"
+                >
+                  <i aria-hidden="true" className="bi bi-trash" />
+                </button>
+              </div>
             ))
           ) : (
             <p className="empty-state">No conversations yet.</p>
           )}
         </div>
+        {conversations.length > 0 && (
+          <div className="ai-suggestions-sidebar-footer">
+            <button
+              className="ai-clear-history-btn"
+              onClick={requestClearAll}
+              type="button"
+            >
+              <i className="bi bi-trash" />
+              <span>Clear all history</span>
+            </button>
+          </div>
+        )}
       </aside>
 
       <div className="ai-suggestions-main">
+        {activeId && (
+          <div className="ai-chat-header-bar">
+            <div className="ai-chat-header-info">
+              <span className="mono-eyebrow">Active conversation</span>
+              <h3 className="ai-chat-header-title">{activeConversation?.title || 'Chat conversation'}</h3>
+            </div>
+            <button
+              className="ghost-button ai-chat-delete-btn"
+              onClick={() => requestDeleteConversation({ id: activeId, title: activeConversation?.title })}
+              type="button"
+              title="Delete this conversation"
+            >
+              <i className="bi bi-trash" />
+              <span>Delete chat</span>
+            </button>
+          </div>
+        )}
+
         <div className="ai-chat-messages">
           {loadingConversation ? (
             <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px 0' }}>
@@ -456,6 +534,80 @@ function AiSuggestionsPage() {
           </form>
         </div>
       </div>
+
+      {/* Confirmation Modal for deleting conversation or clearing history */}
+      {deleteTarget && (
+        <div
+          aria-labelledby="delete-dialog-title"
+          aria-modal="true"
+          className="reader-modal-backdrop admin-book-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleting) setDeleteTarget(null)
+          }}
+          role="dialog"
+        >
+          <div
+            className="admin-book-modal ai-delete-confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', width: '92%' }}
+          >
+            <header className="admin-book-modal-header">
+              <div>
+                <p className="mono-eyebrow">Confirm Deletion</p>
+                <h2 id="delete-dialog-title">
+                  {deleteTarget.type === 'all' ? 'Clear all chat history' : 'Delete conversation'}
+                </h2>
+              </div>
+              <button
+                aria-label="Close"
+                className="admin-book-modal-close"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                type="button"
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </header>
+
+            <div className="admin-book-modal-body" style={{ padding: '16px 20px' }}>
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--app-text)' }}>
+                {deleteTarget.type === 'all' ? (
+                  <>
+                    Are you sure you want to permanently delete <strong>all chat conversations</strong>? All past recommendations and messages will be removed.
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to delete <strong>"{deleteTarget.conversation?.title || 'this conversation'}"</strong>? All messages in this chat will be permanently removed.
+                  </>
+                )}
+              </p>
+              <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--app-muted)' }}>
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <footer className="admin-book-modal-footer">
+              <button
+                className="ghost-button"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                disabled={deleting}
+                onClick={confirmDelete}
+                type="button"
+              >
+                <i className="bi bi-trash" style={{ marginRight: '6px' }} />
+                {deleting ? 'Deleting...' : (deleteTarget.type === 'all' ? 'Clear all history' : 'Delete conversation')}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

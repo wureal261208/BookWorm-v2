@@ -50,6 +50,12 @@ const deleteConversation = asyncHandler(async (req, res) => {
   return success(res, 200, 'Conversation deleted.', null);
 });
 
+// @route DELETE /api/ai-suggestions/conversations
+const clearAllConversations = asyncHandler(async (req, res) => {
+  const result = await Conversation.deleteMany({ user: req.user._id, kind: 'ai-suggestions' });
+  return success(res, 200, 'All chat history deleted.', { deletedCount: result.deletedCount });
+});
+
 async function fetchCandidates(latestUserText) {
   const keywords = latestUserText
     .split(/[^a-zA-Z]+/)
@@ -160,4 +166,4 @@ const addMessage = asyncHandler(async (req, res) => {
   return success(res, 200, 'Message sent.', conversation);
 });
 
-module.exports = { listConversations, getConversation, deleteConversation, createConversation, addMessage };
+module.exports = { listConversations, getConversation, deleteConversation, clearAllConversations, createConversation, addMessage };

@@ -11590,20 +11590,11 @@ progress {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 0;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
   border-radius: 8px;
   background: transparent;
-  color: var(--app-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.ai-suggestions-history-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: background 0.15s ease;
 }
 
 .ai-suggestions-history-item:hover,
@@ -11611,27 +11602,178 @@ progress {
   background: var(--app-surface);
 }
 
-.ai-suggestions-history-item i {
+.ai-suggestions-history-item-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-text);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-suggestions-history-item-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-suggestions-history-delete-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-muted, #71716e);
+  cursor: pointer;
   opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
   flex-shrink: 0;
 }
 
-.ai-suggestions-history-item:hover i {
-  opacity: 0.6;
+.ai-suggestions-history-item:hover .ai-suggestions-history-delete-btn,
+.ai-suggestions-history-item:focus-within .ai-suggestions-history-delete-btn {
+  opacity: 0.7;
 }
 
-.ai-suggestions-history-item i:hover {
-  opacity: 1;
+.ai-suggestions-history-delete-btn:hover {
+  opacity: 1 !important;
+  color: var(--danger-color, #c84040);
+  background: rgba(200, 64, 64, 0.1);
 }
 
 .ai-suggestions-main {
-  display: grid;
-  grid-template-rows: 1fr auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   background: var(--app-surface);
+  border: 1px solid var(--app-line, var(--app-border, rgba(0, 0, 0, 0.08)));
   border-radius: 12px;
   padding: 16px;
+  gap: 10px;
+}
+
+.ai-chat-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--app-line, var(--app-border, rgba(0, 0, 0, 0.08)));
+  flex-shrink: 0;
+}
+
+.ai-chat-header-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.ai-chat-header-info .mono-eyebrow {
+  margin: 0;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--app-muted, #71716e);
+}
+
+.ai-chat-header-title {
+  margin: 2px 0 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-chat-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--danger-color, #c84040);
+  background: transparent;
+  border: 1px solid rgba(200, 64, 64, 0.25);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.ai-chat-delete-btn:hover:not(:disabled) {
+  background: rgba(200, 64, 64, 0.08);
+  border-color: rgba(200, 64, 64, 0.45);
+  color: #b71c1c;
+}
+
+.ai-suggestions-sidebar-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--app-line, var(--app-border, rgba(0, 0, 0, 0.08)));
+  flex-shrink: 0;
+}
+
+.ai-clear-history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--app-muted, #71716e);
+  background: transparent;
+  border: 1px dashed var(--app-line, var(--app-border, rgba(0, 0, 0, 0.18)));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai-clear-history-btn:hover:not(:disabled) {
+  color: var(--danger-color, #c84040);
+  border-color: rgba(200, 64, 64, 0.4);
+  background: rgba(200, 64, 64, 0.06);
+}
+
+.ai-delete-confirm-modal {
+  max-width: 440px;
+  width: 92%;
+  margin: auto;
+}
+
+.ai-delete-confirm-modal .admin-book-modal-body p {
+  color: var(--app-text);
+}
+
+.ai-delete-confirm-modal .admin-book-modal-body strong {
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.app-theme-dark .ai-chat-delete-btn:hover:not(:disabled),
+[data-theme='dark'] .ai-chat-delete-btn:hover:not(:disabled) {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.12);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+.app-theme-dark .ai-clear-history-btn:hover:not(:disabled),
+[data-theme='dark'] .ai-clear-history-btn:hover:not(:disabled) {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.1);
 }
 
 @media (max-width: 900px) {
@@ -11644,14 +11786,41 @@ progress {
   .ai-suggestions-sidebar {
     flex-direction: row;
     align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
 
   .ai-suggestions-history {
     flex-direction: row;
     overflow-x: auto;
     overflow-y: hidden;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ai-suggestions-history-item {
+    flex-shrink: 0;
+    max-width: 180px;
+  }
+
+  .ai-suggestions-sidebar-footer {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    flex-shrink: 0;
+  }
+
+  .ai-clear-history-btn {
+    white-space: nowrap;
+    padding: 7px 10px;
+  }
+
+  .ai-chat-header-bar {
+    padding: 2px 0 8px;
   }
 }
+
 
 /* --- Admin Help chat inbox (SupportInboxPanel in AdminPage.jsx) --- */
 .support-inbox-layout {
