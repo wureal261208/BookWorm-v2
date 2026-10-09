@@ -2,6 +2,7 @@ const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
 const generateDisplayId = require('../utils/generateDisplayId');
 const { fail } = require('../utils/response');
+const { sendWelcomeEmail } = require('../utils/emailTemplates');
 
 function readTokenFromHeader(req) {
   const header = req.headers.authorization || '';
@@ -29,6 +30,14 @@ async function resolveUserFromToken(token) {
       role: 'customer',
       displayId: await generateDisplayId('customer'),
     });
+
+    if (user.email) {
+      sendWelcomeEmail({
+        to: user.email,
+        userName: user.name,
+        displayId: user.displayId,
+      }).catch((mailErr) => console.warn('Could not dispatch welcome email:', mailErr.message));
+    }
   }
 
   // Self-heals accounts created before displayId existed (or via any path

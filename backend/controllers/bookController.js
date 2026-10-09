@@ -11,7 +11,11 @@ const { generateBookMetadataSuggestion, generateBookSummary, OpenRouterConfigErr
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const maskEmail = require('../utils/maskEmail');
 const escapeRegExp = require('../utils/escapeRegExp');
-const { sendBookApprovalEmail, sendBookRejectionEmail } = require('../utils/emailTemplates');
+const {
+  sendBookApprovalEmail,
+  sendBookRejectionEmail,
+  sendBookSubmissionEmail,
+} = require('../utils/emailTemplates');
 
 // Broadcasts a "new book" notification to every customer. Only ever called
 // right after a book's status actually becomes 'published' - never for
@@ -116,6 +120,13 @@ const createBook = asyncHandler(async (req, res) => {
 
   if (book.status === 'published') {
     await notifyBookPublished(book, req.user._id);
+  } else if (isCustomer && req.user.email) {
+    sendBookSubmissionEmail({
+      to: req.user.email,
+      authorName: req.user.name || book.author || 'Author',
+      bookTitle: book.title,
+      bookId: book._id,
+    }).catch((mailErr) => console.warn('Could not dispatch book submission receipt email:', mailErr.message));
   }
 
   return success(res, 201, 'Book pushed successfully.', { book });

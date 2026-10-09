@@ -5560,15 +5560,20 @@ progress {
 }
 
 .account-role-pill.role-admin {
-  background: rgba(220, 38, 38, 0.08);
-  border-color: rgba(220, 38, 38, 0.25);
-  color: #dc2626;
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #ffffff;
 }
 
 .account-role-pill.role-member {
-  background: rgba(22, 160, 154, 0.08);
-  border-color: rgba(22, 160, 154, 0.25);
-  color: var(--app-accent, #16a09a);
+  background: #0d9488;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+
+.account-role-pill.role-admin i,
+.account-role-pill.role-member i {
+  color: #ffffff;
 }
 
 .reader-rank-badge {
@@ -7469,8 +7474,13 @@ progress {
   font-weight: 950;
 }
 
-.admin-filter-bar button.active,
-.admin-filter-bar button:hover {
+.admin-filter-bar button.active {
+  border-color: #0f766e;
+  background: #0d9488;
+  color: #ffffff;
+}
+
+.admin-filter-bar button:hover:not(.active) {
   border-color: color-mix(in srgb, var(--app-accent, #16a09a) 55%, transparent);
   background: color-mix(in srgb, var(--app-accent, #16a09a) 14%, transparent);
   color: #0f6b66;
@@ -7558,13 +7568,15 @@ progress {
 }
 
 .status-published {
-  background: #eefaf8;
-  color: #146b66;
+  background: #0d9488;
+  color: #ffffff;
+  border: 1px solid #0f766e;
 }
 
 .status-hidden {
-  background: #fbecec;
-  color: #b3261e;
+  background: #dc2626;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
 }
 
 .admin-row-actions .edit-button {
@@ -9197,9 +9209,9 @@ progress {
 .app-theme-dark .admin-filter-bar button.active,
 .app-theme-dark .admin-choice-grid button.active,
 .app-theme-dark .admin-pagination button.active {
-  background: var(--app-accent);
-  border-color: var(--app-accent);
-  color: #0d0e10;
+  background: #0d9488;
+  border-color: #0f766e;
+  color: #ffffff !important;
 }
 
 .app-theme-dark .admin-pagination {
@@ -9223,9 +9235,14 @@ progress {
 }
 
 .app-theme-dark .primary-button {
-  background: var(--app-accent);
-  border-color: var(--app-accent);
-  color: #0d0e10;
+  background: #0d9488;
+  border-color: #0f766e;
+  color: #ffffff !important;
+}
+
+.app-theme-dark .primary-button i,
+.app-theme-dark .primary-button span {
+  color: #ffffff !important;
 }
 
 .app-theme-dark .ghost-button {
@@ -9252,8 +9269,9 @@ progress {
 }
 
 .app-theme-dark .status-published {
-  background: rgba(124, 140, 248, 0.18);
-  color: var(--app-accent);
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border-color: #14b8a6;
 }
 
 .app-theme-dark .status-hidden {
@@ -9385,7 +9403,7 @@ progress {
 .reader-dark .primary-button {
   background: #7c8cf8;
   border-color: #7c8cf8;
-  color: #0d0e10;
+  color: #ffffff;
 }
 
 .reader-dark .ghost-button {
@@ -10815,8 +10833,31 @@ progress {
 
 .ai-chat-bubble-admin {
   align-self: flex-start;
-  background: #dff5e1;
-  color: #1c3d20;
+  background: #0d9488;
+  color: #ffffff !important;
+  border: 1px solid #0f766e;
+}
+
+.ai-chat-bubble-admin p {
+  color: #ffffff !important;
+}
+
+.ai-chat-bubble-admin .ai-chat-role-label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.ai-chat-bubble-admin .ai-chat-timestamp {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.app-theme-dark .ai-chat-bubble-admin {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border-color: #14b8a6 !important;
+}
+
+.app-theme-dark .ai-chat-bubble-admin p {
+  color: #ffffff !important;
 }
 
 .ai-chat-role-label {
@@ -11404,23 +11445,32 @@ progress {
   border-color: #334155;
 }
 
-.support-bubble-admin {
+.support-bubble-admin,
+.app-theme-dark .support-bubble-admin {
   align-self: flex-end;
-  background: #0d9488;
-  color: #ffffff;
-  border: 1px solid #0f766e;
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border: 1px solid #0f766e !important;
   border-radius: 12px 12px 2px 12px;
   box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
   max-width: 82%;
   padding: 10px 14px;
 }
 
-.support-bubble-admin .ai-chat-role-label {
-  color: rgba(255, 255, 255, 0.9);
+.support-bubble-admin p,
+.app-theme-dark .support-bubble-admin p {
+  color: #ffffff !important;
+  margin: 0;
 }
 
-.support-bubble-admin .ai-chat-timestamp {
-  color: rgba(255, 255, 255, 0.75);
+.support-bubble-admin .ai-chat-role-label,
+.app-theme-dark .support-bubble-admin .ai-chat-role-label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.support-bubble-admin .ai-chat-timestamp,
+.app-theme-dark .support-bubble-admin .ai-chat-timestamp {
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 .support-bubble-ai {
@@ -17568,10 +17618,15 @@ progress {
 }
 
 .shelf-tab-btn.active {
-  background: var(--app-accent, #16a09a);
-  border-color: var(--app-accent, #16a09a);
+  background: #0d9488;
+  border-color: #0f766e;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(22, 160, 154, 0.25);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.28);
+}
+
+.shelf-tab-btn.active span,
+.shelf-tab-btn.active i {
+  color: #ffffff !important;
 }
 
 .shelf-count-pill {
@@ -17770,9 +17825,14 @@ progress {
 }
 
 .authored-status-pill.status-published {
-  background: rgba(22, 160, 154, 0.12);
-  color: #16a09a;
-  border: 1px solid rgba(22, 160, 154, 0.25);
+  background: #0d9488;
+  color: #ffffff !important;
+  border: 1px solid #0f766e;
+}
+
+.authored-status-pill.status-published i,
+.authored-status-pill.status-published span {
+  color: #ffffff !important;
 }
 
 .authored-status-pill.status-draft {
@@ -18090,32 +18150,791 @@ progress {
   }
 }
 
-/* Dark Theme Support for Profile Widgets */
-.app-theme-dark .quick-resume-content,
-.app-theme-dark .metric-item,
-.app-theme-dark .reading-goal-box,
-.app-theme-dark .quick-resume-empty {
-  background: var(--app-surface-soft, #1e1e1e);
-  border-color: var(--app-line, #333333);
+/* ==========================================================================
+   Comprehensive Dark Theme & High Contrast Styling for Profile & Admin Chat
+   ========================================================================== */
+
+/* 1. Global Green Elements - Guarantee Crisp White Text on Green Background */
+.primary-button,
+.primary-button i,
+.primary-button span,
+.app-theme-dark .primary-button,
+.app-theme-dark .primary-button i,
+.app-theme-dark .primary-button span,
+[data-theme='dark'] .primary-button,
+[data-theme='dark'] .primary-button i,
+[data-theme='dark'] .primary-button span {
+  color: #ffffff !important;
 }
 
-.app-theme-dark .quick-resume-title,
-.app-theme-dark .metric-value,
-.app-theme-dark .goal-title-wrap strong {
-  color: var(--app-text, #f0ede6);
+.support-inbox-send-btn,
+.support-inbox-send-btn i,
+.support-inbox-send-btn span,
+.app-theme-dark .support-inbox-send-btn,
+.app-theme-dark .support-inbox-send-btn i,
+.app-theme-dark .support-inbox-send-btn span,
+[data-theme='dark'] .support-inbox-send-btn,
+[data-theme='dark'] .support-inbox-send-btn i,
+[data-theme='dark'] .support-inbox-send-btn span,
+.help-chat-send-btn,
+.help-chat-send-btn i,
+.app-theme-dark .help-chat-send-btn,
+.app-theme-dark .help-chat-send-btn i,
+[data-theme='dark'] .help-chat-send-btn,
+[data-theme='dark'] .help-chat-send-btn i {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border-color: #0f766e !important;
 }
 
-.app-theme-dark .edit-goal-form input {
-  background: var(--app-surface, #181818);
-  border-color: var(--app-line, #383838);
-  color: var(--app-text, #f0ede6);
+.status-published,
+.admin-status.status-published,
+.authored-status-pill.status-published,
+.app-theme-dark .status-published,
+.app-theme-dark .admin-status.status-published,
+.app-theme-dark .authored-status-pill.status-published,
+[data-theme='dark'] .status-published,
+[data-theme='dark'] .admin-status.status-published,
+[data-theme='dark'] .authored-status-pill.status-published {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border-color: #0f766e !important;
 }
 
-.app-theme-dark .metric-item.metric-interactive-btn.active-shelf-metric {
-  background: rgba(22, 160, 154, 0.16);
-  border-color: var(--app-accent, #16a09a);
+.status-published i,
+.status-published span,
+.admin-status.status-published i,
+.admin-status.status-published span,
+.authored-status-pill.status-published i,
+.authored-status-pill.status-published span,
+.app-theme-dark .status-published i,
+.app-theme-dark .status-published span,
+.app-theme-dark .admin-status.status-published i,
+.app-theme-dark .admin-status.status-published span,
+.app-theme-dark .authored-status-pill.status-published i,
+.app-theme-dark .authored-status-pill.status-published span,
+[data-theme='dark'] .status-published i,
+[data-theme='dark'] .status-published span,
+[data-theme='dark'] .admin-status.status-published i,
+[data-theme='dark'] .admin-status.status-published span,
+[data-theme='dark'] .authored-status-pill.status-published i,
+[data-theme='dark'] .authored-status-pill.status-published span {
+  color: #ffffff !important;
 }
 
-.app-theme-dark .metric-action-arrow {
-  color: #a3a39e;
+.account-role-pill.role-member,
+.account-role-pill.role-member i,
+.app-theme-dark .account-role-pill.role-member,
+.app-theme-dark .account-role-pill.role-member i,
+[data-theme='dark'] .account-role-pill.role-member,
+[data-theme='dark'] .account-role-pill.role-member i {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border-color: #0f766e !important;
 }
+
+/* 2. Chat with User (Admin Panel & Live Support Chat) - Green Bubbles & Dark Mode */
+.support-bubble-admin,
+.app-theme-dark .support-bubble-admin,
+[data-theme='dark'] .support-bubble-admin,
+.ai-chat-bubble-admin,
+.app-theme-dark .ai-chat-bubble-admin,
+[data-theme='dark'] .ai-chat-bubble-admin {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  border: 1px solid #0f766e !important;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3) !important;
+}
+
+.support-bubble-admin p,
+.app-theme-dark .support-bubble-admin p,
+[data-theme='dark'] .support-bubble-admin p,
+.ai-chat-bubble-admin p,
+.app-theme-dark .ai-chat-bubble-admin p,
+[data-theme='dark'] .ai-chat-bubble-admin p {
+  color: #ffffff !important;
+}
+
+.support-bubble-admin .ai-chat-role-label,
+.app-theme-dark .support-bubble-admin .ai-chat-role-label,
+[data-theme='dark'] .support-bubble-admin .ai-chat-role-label,
+.ai-chat-bubble-admin .ai-chat-role-label,
+.app-theme-dark .ai-chat-bubble-admin .ai-chat-role-label,
+[data-theme='dark'] .ai-chat-bubble-admin .ai-chat-role-label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.support-bubble-admin .ai-chat-timestamp,
+.app-theme-dark .support-bubble-admin .ai-chat-timestamp,
+[data-theme='dark'] .support-bubble-admin .ai-chat-timestamp,
+.ai-chat-bubble-admin .ai-chat-timestamp,
+.app-theme-dark .ai-chat-bubble-admin .ai-chat-timestamp,
+[data-theme='dark'] .ai-chat-bubble-admin .ai-chat-timestamp {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Admin Chat Inbox Dark Mode */
+.app-theme-dark .support-inbox-list,
+[data-theme='dark'] .support-inbox-list,
+.app-theme-dark .support-inbox-detail,
+[data-theme='dark'] .support-inbox-detail {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #282a32);
+}
+
+.app-theme-dark .support-inbox-row,
+[data-theme='dark'] .support-inbox-row {
+  color: var(--app-text, #f1f5f9);
+}
+
+.app-theme-dark .support-inbox-row strong,
+[data-theme='dark'] .support-inbox-row strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .support-inbox-row small,
+[data-theme='dark'] .support-inbox-row small {
+  color: #94a3b8;
+}
+
+.app-theme-dark .support-inbox-row:hover,
+[data-theme='dark'] .support-inbox-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--app-line, #282a32);
+}
+
+.app-theme-dark .support-inbox-row.active,
+[data-theme='dark'] .support-inbox-row.active {
+  background: rgba(13, 148, 136, 0.16);
+  border-color: #0d9488;
+}
+
+.app-theme-dark .support-inbox-header,
+[data-theme='dark'] .support-inbox-header {
+  border-bottom-color: var(--app-line, #282a32);
+}
+
+.app-theme-dark .support-inbox-customer-meta strong,
+[data-theme='dark'] .support-inbox-customer-meta strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .support-customer-subtext,
+[data-theme='dark'] .support-customer-subtext {
+  color: #94a3b8;
+}
+
+.app-theme-dark .support-customer-avatar,
+[data-theme='dark'] .support-customer-avatar {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .support-inbox-messages,
+[data-theme='dark'] .support-inbox-messages {
+  background: var(--app-bg, #121316);
+  border-color: var(--app-line, #282a32);
+}
+
+.app-theme-dark .support-inbox-empty-prompt,
+[data-theme='dark'] .support-inbox-empty-prompt {
+  color: #94a3b8;
+}
+
+.app-theme-dark .support-back-to-list-btn,
+[data-theme='dark'] .support-back-to-list-btn {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+  color: #e2e8f0;
+}
+
+.app-theme-dark .help-chat-escalated-alert,
+[data-theme='dark'] .help-chat-escalated-alert {
+  background: rgba(5, 150, 105, 0.18);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.app-theme-dark .help-chat-escalated-alert strong,
+[data-theme='dark'] .help-chat-escalated-alert strong {
+  color: #a7f3d0;
+}
+
+.app-theme-dark .help-chat-escalated-alert p,
+[data-theme='dark'] .help-chat-escalated-alert p {
+  color: #d1fae5;
+}
+
+/* 3. Comprehensive Dark Theme Styling for User Profile (ProfilePage) */
+.app-theme-dark .profile-page,
+[data-theme='dark'] .profile-page,
+.app-theme-dark .profile-settings,
+[data-theme='dark'] .profile-settings {
+  color: var(--app-text, #edeef2);
+}
+
+.app-theme-dark .profile-page .settings-panel,
+[data-theme='dark'] .profile-page .settings-panel {
+  background: var(--app-surface, #1b1d22);
+  border-color: var(--app-line, #2c2f37);
+  color: var(--app-text, #edeef2);
+}
+
+.app-theme-dark .profile-page .account-settings-card,
+[data-theme='dark'] .profile-page .account-settings-card {
+  background: var(--app-surface-soft, #202329);
+  border-color: var(--app-line, #2c2f37);
+  color: var(--app-text, #edeef2);
+}
+
+.app-theme-dark .profile-page .settings-intro,
+[data-theme='dark'] .profile-page .settings-intro {
+  border-bottom-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .profile-page .settings-intro h2,
+[data-theme='dark'] .profile-page .settings-intro h2 {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .settings-intro p:not(.mono-eyebrow),
+[data-theme='dark'] .profile-page .settings-intro p:not(.mono-eyebrow) {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .mono-eyebrow,
+[data-theme='dark'] .profile-page .mono-eyebrow {
+  color: #2dd4bf !important;
+}
+
+.app-theme-dark .profile-page .settings-card-heading h3,
+[data-theme='dark'] .profile-page .settings-card-heading h3 {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .settings-card-heading > i,
+[data-theme='dark'] .profile-page .settings-card-heading > i {
+  background: #2dd4bf;
+  color: #121316;
+}
+
+.app-theme-dark .profile-page .settings-copy,
+[data-theme='dark'] .profile-page .settings-copy {
+  color: #94a3b8;
+}
+
+/* Profile Form Labels, Inputs, Dropdowns, Hints */
+.app-theme-dark .profile-page label,
+[data-theme='dark'] .profile-page label,
+.app-theme-dark .profile-settings label,
+[data-theme='dark'] .profile-settings label {
+  color: #e2e8f0 !important;
+}
+
+.app-theme-dark .profile-page input:not([type="file"]),
+[data-theme='dark'] .profile-page input:not([type="file"]),
+.app-theme-dark .profile-settings input:not([type="file"]),
+[data-theme='dark'] .profile-settings input:not([type="file"]) {
+  background: #131418 !important;
+  border: 1px solid #383a42 !important;
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .profile-page input:focus,
+[data-theme='dark'] .profile-page input:focus,
+.app-theme-dark .profile-settings input:focus,
+[data-theme='dark'] .profile-settings input:focus {
+  border-color: #2dd4bf !important;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2) !important;
+}
+
+.app-theme-dark .profile-page input::placeholder,
+[data-theme='dark'] .profile-page input::placeholder,
+.app-theme-dark .profile-settings input::placeholder,
+[data-theme='dark'] .profile-settings input::placeholder {
+  color: #64748b !important;
+}
+
+.app-theme-dark .profile-page select,
+[data-theme='dark'] .profile-page select,
+.app-theme-dark .profile-settings select,
+[data-theme='dark'] .profile-settings select {
+  background: #131418 !important;
+  border: 1px solid #383a42 !important;
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .profile-page select option,
+[data-theme='dark'] .profile-page select option,
+.app-theme-dark .profile-settings select option,
+[data-theme='dark'] .profile-settings select option {
+  background: #1b1d22 !important;
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .profile-page .field-hint,
+[data-theme='dark'] .profile-page .field-hint {
+  color: #94a3b8 !important;
+}
+
+.app-theme-dark .profile-page .file-picker,
+[data-theme='dark'] .profile-page .file-picker {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+  color: #e2e8f0;
+}
+
+.app-theme-dark .profile-page .file-picker:hover,
+[data-theme='dark'] .profile-page .file-picker:hover {
+  border-color: #2dd4bf;
+  color: #ffffff;
+}
+
+.app-theme-dark .profile-page .avatar-editor,
+[data-theme='dark'] .profile-page .avatar-editor {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+}
+
+.app-theme-dark .profile-page .avatar-editor small,
+[data-theme='dark'] .profile-page .avatar-editor small {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .avatar-editor span,
+[data-theme='dark'] .profile-page .avatar-editor span {
+  background: #2dd4bf;
+  color: #121316;
+}
+
+/* Account Overview Card */
+.app-theme-dark .profile-page .account-overview-name strong,
+[data-theme='dark'] .profile-page .account-overview-name strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .account-overview-name p,
+[data-theme='dark'] .profile-page .account-overview-name p {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .account-overview-meta > div,
+[data-theme='dark'] .profile-page .account-overview-meta > div {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .profile-page .account-overview-meta span,
+[data-theme='dark'] .profile-page .account-overview-meta span {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .account-overview-meta strong,
+[data-theme='dark'] .profile-page .account-overview-meta strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .reader-rank-badge,
+[data-theme='dark'] .profile-page .reader-rank-badge {
+  color: #2dd4bf;
+}
+
+/* Quick Resume Card */
+.app-theme-dark .profile-page .quick-resume-content,
+[data-theme='dark'] .profile-page .quick-resume-content {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .profile-page .quick-resume-title,
+[data-theme='dark'] .profile-page .quick-resume-title {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .quick-resume-author,
+[data-theme='dark'] .profile-page .quick-resume-author {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .quick-resume-progress-bar,
+[data-theme='dark'] .profile-page .quick-resume-progress-bar {
+  background: #2c2f37;
+}
+
+.app-theme-dark .profile-page .quick-resume-progress-fill,
+[data-theme='dark'] .profile-page .quick-resume-progress-fill {
+  background: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .quick-resume-pct,
+[data-theme='dark'] .profile-page .quick-resume-pct {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .quick-resume-empty,
+[data-theme='dark'] .profile-page .quick-resume-empty {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .quick-resume-empty i,
+[data-theme='dark'] .profile-page .quick-resume-empty i {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .quick-resume-empty p,
+[data-theme='dark'] .profile-page .quick-resume-empty p {
+  color: #94a3b8;
+}
+
+/* Reading Stats & Goals */
+.app-theme-dark .profile-page .metric-item,
+[data-theme='dark'] .profile-page .metric-item {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .profile-page .metric-item.metric-interactive-btn:hover,
+[data-theme='dark'] .profile-page .metric-item.metric-interactive-btn:hover {
+  border-color: #2dd4bf;
+  box-shadow: 0 6px 18px rgba(45, 212, 191, 0.15);
+}
+
+.app-theme-dark .profile-page .metric-item.metric-interactive-btn.active-shelf-metric,
+[data-theme='dark'] .profile-page .metric-item.metric-interactive-btn.active-shelf-metric {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .metric-value,
+[data-theme='dark'] .profile-page .metric-value {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .metric-label,
+[data-theme='dark'] .profile-page .metric-label {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .metric-action-arrow,
+[data-theme='dark'] .profile-page .metric-action-arrow {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .reading-goal-box,
+[data-theme='dark'] .profile-page .reading-goal-box {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .profile-page .goal-title-wrap,
+[data-theme='dark'] .profile-page .goal-title-wrap {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .goal-title-wrap i,
+[data-theme='dark'] .profile-page .goal-title-wrap i {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .goal-title-wrap strong,
+[data-theme='dark'] .profile-page .goal-title-wrap strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .profile-page .goal-progress-text,
+[data-theme='dark'] .profile-page .goal-progress-text {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .goal-progress-bar,
+[data-theme='dark'] .profile-page .goal-progress-bar {
+  background: #2c2f37;
+}
+
+.app-theme-dark .profile-page .goal-progress-fill,
+[data-theme='dark'] .profile-page .goal-progress-fill {
+  background: #2dd4bf;
+}
+
+.app-theme-dark .profile-page .edit-goal-form label,
+[data-theme='dark'] .profile-page .edit-goal-form label {
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .profile-page .edit-goal-form input,
+[data-theme='dark'] .profile-page .edit-goal-form input {
+  background: #121316 !important;
+  border-color: #2c2f37 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Personal Bookshelf */
+.app-theme-dark .profile-shelf-card,
+[data-theme='dark'] .profile-shelf-card {
+  background: var(--app-surface-soft, #202329);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .shelf-tab-nav,
+[data-theme='dark'] .shelf-tab-nav {
+  border-bottom-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .shelf-tab-btn,
+[data-theme='dark'] .shelf-tab-btn {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+  color: #cbd5e1;
+}
+
+.app-theme-dark .shelf-tab-btn:hover,
+[data-theme='dark'] .shelf-tab-btn:hover {
+  border-color: #2dd4bf;
+  color: #ffffff;
+}
+
+.app-theme-dark .shelf-tab-btn.active,
+[data-theme='dark'] .shelf-tab-btn.active {
+  background: #0d9488 !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
+}
+
+.app-theme-dark .shelf-tab-btn.active span,
+.app-theme-dark .shelf-tab-btn.active i,
+[data-theme='dark'] .shelf-tab-btn.active span,
+[data-theme='dark'] .shelf-tab-btn.active i {
+  color: #ffffff !important;
+}
+
+.app-theme-dark .shelf-count-pill,
+[data-theme='dark'] .shelf-count-pill {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+}
+
+.app-theme-dark .shelf-tab-btn.active .shelf-count-pill,
+[data-theme='dark'] .shelf-tab-btn.active .shelf-count-pill {
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+}
+
+.app-theme-dark .shelf-book-item,
+[data-theme='dark'] .shelf-book-item {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .shelf-book-item:hover,
+[data-theme='dark'] .shelf-book-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.app-theme-dark .shelf-book-meta strong,
+[data-theme='dark'] .shelf-book-meta strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .shelf-book-meta span,
+[data-theme='dark'] .shelf-book-meta span {
+  color: #94a3b8;
+}
+
+.app-theme-dark .shelf-item-progress-bar,
+[data-theme='dark'] .shelf-item-progress-bar {
+  background: #2c2f37;
+}
+
+.app-theme-dark .shelf-item-progress-fill,
+[data-theme='dark'] .shelf-item-progress-fill {
+  background: #2dd4bf;
+}
+
+.app-theme-dark .shelf-item-progress-wrap small,
+[data-theme='dark'] .shelf-item-progress-wrap small {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .shelf-status-select,
+[data-theme='dark'] .shelf-status-select {
+  background: #121316 !important;
+  border-color: var(--app-line, #383a42) !important;
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .shelf-status-select option,
+[data-theme='dark'] .shelf-status-select option {
+  background: #18191d !important;
+  color: #f1f5f9 !important;
+}
+
+.app-theme-dark .shelf-remove-btn,
+[data-theme='dark'] .shelf-remove-btn {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+  color: #94a3b8;
+}
+
+.app-theme-dark .shelf-remove-btn:hover,
+[data-theme='dark'] .shelf-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+.app-theme-dark .shelf-empty-box,
+[data-theme='dark'] .shelf-empty-box {
+  color: #94a3b8;
+}
+
+.app-theme-dark .shelf-empty-box i,
+[data-theme='dark'] .shelf-empty-box i {
+  color: #2dd4bf;
+}
+
+.app-theme-dark .shelf-empty-box p,
+[data-theme='dark'] .shelf-empty-box p {
+  color: #94a3b8 !important;
+}
+
+/* Authored Books in Profile */
+.app-theme-dark .authored-book-item,
+[data-theme='dark'] .authored-book-item {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .authored-views-pill,
+[data-theme='dark'] .authored-views-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--app-line, #2c2f37);
+  color: #94a3b8;
+}
+
+.app-theme-dark .authored-status-pill.status-draft,
+[data-theme='dark'] .authored-status-pill.status-draft {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.app-theme-dark .authored-status-pill.status-hidden,
+[data-theme='dark'] .authored-status-pill.status-hidden {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.app-theme-dark .author-rejection-note,
+[data-theme='dark'] .author-rejection-note {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.4);
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+.app-theme-dark .author-rejection-note p,
+[data-theme='dark'] .author-rejection-note p {
+  color: #fecaca;
+}
+
+.app-theme-dark .author-rejection-note .rejection-note-hint,
+[data-theme='dark'] .author-rejection-note .rejection-note-hint {
+  color: #f87171;
+}
+
+/* Security & Recovery in Profile */
+.app-theme-dark .security-recovery-divider,
+[data-theme='dark'] .security-recovery-divider {
+  border-top-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .security-recovery-divider span,
+[data-theme='dark'] .security-recovery-divider span {
+  color: #94a3b8;
+}
+
+.app-theme-dark .security-recovery-box,
+[data-theme='dark'] .security-recovery-box {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+}
+
+.app-theme-dark .recovery-icon-badge,
+[data-theme='dark'] .recovery-icon-badge {
+  background: #202329;
+  border-color: var(--app-line, #2c2f37);
+  color: #2dd4bf;
+}
+
+.app-theme-dark .recovery-text strong,
+[data-theme='dark'] .recovery-text strong {
+  color: #f1f5f9;
+}
+
+.app-theme-dark .recovery-text p,
+[data-theme='dark'] .recovery-text p {
+  color: #94a3b8;
+}
+
+/* Reader Preview Card & Website Theme */
+.app-theme-dark .profile-page .settings-reader-preview.reader-dark,
+[data-theme='dark'] .profile-page .settings-reader-preview.reader-dark {
+  background: #121316;
+  border-color: var(--app-line, #2c2f37);
+  color: #edeef2;
+}
+
+.app-theme-dark .profile-page .settings-reader-preview.reader-dark h4,
+[data-theme='dark'] .profile-page .settings-reader-preview.reader-dark h4 {
+  color: #edeef2;
+}
+
+.app-theme-dark .profile-page .settings-reader-preview.reader-dark p,
+[data-theme='dark'] .profile-page .settings-reader-preview.reader-dark p {
+  color: #94a3b8;
+}
+
+.app-theme-dark .profile-page .theme-options button,
+[data-theme='dark'] .profile-page .theme-options button {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #2c2f37);
+  color: #edeef2;
+}
+
+.app-theme-dark .profile-page .theme-options button.active,
+[data-theme='dark'] .profile-page .theme-options button.active {
+  border-color: #2dd4bf;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.3);
+  color: #ffffff;
+}
+
+/* Profile Buttons in Dark Mode */
+.app-theme-dark .profile-page .primary-button,
+[data-theme='dark'] .profile-page .primary-button {
+  background: #0d9488 !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+.app-theme-dark .profile-page .primary-button:hover:not(:disabled),
+[data-theme='dark'] .profile-page .primary-button:hover:not(:disabled) {
+  background: #0f766e !important;
+  color: #ffffff !important;
+}
+
+.app-theme-dark .profile-page .ghost-button,
+[data-theme='dark'] .profile-page .ghost-button {
+  background: var(--app-surface, #18191f);
+  border-color: var(--app-line, #383a42);
+  color: #e2e8f0;
+}
+
+.app-theme-dark .profile-page .ghost-button:hover:not(:disabled),
+[data-theme='dark'] .profile-page .ghost-button:hover:not(:disabled) {
+  border-color: #2dd4bf;
+  color: #ffffff;
+}
+

@@ -360,6 +360,127 @@ async function sendPasswordChangedEmail({ to, userName, when }) {
   });
 }
 
+/**
+ * 6. Password Reset Request Email
+ */
+async function sendPasswordResetEmail({ to, userName, resetLink }) {
+  if (!to) return false;
+  const name = userName || 'Reader';
+  const targetLink = resetLink || `${APP_URL}/login`;
+
+  const contentHtml = `
+    <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0;">Password Reset Request</h2>
+    <p>Hello ${name},</p>
+    <p>We received a request to reset the password associated with your BookWorm account (<strong>${to}</strong>).</p>
+    <p>To choose a new password, click the button below within the next 60 minutes:</p>
+    <div style="text-align: center; margin: 26px 0 20px;">
+      <a href="${targetLink}" class="btn-action">Reset Password</a>
+    </div>
+    <div class="card-box" style="font-size: 13px; color: #64748b; background: #fafaf9;">
+      <p style="margin: 0 0 6px;"><strong>Security notice:</strong> If you did not request this password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+      <p style="margin: 0;">Link not working? Paste this URL directly into your browser:<br/><span style="color: #0f172a; word-break: break-all;">${targetLink}</span></p>
+    </div>
+  `;
+
+  const html = wrapEmailLayout({
+    title: 'Reset Your BookWorm Password',
+    badgeText: 'Security Service',
+    contentHtml,
+    footerNote: 'You received this notification because a password reset was requested for your account.',
+  });
+
+  return sendMail({
+    to,
+    from: '"BookWorm Security" <security@bookworm.app>',
+    subject: 'Action Required: Reset your BookWorm password',
+    html,
+  });
+}
+
+/**
+ * 7. Welcome & Member Onboarding Email
+ */
+async function sendWelcomeEmail({ to, userName, displayId }) {
+  if (!to) return false;
+  const name = userName || 'Reader';
+  const memberId = displayId || 'Member';
+  const catalogUrl = `${APP_URL}`;
+
+  const contentHtml = `
+    <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome to BookWorm</h2>
+    <p>Dear ${name},</p>
+    <p>Welcome to <strong>BookWorm</strong>! We are delighted to have you join our digital library and global community of bibliophiles.</p>
+    <div class="card-box">
+      <div class="card-row"><span class="card-label">Member Name:</span> <span class="card-val">${name}</span></div>
+      <div class="card-row"><span class="card-label">Account Email:</span> <span class="card-val">${to}</span></div>
+      <div class="card-row"><span class="card-label">Reader ID:</span> <span class="card-val" style="font-weight: 700; color: #0f172a;">${memberId}</span></div>
+      <div class="card-row"><span class="card-label">Status:</span> <span class="card-val" style="color: #059669; font-weight: 600;">Active Member</span></div>
+    </div>
+    <p><strong>What you can do right now:</strong></p>
+    <ul style="color: #475569; font-size: 14px; padding-left: 20px; margin: 8px 0 16px;">
+      <li>Explore thousands of ebooks and full-cast audiobooks.</li>
+      <li>Curate custom personal bookshelves and track reading goals.</li>
+      <li>Write and self-publish original manuscripts via our Author Studio.</li>
+    </ul>
+    <div style="text-align: center; margin: 24px 0 12px;">
+      <a href="${catalogUrl}" class="btn-action">Start Reading Now</a>
+    </div>
+  `;
+
+  const html = wrapEmailLayout({
+    title: `Welcome to BookWorm, ${name}!`,
+    badgeText: 'Member Onboarding',
+    contentHtml,
+    footerNote: 'You received this onboarding welcome message because a new account was registered with BookWorm.',
+  });
+
+  return sendMail({
+    to,
+    from: '"BookWorm Welcome Desk" <welcome@bookworm.app>',
+    subject: `Welcome to BookWorm, ${name}!`,
+    html,
+  });
+}
+
+/**
+ * 8. Author Manuscript Submission Receipt Email
+ */
+async function sendBookSubmissionEmail({ to, authorName, bookTitle, bookId }) {
+  if (!to) return false;
+  const name = authorName || 'Author';
+  const title = bookTitle || 'Your manuscript';
+  const writeUrl = `${APP_URL}/write`;
+
+  const contentHtml = `
+    <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0;">Manuscript Submission Received</h2>
+    <p>Dear ${name},</p>
+    <p>Thank you for submitting <strong>"${title}"</strong> to BookWorm. Your manuscript has been safely received and entered into our editorial review queue.</p>
+    <div class="card-box">
+      <div class="card-row"><span class="card-label">Title:</span> <span class="card-val">${title}</span></div>
+      <div class="card-row"><span class="card-label">Current Status:</span> <span class="card-val" style="color: #2563eb; font-weight: 600;">Under Editorial Review</span></div>
+      <div class="card-row"><span class="card-label">Submission Date:</span> <span class="card-val">${new Date().toUTCString()}</span></div>
+    </div>
+    <p>Our editorial and moderation team inspects submissions for formatting, chapter flow, and platform safety. You will receive an automated email notice as soon as an editorial decision is reached.</p>
+    <div style="text-align: center; margin: 24px 0 12px;">
+      <a href="${writeUrl}" class="btn-action">View in Author Studio</a>
+    </div>
+  `;
+
+  const html = wrapEmailLayout({
+    title: `Submission Received: "${title}"`,
+    badgeText: 'Author Studio',
+    contentHtml,
+    footerNote: 'You received this receipt because you submitted a manuscript to BookWorm.',
+  });
+
+  return sendMail({
+    to,
+    from: '"BookWorm Editorial" <editorial@bookworm.app>',
+    subject: `Manuscript Received: "${title}" is under review`,
+    html,
+  });
+}
+
 module.exports = {
   wrapEmailLayout,
   sendBookApprovalEmail,
@@ -367,4 +488,7 @@ module.exports = {
   sendBanNotificationEmail,
   sendUnbanNotificationEmail,
   sendPasswordChangedEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendBookSubmissionEmail,
 };

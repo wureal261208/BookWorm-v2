@@ -5,6 +5,9 @@ const {
   sendBanNotificationEmail,
   sendUnbanNotificationEmail,
   sendPasswordChangedEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendBookSubmissionEmail,
 } = require('../utils/emailTemplates');
 const mailer = require('../utils/mailer');
 
@@ -118,5 +121,57 @@ describe('Email Notification Engine & Bot Worm Templates', () => {
     expect(callArgs.html).toContain('Security Alert: Password Updated');
     expect(callArgs.html).toContain('Alice');
     expect(callArgs.html).toContain('user@example.com');
+  });
+
+  test('sendPasswordResetEmail dispatches password reset link with 60-minute expiry notice', async () => {
+    await sendPasswordResetEmail({
+      to: 'resetme@example.com',
+      userName: 'Bob Reader',
+      resetLink: 'https://bookworm.app/__/auth/action?mode=resetPassword&oobCode=XYZ123',
+    });
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+    const callArgs = mailer.sendMail.mock.calls[0][0];
+    expect(callArgs.to).toBe('resetme@example.com');
+    expect(callArgs.subject).toContain('Reset your BookWorm password');
+    expect(callArgs.html).toContain('Password Reset Request');
+    expect(callArgs.html).toContain('Bob Reader');
+    expect(callArgs.html).toContain('https://bookworm.app/__/auth/action?mode=resetPassword&oobCode=XYZ123');
+    expect(callArgs.html).toContain('within the next 60 minutes');
+  });
+
+  test('sendWelcomeEmail dispatches member onboarding details with reader ID', async () => {
+    await sendWelcomeEmail({
+      to: 'newbie@example.com',
+      userName: 'Charlie',
+      displayId: 'BW-000999',
+    });
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+    const callArgs = mailer.sendMail.mock.calls[0][0];
+    expect(callArgs.to).toBe('newbie@example.com');
+    expect(callArgs.subject).toContain('Welcome to BookWorm, Charlie!');
+    expect(callArgs.html).toContain('Welcome to BookWorm');
+    expect(callArgs.html).toContain('Charlie');
+    expect(callArgs.html).toContain('BW-000999');
+    expect(callArgs.html).toContain('Active Member');
+  });
+
+  test('sendBookSubmissionEmail dispatches manuscript submission receipt', async () => {
+    await sendBookSubmissionEmail({
+      to: 'writer@example.com',
+      authorName: 'Dan Brown',
+      bookTitle: 'Angels & Demons',
+      bookId: 'b-98765',
+    });
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+    const callArgs = mailer.sendMail.mock.calls[0][0];
+    expect(callArgs.to).toBe('writer@example.com');
+    expect(callArgs.subject).toContain('Angels & Demons');
+    expect(callArgs.html).toContain('Manuscript Submission Received');
+    expect(callArgs.html).toContain('Dan Brown');
+    expect(callArgs.html).toContain('Under Editorial Review');
+    expect(callArgs.html).toContain('/write');
   });
 });

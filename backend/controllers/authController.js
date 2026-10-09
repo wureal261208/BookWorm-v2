@@ -1,6 +1,8 @@
+const User = require('../models/User');
 const maskEmail = require('../utils/maskEmail');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
+const { sendPasswordResetEmail } = require('../utils/emailTemplates');
 
 function sanitizeUser(user) {
   return {
@@ -87,7 +89,7 @@ const recordCategoryEngagement = asyncHandler(async (req, res) => {
 
 // @route POST /api/auth/forgot-password
 // @desc  Generates a genuine Firebase password reset link using Firebase Admin,
-//        logs it to console for easy local testing, and returns status.
+//        dispatches a branded email via Nodemailer, and returns status.
 const forgotPassword = asyncHandler(async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   if (!email) {
@@ -95,6 +97,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
   }
 
   let resetLink = null;
+  const user = await User.findOne({ email }).select('name email');
+
   try {
     const initFirebaseAdmin = require('../config/firebaseAdmin');
     const admin = initFirebaseAdmin();
@@ -105,6 +109,14 @@ const forgotPassword = asyncHandler(async (req, res) => {
     console.log('==================================================\n');
   } catch (err) {
     console.warn(`Could not generate Firebase reset link for ${email}:`, err.message);
+  }
+
+  if (resetLink) {
+    sendPasswordResetEmail({
+      to: email,
+      userName: user?.name,
+      resetLink,
+    }).catch((mailErr) => console.warn('Could not dispatch password reset email:', mailErr.message));
   }
 
   return success(res, 200, 'If this account exists, a password reset link has been dispatched.', {
