@@ -14,15 +14,18 @@ vi.mock('../../../utils/apiClient', () => ({
   publicApiFetch: vi.fn().mockResolvedValue({}),
 }))
 
+const mockNavigateTo = vi.fn()
+
 vi.mock('../../../context/NavigationContext', () => ({
   useNavigation: () => ({
-    navigateTo: vi.fn(),
+    navigateTo: mockNavigateTo,
   }),
 }))
 
 describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockNavigateTo.mockClear()
     apiFetch.mockImplementation((url) => {
       if (url.includes('/api/ai-suggestions/conversations')) {
         return Promise.resolve([])
@@ -40,7 +43,7 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
     expect(screen.getByRole('button', { name: /Other topic\.\.\./i })).toBeInTheDocument()
   })
 
-  test('clicking a starter button populates input and submitting sends message', async () => {
+  test('clicking a starter button immediately sends message without needing Enter or Send', async () => {
     let sentBody
     apiFetch.mockImplementation((url, options) => {
       if (url === '/api/ai-suggestions/conversations' && options?.method === 'POST') {
@@ -69,14 +72,9 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
     render(<AiSuggestionsPage />)
 
     const starterBtn = await screen.findByRole('button', { name: /Something adventurous/i })
-    const input = screen.getByRole('textbox')
 
-    // Clicking button populates the chat input
+    // Clicking button sends message immediately
     fireEvent.click(starterBtn)
-    expect(input.value).toBe('Something adventurous')
-
-    // Submitting with Enter / Send button
-    fireEvent.submit(input.closest('form'))
 
     await waitFor(() => {
       expect(sentBody).toEqual({ text: 'Something adventurous' })
@@ -90,7 +88,7 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
     expect(screen.getAllByRole('button', { name: /Lighthearted & fun/i }).length).toBeGreaterThan(0)
   })
 
-  test('selecting a docked option button loads it into chat bar, then submitting sends it', async () => {
+  test('selecting a docked option button immediately sends message without needing Enter or Send', async () => {
     apiFetch.mockImplementation((url, options) => {
       if (url === '/api/ai-suggestions/conversations' && options?.method === 'POST') {
         return Promise.resolve({
@@ -116,11 +114,9 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
 
     render(<AiSuggestionsPage />)
 
-    // Trigger initial message
+    // Trigger initial message by clicking starter button
     const starterBtn = await screen.findByRole('button', { name: /Something adventurous/i })
-    const input = screen.getByRole('textbox')
     fireEvent.click(starterBtn)
-    fireEvent.submit(input.closest('form'))
 
     // Wait for options to appear
     await screen.findByText('What kind of mood?')
@@ -137,26 +133,41 @@ describe('AiSuggestionsPage - Guided Quick Replies & Dynamic Thinking', () => {
             { role: 'user', text: 'Something adventurous' },
             { role: 'assistant', text: 'What kind of mood?' },
             { role: 'user', text: 'Lighthearted & fun' },
-            { role: 'assistant', text: 'Great picks for fun!' },
+            {
+              role: 'assistant',
+              text: 'Great picks for fun!',
+              suggestions: [
+                { id: 'book-101', title: 'The Time Machine', author: 'H. G. Wells', type: 'ebook' },
+              ],
+            },
           ],
         })
       }
       return Promise.resolve({})
     })
 
-    // Click the docked chip option
+    // Click the docked chip option - sends immediately!
     const optionBtns = screen.getAllByRole('button', { name: /Lighthearted & fun/i })
     fireEvent.click(optionBtns[0])
-
-    // Verify input contains the chosen option
-    expect(input.value).toBe('Lighthearted & fun')
-
-    // Press Enter or click Send to submit
-    fireEvent.submit(input.closest('form'))
 
     await waitFor(() => {
       expect(followUpSentBody).toEqual({ text: 'Lighthearted & fun' })
     })
+
+    // Verify smart recommendation card is rendered with Read Now & Details buttons
+    expect(await screen.findByText('The Time Machine')).toBeInTheDocument()
+    const readBtn = screen.getByRole('button', { name: /Read now/i })
+    const detailsBtn = screen.getByRole('button', { name: /Details/i })
+    expect(readBtn).toBeInTheDocument()
+    expect(detailsBtn).toBeInTheDocument()
+
+    // Clicking Read now triggers navigation to reader
+    fireEvent.click(readBtn)
+    expect(mockNavigateTo).toHaveBeenCalledWith('read', { query: 'id=book-101' })
+
+    // Clicking Details triggers navigation to book details
+    fireEvent.click(detailsBtn)
+    expect(mockNavigateTo).toHaveBeenCalledWith('detail', { query: 'id=book-101' })
   })
 
   test('clicking "Other (type below)..." clears option and focuses input for custom typing', async () => {

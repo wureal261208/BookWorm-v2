@@ -56,18 +56,40 @@ const clearAllConversations = asyncHandler(async (req, res) => {
   return success(res, 200, 'All chat history deleted.', { deletedCount: result.deletedCount });
 });
 
+function extractKeywords(text) {
+  if (!text) return [];
+  const stopWords = new Set([
+    'the', 'and', 'for', 'with', 'about', 'some', 'book', 'books', 'read', 'listen',
+    'want', 'like', 'give', 'recommend', 'suggestion', 'suggestions', 'something',
+    'please', 'tell', 'more', 'what', 'which', 'looking', 'tôi', 'muốn', 'sách',
+    'đọc', 'nghe', 'cuốn', 'thích', 'cho', 'gợi', 'ý'
+  ]);
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w))
+    .slice(0, 8);
+}
+
 async function fetchCandidates(latestUserText) {
-  const keywords = latestUserText
-    .split(/[^a-zA-Z]+/)
-    .filter((word) => word.length > 3)
-    .slice(0, 5);
+  const keywords = extractKeywords(latestUserText);
 
   let candidates = [];
   if (keywords.length) {
-    candidates = await Content.find({ status: 'published', categories: { $regex: keywords.join('|'), $options: 'i' } })
+    const orClauses = keywords.flatMap((keyword) => {
+      const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return [
+        { title: { $regex: safe, $options: 'i' } },
+        { author: { $regex: safe, $options: 'i' } },
+        { categories: { $regex: safe, $options: 'i' } },
+      ];
+    });
+
+    candidates = await Content.find({ status: 'published', $or: orClauses })
       .sort({ downloadCount: -1 })
       .limit(CANDIDATE_POOL_SIZE)
-      .select('title author type categories')
+      .select('title author type categories cover_image')
       .lean();
   }
 
@@ -76,7 +98,7 @@ async function fetchCandidates(latestUserText) {
     const topUp = await Content.find({ status: 'published' })
       .sort({ downloadCount: -1 })
       .limit(CANDIDATE_POOL_SIZE)
-      .select('title author type categories')
+      .select('title author type categories cover_image')
       .lean();
     for (const item of topUp) {
       if (candidates.length >= CANDIDATE_POOL_SIZE) break;
@@ -96,6 +118,7 @@ async function askAndAppend(conversation, userText) {
     throw new Error('No published catalog content available to suggest from yet.');
   }
   const candidateLookup = new Map(candidates.map((item) => [String(item._id), item]));
+  const titleLookup = new Map(candidates.map((item) => [item.title.toLowerCase().trim(), item]));
 
   const history = conversation.messages
     .slice(-MAX_HISTORY_MESSAGES)
@@ -113,10 +136,48 @@ async function askAndAppend(conversation, userText) {
     })),
   });
 
-  const suggestions = suggestionIds
-    .map((id) => candidateLookup.get(id))
-    .filter(Boolean)
-    .map((item) => ({ id: item._id, title: item.title, author: item.author, type: item.type }));
+  // Smart matching: resolve by exact ID, title lookup, or fuzzy title match
+  const matchedSuggestions = [];
+  const addedIds = new Set();
+
+  for (const idOrTitle of suggestionIds) {
+    const rawStr = String(idOrTitle).trim();
+    let item = candidateLookup.get(rawStr);
+    if (!item) {
+      item = titleLookup.get(rawStr.toLowerCase());
+    }
+    if (!item) {
+      item = candidates.find((c) =>
+        c.title.toLowerCase().includes(rawStr.toLowerCase()) ||
+        rawStr.toLowerCase().includes(c.title.toLowerCase())
+      );
+    }
+    if (item && !addedIds.has(String(item._id))) {
+      addedIds.add(String(item._id));
+      matchedSuggestions.push(item);
+    }
+  }
+
+  // Fallback: If AI mentions candidate book titles in reply text and no suggestions were resolved
+  if (matchedSuggestions.length === 0) {
+    for (const item of candidates) {
+      if (item.title && item.title.length > 3 && reply.toLowerCase().includes(item.title.toLowerCase())) {
+        if (!addedIds.has(String(item._id))) {
+          addedIds.add(String(item._id));
+          matchedSuggestions.push(item);
+          if (matchedSuggestions.length >= 4) break;
+        }
+      }
+    }
+  }
+
+  const suggestions = matchedSuggestions.map((item) => ({
+    id: item._id,
+    title: item.title,
+    author: item.author,
+    type: item.type,
+    cover_image: item.cover_image || '',
+  }));
 
   conversation.messages.push({ role: 'assistant', text: reply, suggestions, options });
 }

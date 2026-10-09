@@ -144,15 +144,10 @@ function AiSuggestionsPage() {
     }
   }
 
-  // Populate input when an option button is selected; user confirms with Enter or Send button
+  // Instant send when an option button is selected (no need to press Enter or Send)
   function handleSelectOption(option) {
-    setInput(option)
-    if (inputRef.current) {
-      inputRef.current.focus()
-      const len = option.length
-      inputRef.current.setSelectionRange?.(len, len)
-      inputRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
-    }
+    if (!option || sending) return
+    send(option)
   }
 
   // Focus and highlight custom input for free-form query ("Other")
@@ -374,18 +369,73 @@ function AiSuggestionsPage() {
                   {/* Suggestion cards (recommended titles) */}
                   {message.suggestions?.length > 0 && (
                     <div className="ai-chat-suggestions">
-                      {message.suggestions.map((item) => (
-                        <button
-                          className="ai-chat-suggestion-card"
-                          key={item.id}
-                          onClick={() => navigateTo(item.type === 'ebook' ? 'read' : 'listen', { query: `id=${item.id}` })}
-                          type="button"
-                        >
-                          <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</span>
-                          <strong>{item.title}</strong>
-                          <span>{item.author}</span>
-                        </button>
-                      ))}
+                      <div className="ai-suggestions-grid-header">
+                        <i className="bi bi-bookmark-check" />
+                        <span>Recommended titles - Click to read or listen:</span>
+                      </div>
+                      <div className="ai-suggestions-cards-list">
+                        {message.suggestions.map((item) => {
+                          const isEbook = item.type === 'ebook'
+                          return (
+                            <div
+                              className="ai-chat-suggestion-card"
+                              key={item.id}
+                              onClick={() => navigateTo(isEbook ? 'read' : 'listen', { query: `id=${item.id}` })}
+                            >
+                              <div className="ai-suggestion-cover-wrap">
+                                {item.cover_image ? (
+                                  <img
+                                    alt={item.title}
+                                    className="ai-suggestion-cover"
+                                    loading="lazy"
+                                    src={item.cover_image}
+                                  />
+                                ) : (
+                                  <div className="ai-suggestion-cover-fallback">
+                                    <i className={`bi ${isEbook ? 'bi-book' : 'bi-headphones'}`} />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="ai-suggestion-meta">
+                                <div className="ai-suggestion-badge-row">
+                                  <span className={`ai-chat-tag ai-chat-tag-${item.type}`}>
+                                    <i className={`bi ${isEbook ? 'bi-book-half' : 'bi-headphones'}`} />
+                                    {isEbook ? 'Ebook' : 'Audiobook'}
+                                  </span>
+                                </div>
+                                <strong className="ai-suggestion-title" title={item.title}>
+                                  {item.title}
+                                </strong>
+                                <span className="ai-suggestion-author">
+                                  {item.author || 'Unknown author'}
+                                </span>
+                              </div>
+
+                              <div className="ai-suggestion-actions" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className="ai-book-action-btn ai-book-action-primary"
+                                  onClick={() => navigateTo(isEbook ? 'read' : 'listen', { query: `id=${item.id}` })}
+                                  title={isEbook ? 'Read now' : 'Listen now'}
+                                  type="button"
+                                >
+                                  <i className={`bi ${isEbook ? 'bi-book-half' : 'bi-headphones'}`} />
+                                  <span>{isEbook ? 'Read now' : 'Listen now'}</span>
+                                </button>
+                                <button
+                                  className="ai-book-action-btn ai-book-action-secondary"
+                                  onClick={() => navigateTo('detail', { query: `id=${item.id}` })}
+                                  title="View details"
+                                  type="button"
+                                >
+                                  <i className="bi bi-info-circle" />
+                                  <span>Details</span>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -394,7 +444,7 @@ function AiSuggestionsPage() {
                     <div className="ai-chat-quick-replies-wrap">
                       <div className="ai-chat-quick-replies-header">
                         <i className="bi bi-chat-quote" />
-                        <span>Quick suggestions (Click to load into chat bar):</span>
+                        <span>Quick suggestions (Tap to ask immediately):</span>
                       </div>
                       <div className="ai-chat-quick-replies-list">
                         {quickReplies.map((option) => {
@@ -473,7 +523,7 @@ function AiSuggestionsPage() {
                   <i className="bi bi-lightbulb" /> Suggested choices:
                 </span>
                 <span className="ai-chat-quick-dock-hint">
-                  Click to select, then press Enter or Send
+                  Tap any option to ask immediately
                 </span>
               </div>
               <div aria-label="Suggested reply options" className="ai-chat-quick-dock-chips" role="group">

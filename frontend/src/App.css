@@ -10393,33 +10393,110 @@ progress {
 }
 
 .ai-chat-suggestions {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.ai-suggestions-grid-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--app-muted, #71716e);
+  margin-bottom: 2px;
+}
+
+.ai-suggestions-grid-header i {
+  color: var(--app-accent, #16a09a);
+}
+
+.ai-suggestions-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ai-chat-suggestion-card {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--app-line);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--app-line, var(--app-border, rgba(0, 0, 0, 0.1)));
   background: var(--app-surface);
   color: var(--app-text);
   cursor: pointer;
   text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  outline: none;
+}
+
+.ai-chat-suggestion-card:hover,
+.ai-chat-suggestion-card:focus-visible {
+  border-color: var(--app-accent, #16a09a);
+  background: color-mix(in srgb, var(--app-accent, #16a09a) 4%, var(--app-surface));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.ai-suggestion-cover-wrap {
+  width: 42px;
+  height: 58px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--app-surface-soft, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--app-line, rgba(0, 0, 0, 0.08));
+}
+
+.ai-suggestion-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-suggestion-cover-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--app-muted, #71716e);
+}
+
+.ai-suggestion-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-suggestion-badge-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
 }
 
 .ai-chat-tag {
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--app-surface-soft);
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 
 .ai-chat-tag-audiobook {
@@ -10430,6 +10507,95 @@ progress {
 .ai-chat-tag-ebook {
   background: #dff5e1;
   color: #1c6b2d;
+}
+
+.app-theme-dark .ai-chat-tag-audiobook,
+[data-theme='dark'] .ai-chat-tag-audiobook {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.app-theme-dark .ai-chat-tag-ebook,
+[data-theme='dark'] .ai-chat-tag-ebook {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.ai-suggestion-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--app-text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-suggestion-author {
+  font-size: 12px;
+  color: var(--app-muted, #71716e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ai-book-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ai-book-action-primary {
+  background: var(--app-accent, #16a09a);
+  color: #ffffff;
+}
+
+.ai-book-action-primary:hover {
+  filter: brightness(1.08);
+}
+
+.ai-book-action-secondary {
+  background: transparent;
+  color: var(--app-text);
+  border-color: var(--app-line, var(--app-border, rgba(0, 0, 0, 0.15)));
+}
+
+.ai-book-action-secondary:hover {
+  background: var(--app-surface-soft, rgba(0, 0, 0, 0.05));
+  border-color: var(--app-text);
+}
+
+@media (max-width: 600px) {
+  .ai-chat-suggestion-card {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+
+  .ai-suggestion-actions {
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .ai-book-action-btn {
+    flex: 1;
+    padding: 7px 8px;
+  }
 }
 
 .ai-chat-empty-intro {

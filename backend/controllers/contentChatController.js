@@ -29,21 +29,34 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
 
   const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
 
-  // Bias the candidate pool toward whatever the reader just said (a loose
-  // keyword match against categories) so the model has relevant options,
-  // then top up with generally popular titles so it always has a
-  // reasonable pool even when nothing matches.
+  const stopWords = new Set([
+    'the', 'and', 'for', 'with', 'about', 'some', 'book', 'books', 'read', 'listen',
+    'want', 'like', 'give', 'recommend', 'suggestion', 'suggestions', 'something',
+    'please', 'tell', 'more', 'what', 'which', 'looking', 'tôi', 'muốn', 'sách',
+    'đọc', 'nghe', 'cuốn', 'thích', 'cho', 'gợi', 'ý'
+  ]);
   const keywords = latestUserMessage
-    .split(/[^a-zA-Z]+/)
-    .filter((word) => word.length > 3)
-    .slice(0, 5);
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w))
+    .slice(0, 8);
 
   let candidates = [];
   if (keywords.length) {
-    candidates = await Content.find({ status: 'published', categories: { $regex: keywords.join('|'), $options: 'i' } })
+    const orClauses = keywords.flatMap((keyword) => {
+      const safe = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return [
+        { title: { $regex: safe, $options: 'i' } },
+        { author: { $regex: safe, $options: 'i' } },
+        { categories: { $regex: safe, $options: 'i' } },
+      ];
+    });
+
+    candidates = await Content.find({ status: 'published', $or: orClauses })
       .sort({ downloadCount: -1 })
       .limit(CANDIDATE_POOL_SIZE)
-      .select('title author type categories')
+      .select('title author type categories cover_image')
       .lean();
   }
 
@@ -52,7 +65,7 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
     const topUp = await Content.find({ status: 'published' })
       .sort({ downloadCount: -1 })
       .limit(CANDIDATE_POOL_SIZE)
-      .select('title author type categories')
+      .select('title author type categories cover_image')
       .lean();
 
     for (const item of topUp) {
@@ -69,6 +82,7 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
   }
 
   const candidateLookup = new Map(candidates.map((item) => [String(item._id), item]));
+  const titleLookup = new Map(candidates.map((item) => [item.title.toLowerCase().trim(), item]));
 
   try {
     const { reply, suggestionIds, options } = await generateChatSuggestion({
@@ -82,10 +96,48 @@ const chatWithAiSuggestions = asyncHandler(async (req, res) => {
       })),
     });
 
-    const suggestions = suggestionIds
-      .map((id) => candidateLookup.get(id))
-      .filter(Boolean)
-      .map((item) => ({ id: String(item._id), title: item.title, author: item.author, type: item.type }));
+    // Smart matching: resolve by exact ID, title lookup, or fuzzy title match
+    const matchedSuggestions = [];
+    const addedIds = new Set();
+
+    for (const idOrTitle of (suggestionIds || [])) {
+      const rawStr = String(idOrTitle).trim();
+      let item = candidateLookup.get(rawStr);
+      if (!item) {
+        item = titleLookup.get(rawStr.toLowerCase());
+      }
+      if (!item) {
+        item = candidates.find((c) =>
+          c.title.toLowerCase().includes(rawStr.toLowerCase()) ||
+          rawStr.toLowerCase().includes(c.title.toLowerCase())
+        );
+      }
+      if (item && !addedIds.has(String(item._id))) {
+        addedIds.add(String(item._id));
+        matchedSuggestions.push(item);
+      }
+    }
+
+    // Fallback: If AI mentions candidate book titles in reply text and no suggestions were resolved
+    if (matchedSuggestions.length === 0) {
+      for (const item of candidates) {
+        if (item.title && item.title.length > 3 && reply.toLowerCase().includes(item.title.toLowerCase())) {
+          if (!addedIds.has(String(item._id))) {
+            addedIds.add(String(item._id));
+            matchedSuggestions.push(item);
+            if (matchedSuggestions.length >= 4) break;
+          }
+        }
+      }
+    }
+
+    const suggestions = matchedSuggestions.map((item) => ({
+      id: String(item._id),
+      title: item.title,
+      author: item.author,
+      type: item.type,
+      cover_image: item.cover_image || '',
+    }));
 
     return success(res, 200, 'AI reply generated.', { reply, suggestions, options: options || [] });
   } catch (error) {
