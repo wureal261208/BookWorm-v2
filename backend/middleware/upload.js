@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
 });
 
 const allowedMimeTypes = new Set([
-  'application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/x-m4a', 'audio/aac', 'image/jpeg', 'image/png', 'image/webp',
+  'application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/x-m4a', 'audio/aac', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml',
 ]);
 
 module.exports = multer({

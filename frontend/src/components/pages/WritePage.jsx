@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch } from '../../utils/apiClient'
 import { renderLiteMarkdown } from '../../utils/liteMarkdown'
+import CoverImagePicker from '../shared/CoverImagePicker'
 
 const emptyChapter = () => ({ title: '', content: '' })
 
@@ -30,7 +31,7 @@ function formatTime(seconds) {
   return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
-function WritePage({ account, onDetail }) {
+function WritePage({ account, onDetail, onToast }) {
   const isGuest = !auth.currentUser
   const [tab, setTab] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -683,15 +684,14 @@ function WritePage({ account, onDetail }) {
               )}
             </div>
 
-            <label>
-              Cover image link (optional)
-              <input
-                onChange={(e) => setStoryForm((prev) => ({ ...prev, coverUrl: e.target.value }))}
-                placeholder="https://example.com/cover.jpg"
-                type="url"
-                value={storyForm.coverUrl}
-              />
-            </label>
+            <CoverImagePicker
+              label="Story Cover Banner"
+              onChange={(nextUrl) => setStoryForm((prev) => ({ ...prev, coverUrl: nextUrl }))}
+              onToast={onToast}
+              type="story"
+              uploadEndpoint="/api/stories/upload-image"
+              value={storyForm.coverUrl}
+            />
 
             {storyError && (
               <p className="admin-validation-error">
@@ -811,10 +811,14 @@ function WritePage({ account, onDetail }) {
                     <input onChange={(e) => updateBookField('language', e.target.value)} type="text" value={bookForm.language} />
                   </label>
                 </div>
-                <label>
-                  Cover image link (optional)
-                  <input onChange={(e) => updateBookField('coverUrl', e.target.value)} type="url" value={bookForm.coverUrl} />
-                </label>
+                <CoverImagePicker
+                  label="Book Cover Image"
+                  onChange={(nextUrl) => updateBookField('coverUrl', nextUrl)}
+                  onToast={onToast}
+                  type="book"
+                  uploadEndpoint="/api/books/upload-cover"
+                  value={bookForm.coverUrl}
+                />
 
                 <h3>Chapters</h3>
                 <div className="write-page-chapters">

@@ -108,9 +108,22 @@ const createStory = asyncHandler(async (req, res) => {
     return fail(res, 400, 'Story content is required.');
   }
 
-  // If file was uploaded in this request
-  if (req.file) {
-    audioUrl = `/uploads/${req.file.filename}`;
+  let finalCoverUrl = (coverUrl || '').trim();
+
+  // If files were uploaded in this request
+  if (req.files) {
+    if (req.files.audio && req.files.audio[0]) {
+      audioUrl = `/uploads/${req.files.audio[0].filename}`;
+    }
+    if (req.files.coverImage && req.files.coverImage[0]) {
+      finalCoverUrl = `/uploads/${req.files.coverImage[0].filename}`;
+    }
+  } else if (req.file) {
+    if (req.file.mimetype.startsWith('audio/')) {
+      audioUrl = `/uploads/${req.file.filename}`;
+    } else if (req.file.mimetype.startsWith('image/')) {
+      finalCoverUrl = `/uploads/${req.file.filename}`;
+    }
   }
 
   const isAudio = Boolean(audioUrl && audioUrl.trim());
@@ -133,7 +146,7 @@ const createStory = asyncHandler(async (req, res) => {
     authorAvatar: req.user.avatar || '',
     audioUrl: audioUrl.trim(),
     audioDuration: Number(audioDuration) || 0,
-    coverUrl: (coverUrl || '').trim(),
+    coverUrl: finalCoverUrl,
     tags: normalizedTags,
     type,
     status: 'published',
@@ -141,6 +154,27 @@ const createStory = asyncHandler(async (req, res) => {
 
   return success(res, 201, 'Story published successfully.', {
     story: formatStory(story, req.user._id),
+  });
+});
+
+// @route POST /api/stories/upload-image
+// @desc  Upload an image file (book cover, story cover)
+const uploadCoverImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return fail(res, 400, 'No image file provided.');
+  }
+
+  if (!req.file.mimetype.startsWith('image/')) {
+    return fail(res, 400, 'Only image files (JPEG, PNG, WebP) are allowed.');
+  }
+
+  const imageUrl = `/uploads/${req.file.filename}`;
+  return success(res, 200, 'Cover image uploaded successfully.', {
+    imageUrl,
+    url: imageUrl,
+    filename: req.file.filename,
+    size: req.file.size,
+    mimetype: req.file.mimetype,
   });
 });
 
@@ -212,6 +246,7 @@ module.exports = {
   getMyStories,
   getStoryById,
   createStory,
+  uploadCoverImage,
   uploadStoryAudio,
   toggleLikeStory,
   deleteMyStory,

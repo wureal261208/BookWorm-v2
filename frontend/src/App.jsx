@@ -1241,7 +1241,7 @@ function App() {
     read: <ContentReaderPage />,
     listen: <ContentPlayerPage />,
     community: <CommunityPage />,
-    write: <WritePage account={account} onDetail={openDetail} />,
+    write: <WritePage account={account} onDetail={openDetail} onToast={setToast} />,
     random: (
       <RandomPage
         favorites={favorites}

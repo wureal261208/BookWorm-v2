@@ -444,6 +444,19 @@ function HomePage({
                       )}
                     </div>
 
+                    {story.coverUrl && (
+                      <div className="story-card-cover">
+                        <img
+                          alt={story.title}
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                          src={story.coverUrl}
+                        />
+                      </div>
+                    )}
+
                     <h4 className="story-card-title">{story.title}</h4>
                     <p className="story-card-snippet">{story.content}</p>
 

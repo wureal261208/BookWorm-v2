@@ -21,8 +21,13 @@ const {
 const { listComments, createComment } = require('../controllers/commentController');
 const { rateContent, getContentRating } = require('../controllers/contentController');
 const { identify, protect, authorize } = require('../middleware/auth');
+const upload = require('../middleware/upload');
+const { uploadCoverImage } = require('../controllers/storyController');
 
 const router = express.Router();
+
+// Upload book cover image
+router.post('/upload-cover', protect, upload.single('image'), uploadCoverImage);
 
 // Anyone (including anonymous) can browse and read, with chapter limits enforced in the controller.
 router.get('/', identify, listBooks);

@@ -4368,14 +4368,26 @@ function StoriesManagementPanel({ onToast }) {
               const isAudio = story.type === 'audio-story'
               return (
                 <div className="table-row admin-story-row" key={sId}>
-                  <div className="admin-story-main-col">
-                    <strong>{story.title}</strong>
-                    <p className="admin-story-excerpt">{story.content}</p>
-                    {isAudio && story.audioUrl && (
-                      <div className="admin-story-audio-inline">
-                        <audio controls preload="none" src={story.audioUrl} style={{ height: '32px', width: '280px' }} />
-                      </div>
+                  <div className="admin-story-main-col" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    {story.coverUrl && (
+                      <img
+                        alt=""
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                        src={story.coverUrl}
+                        style={{ width: '64px', height: '40px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, border: '1px solid #e2e8f0' }}
+                      />
                     )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong>{story.title}</strong>
+                      <p className="admin-story-excerpt">{story.content}</p>
+                      {isAudio && story.audioUrl && (
+                        <div className="admin-story-audio-inline">
+                          <audio controls preload="none" src={story.audioUrl} style={{ height: '32px', width: '280px' }} />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="admin-story-meta-col">
