@@ -1,14 +1,25 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const multer = require('multer');
 
-const uploadDir = path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(uploadDir, { recursive: true });
+// On serverless environments (Vercel, AWS Lambda), the app directory is read-only.
+// Writable disk space is available only in os.tmpdir() (/tmp).
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadDir = isServerless
+  ? path.join(os.tmpdir(), 'uploads')
+  : path.join(__dirname, '..', 'uploads');
+
+try {
+  fs.mkdirSync(uploadDir, { recursive: true });
+} catch (_) {
+  // Graceful fallback if filesystem restricts directory creation
+}
 
 const storage = multer.diskStorage({
-  destination: uploadDir,
+  destination: (_req, _file, callback) => callback(null, uploadDir),
   filename: (_req, file, callback) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
     callback(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`);
   },
 });

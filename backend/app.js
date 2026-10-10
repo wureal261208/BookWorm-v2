@@ -3,6 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
 const path = require('path');
+const os = require('os');
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -50,7 +51,7 @@ const corsOptions = {
     }
 
     // Allow all *.vercel.app deployments (e.g. preview branches like book-worm-v2-stcm.vercel.app, book-worm-v2.vercel.app)
-    if (/^https:\/\/([a-zA-Z0-9_-]+\.)?vercel\.app$/.test(origin)) {
+    if (origin.endsWith('.vercel.app') || /^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/i.test(origin)) {
       return callback(null, true);
     }
 
@@ -160,7 +161,9 @@ app.use('/api/content', contentRoutes);
 // Admin-only: Book Management list/detail/publish-hide/stats, see contentAdminRoutes.js
 app.use('/api/admin/content', contentAdminRoutes);
 // Community stories & voice sharing, see storyRoutes.js & adminStoryRoutes.js
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadStaticDir = isServerless ? path.join(os.tmpdir(), 'uploads') : path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadStaticDir));
 app.use('/api/stories', storyRoutes);
 app.use('/api/admin/stories', adminStoryRoutes);
 // GET /api/librivox/preview - live, uncached LibriVox passthrough, see librivoxRoutes.js
