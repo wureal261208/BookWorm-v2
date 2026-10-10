@@ -66,6 +66,43 @@ function useExternalRow(path) {
   return [items, loading]
 }
 
+function useStoriesRow() {
+  const [stories, setStories] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    publicApiFetch('/api/stories?limit=12')
+      .then((data) => {
+        if (!ignore) setStories(Array.isArray(data?.stories) ? data.stories : [])
+      })
+      .catch(() => {
+        if (!ignore) setStories([])
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  return [stories, loading, setStories]
+}
+
+function timeAgo(dateString) {
+  if (!dateString) return 'Recently'
+  const diff = Math.max(0, Date.now() - new Date(dateString).getTime())
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 3600000)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 function HomePage({
   account,
   books = [],
@@ -97,7 +134,23 @@ function HomePage({
   const [hotEbooks, hotEbooksLoading] = useExternalRow('/api/content?type=ebook&sort=hot&limit=16')
   const [hotAudiobooks, hotAudiobooksLoading] = useExternalRow('/api/content?type=audiobook&sort=hot&limit=16')
   const [forYou, forYouLoading] = useExternalRow(`/api/content/for-you?limit=16&v=${preferenceVersion}`)
+  const [communityBooks, communityBooksLoading] = useBookRow('createdByRole=customer&limit=16')
+  const [stories, storiesLoading, setStories] = useStoriesRow()
   const [recentItems, setRecentItems] = useState([])
+
+  const toggleStoryLike = async (storyId) => {
+    if (!auth.currentUser) return
+    try {
+      const data = await apiFetch(`/api/stories/${storyId}/like`, { method: 'POST' })
+      setStories((prev) =>
+        prev.map((s) =>
+          (s.id === storyId || s._id === storyId)
+            ? { ...s, isLiked: data.isLiked, likesCount: data.likesCount }
+            : s
+        )
+      )
+    } catch (_) {}
+  }
 
   const handleDismissRecent = (e, bookId) => {
     e.stopPropagation()
@@ -331,6 +384,177 @@ function HomePage({
         viewCounts={viewCounts}
         viewerCounts={viewerCounts}
       />
+
+      {/* People share their own stories & audio (tagged: stories) */}
+      <section className="section-block community-stories-section">
+        <div className="section-heading">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <p className="mono-eyebrow" style={{ margin: 0 }}>Community Voices</p>
+              <span className="community-tag-badge">#stories</span>
+            </div>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="bi bi-chat-heart" style={{ color: 'var(--app-accent)' }} />
+              People share their own stories & audio
+            </h2>
+          </div>
+          <button
+            className="ghost-button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/?tab=story')
+              }
+              setPage?.('write')
+            }}
+            type="button"
+          >
+            <i className="bi bi-mic" /> Share a story
+          </button>
+        </div>
+
+        {storiesLoading ? (
+          <CarouselSkeleton />
+        ) : stories.length > 0 ? (
+          <div className="community-stories-scroll-container">
+            <div className="community-stories-grid">
+              {stories.map((story) => {
+                const sId = story.id || story._id
+                return (
+                  <article className="community-story-card" key={sId}>
+                    <div className="story-card-header">
+                      <div className="story-card-avatar">
+                        {story.authorAvatar ? (
+                          <img alt={story.authorName} src={story.authorAvatar} />
+                        ) : (
+                          <span>{(story.authorName || 'R')[0].toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="story-card-meta">
+                        <strong>{story.authorName || 'Reader'}</strong>
+                        <small>{timeAgo(story.createdAt)}</small>
+                      </div>
+                      {story.type === 'audio-story' ? (
+                        <span className="story-type-badge audio-type">
+                          <i className="bi bi-soundwave" /> Audio
+                        </span>
+                      ) : (
+                        <span className="story-type-badge text-type">
+                          <i className="bi bi-file-text" /> Story
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="story-card-title">{story.title}</h4>
+                    <p className="story-card-snippet">{story.content}</p>
+
+                    {story.audioUrl && (
+                      <div className="story-card-audio">
+                        <audio controls preload="none" src={story.audioUrl} />
+                      </div>
+                    )}
+
+                    <div className="story-card-tags">
+                      {(story.tags || ['stories']).map((tag, tIdx) => (
+                        <span className="story-pill-tag" key={tIdx}>#{tag}</span>
+                      ))}
+                    </div>
+
+                    <div className="story-card-footer">
+                      <button
+                        className={`story-like-btn ${story.isLiked ? 'liked' : ''}`}
+                        onClick={() => toggleStoryLike(sId)}
+                        type="button"
+                        aria-label={`Like story by ${story.authorName || 'Reader'}`}
+                      >
+                        <i className={`bi ${story.isLiked ? 'bi-heart-fill' : 'bi-heart'}`} />
+                        <span>{story.likesCount || 0}</span>
+                      </button>
+                      <span className="story-views-count">
+                        <i className="bi bi-eye" /> {story.views || 0} views
+                      </span>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="community-stories-empty">
+            <p>No community stories shared yet. Be the first to share your reflection or voice recording!</p>
+            <button
+              className="primary-button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/?tab=story')
+                }
+                setPage?.('write')
+              }}
+              type="button"
+            >
+              <i className="bi bi-mic" /> Share your story
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* People share their own books (tagged: audiobooks, ebooks) */}
+      <section className="section-block community-books-section">
+        <div className="section-heading">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <p className="mono-eyebrow" style={{ margin: 0 }}>Community Authors</p>
+              <span className="community-tag-badge">#ebooks</span>
+              <span className="community-tag-badge">#audiobooks</span>
+            </div>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="bi bi-pen" style={{ color: 'var(--app-accent)' }} />
+              People share their own books
+            </h2>
+          </div>
+          <button
+            className="ghost-button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/?tab=write')
+              }
+              setPage?.('write')
+            }}
+            type="button"
+          >
+            <i className="bi bi-plus-lg" /> Write a book
+          </button>
+        </div>
+
+        {communityBooksLoading ? (
+          <CarouselSkeleton />
+        ) : communityBooks.length > 0 ? (
+          <BookCarousel
+            books={communityBooks}
+            favorites={favorites}
+            onDetail={onDetail}
+            onFavorite={onFavorite}
+            onRead={onRead}
+            viewCounts={viewCounts}
+            viewerCounts={viewerCounts}
+          />
+        ) : (
+          <div className="community-stories-empty">
+            <p>No community books published yet. Write your own book and get featured after editorial review!</p>
+            <button
+              className="primary-button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/?tab=write')
+                }
+                setPage?.('write')
+              }}
+              type="button"
+            >
+              <i className="bi bi-pen" /> Start writing
+            </button>
+          </div>
+        )}
+      </section>
 
       {/* Hot ebooks */}
       <ExternalRowSection

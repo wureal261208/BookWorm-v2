@@ -159,6 +159,9 @@ const listBooks = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 32));
 
   const filter = { status: 'published' };
+  if (req.query.createdByRole) {
+    filter.createdByRole = req.query.createdByRole;
+  }
   let categoryClauses = null;
   if (req.query.category && req.query.category !== 'all') {
     const categories = req.query.category.split(',').map((entry) => entry.trim()).filter(Boolean).slice(0, 5);

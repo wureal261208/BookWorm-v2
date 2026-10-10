@@ -150,6 +150,7 @@ function AdminPage({
   const adminNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
     canPushBooks && { id: 'book', label: 'Book Management', icon: 'bi-collection' },
+    { id: 'stories', label: 'Stories Management', icon: 'bi-chat-heart' },
     canManageUsers && {
       id: 'contributions',
       label: 'User Management',
@@ -591,6 +592,8 @@ function AdminPage({
           )}
         </>
       ) : null}
+
+      {activeAdminSection === 'stories' && <StoriesManagementPanel onToast={onToast} />}
 
       {activeAdminSection === 'contributions' && canManageUsers ? (
         <>
@@ -4231,6 +4234,254 @@ function isValidImageSource(value) {
   if (!hasText(value)) return true
   const source = String(value).trim()
   return source.startsWith('data:image/') || isValidHttpUrl(source)
+}
+
+function StoriesManagementPanel({ onToast }) {
+  const [stories, setStories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteReason, setDeleteReason] = useState('Content violates community guidelines.')
+  const [deleting, setDeleting] = useState(false)
+  const [refreshTick, setRefreshTick] = useState(0)
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+
+    const params = new URLSearchParams()
+    params.set('page', String(page))
+    params.set('limit', '20')
+    if (typeFilter !== 'all') params.set('type', typeFilter)
+    if (search.trim()) params.set('search', search.trim())
+
+    apiFetch(`/api/admin/stories?${params.toString()}`)
+      .then((data) => {
+        if (!ignore) {
+          setStories(Array.isArray(data?.stories) ? data.stories : [])
+          setTotal(Number(data?.total) || 0)
+          setPages(Number(data?.pages) || 1)
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setStories([])
+          onToast?.({ type: 'error', message: err.message || 'Failed to load stories.' })
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [page, typeFilter, search, refreshTick, onToast])
+
+  function handleSearchSubmit(e) {
+    e.preventDefault()
+    setPage(1)
+    setSearch(searchInput)
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await apiFetch(`/api/admin/stories/${deleteTarget.id || deleteTarget._id}`, {
+        method: 'DELETE',
+        body: { reason: deleteReason.trim() || 'Content violates community guidelines.' },
+      })
+      onToast?.({
+        type: 'success',
+        message: `"${deleteTarget.title}" deleted and author notified.`,
+      })
+      setDeleteTarget(null)
+      setDeleteReason('Content violates community guidelines.')
+      setRefreshTick((t) => t + 1)
+    } catch (err) {
+      onToast?.({ type: 'error', message: err.message || 'Could not delete story.' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <section className="admin-workspace admin-stories-panel">
+      <div className="section-heading">
+        <div>
+          <p className="mono-eyebrow">Moderation</p>
+          <h2>Stories & Audio Management</h2>
+        </div>
+        <span>Review community voice stories and reflections. Inappropriate submissions can be removed with automatic notification to the author.</span>
+      </div>
+
+      <div className="admin-filter-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+        <button
+          className={typeFilter === 'all' ? 'active' : ''}
+          onClick={() => { setTypeFilter('all'); setPage(1); }}
+          type="button"
+        >
+          All types
+        </button>
+        <button
+          className={typeFilter === 'audio-story' ? 'active' : ''}
+          onClick={() => { setTypeFilter('audio-story'); setPage(1); }}
+          type="button"
+        >
+          <i className="bi bi-soundwave" /> Audio stories
+        </button>
+        <button
+          className={typeFilter === 'story' ? 'active' : ''}
+          onClick={() => { setTypeFilter('story'); setPage(1); }}
+          type="button"
+        >
+          <i className="bi bi-file-text" /> Text stories
+        </button>
+
+        <form className="admin-catalog-search" onSubmit={handleSearchSubmit} style={{ marginLeft: 'auto', maxWidth: '340px' }}>
+          <i className="bi bi-search" />
+          <input
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search stories, author... (Enter)"
+            type="text"
+            value={searchInput}
+          />
+        </form>
+      </div>
+
+      {loading ? (
+        <p className="inline-loading"><span className="admin-spin-small" /> Loading community stories...</p>
+      ) : stories.length > 0 ? (
+        <div className="admin-table admin-stories-table">
+          <div className="admin-table-heading">
+            <h2>Stories ({total})</h2>
+          </div>
+          <div className="admin-table-body">
+            {stories.map((story) => {
+              const sId = story.id || story._id
+              const isAudio = story.type === 'audio-story'
+              return (
+                <div className="table-row admin-story-row" key={sId}>
+                  <div className="admin-story-main-col">
+                    <strong>{story.title}</strong>
+                    <p className="admin-story-excerpt">{story.content}</p>
+                    {isAudio && story.audioUrl && (
+                      <div className="admin-story-audio-inline">
+                        <audio controls preload="none" src={story.audioUrl} style={{ height: '32px', width: '280px' }} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="admin-story-meta-col">
+                    <div className="admin-story-author">
+                      <span className="admin-sidebar-avatar" style={{ width: '28px', height: '28px', fontSize: '11px' }}>
+                        {story.author?.avatar ? <img alt="" src={story.author.avatar} /> : (story.authorName || 'R')[0].toUpperCase()}
+                      </span>
+                      <div>
+                        <strong>{story.authorName || 'Anonymous'}</strong>
+                        <small>{story.author?.email ? maskEmail(story.author.email) : (story.author?.displayId || 'User')}</small>
+                      </div>
+                    </div>
+                    <div className="admin-story-stats">
+                      <span><i className="bi bi-heart" /> {story.likesCount || 0}</span>
+                      <span><i className="bi bi-eye" /> {story.views || 0}</span>
+                      <small>{new Date(story.createdAt).toLocaleDateString()}</small>
+                    </div>
+                  </div>
+
+                  <div className="admin-row-actions">
+                    <button
+                      className="danger-button"
+                      onClick={() => setDeleteTarget(story)}
+                      type="button"
+                    >
+                      <i className="bi bi-trash" /> Remove
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {pages > 1 && (
+            <AdminPagination
+              currentPage={page}
+              onPageChange={setPage}
+              totalPages={pages}
+            />
+          )}
+        </div>
+      ) : (
+        <p className="empty-state">No stories found matching your filter criteria.</p>
+      )}
+
+      {deleteTarget && (
+        <DeleteStoryModal
+          busy={deleting}
+          item={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+          reason={deleteReason}
+          setReason={setDeleteReason}
+        />
+      )}
+    </section>
+  )
+}
+
+function DeleteStoryModal({ busy, item, onClose, onConfirm, reason, setReason }) {
+  if (!item) return null
+
+  return (
+    <div
+      aria-labelledby="admin-delete-story-title"
+      aria-modal="true"
+      className="reader-modal-backdrop admin-ban-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose()
+      }}
+      role="dialog"
+    >
+      <div className="admin-ban-modal" style={{ maxWidth: '480px' }}>
+        <button aria-label="Close" className="admin-book-modal-close" disabled={busy} onClick={onClose} type="button">
+          <i className="bi bi-x-lg" />
+        </button>
+        <p className="mono-eyebrow">Moderation Action</p>
+        <h2 id="admin-delete-story-title">Remove Community Story</h2>
+        <p className="form-note">
+          Are you sure you want to permanently delete <strong>"{item.title}"</strong> by <em>{item.authorName || 'Author'}</em>?
+        </p>
+
+        <label style={{ display: 'block', margin: '14px 0 6px', fontSize: '13px', fontWeight: 600 }}>
+          Removal Reason (sent to author in notification)
+          <textarea
+            disabled={busy}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Explain why this story was removed..."
+            rows={3}
+            style={{ width: '100%', marginTop: '6px', resize: 'vertical' }}
+            value={reason}
+          />
+        </label>
+
+        <div className="admin-form-actions">
+          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button className="danger-button" disabled={busy} onClick={onConfirm} type="button">
+            <i className="bi bi-trash" />
+            {busy ? 'Removing & Notifying...' : 'Remove Story'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default AdminPage

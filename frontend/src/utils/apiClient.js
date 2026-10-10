@@ -3,7 +3,8 @@ import { auth } from '../features/auth-firebase/firebaseConfig'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
 
 async function request(path, { method = 'GET', body, requireAuth = false } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+  const headers = isFormData ? {} : { 'Content-Type': 'application/json' }
 
   if (auth.currentUser) {
     const token = await auth.currentUser.getIdToken()
@@ -15,7 +16,7 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? body : (body !== undefined ? JSON.stringify(body) : undefined),
   })
 
   let payload = null

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
+const path = require('path');
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -10,6 +11,8 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const bookMetadataRoutes = require('./routes/bookMetadataRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const contentAdminRoutes = require('./routes/contentAdminRoutes');
+const storyRoutes = require('./routes/storyRoutes');
+const adminStoryRoutes = require('./routes/adminStoryRoutes');
 const librivoxRoutes = require('./routes/librivoxRoutes');
 const aiSuggestionsRoutes = require('./routes/aiSuggestionsRoutes');
 const supportRoutes = require('./routes/supportRoutes');
@@ -152,10 +155,14 @@ app.use('/api/users', userRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/book-metadata', bookMetadataRoutes);
-// GET /api/content - unified ebook+audiobook reads, see contentRoutes.js
+// Unified ebook+audiobook reads, see contentRoutes.js
 app.use('/api/content', contentRoutes);
 // Admin-only: Book Management list/detail/publish-hide/stats, see contentAdminRoutes.js
 app.use('/api/admin/content', contentAdminRoutes);
+// Community stories & voice sharing, see storyRoutes.js & adminStoryRoutes.js
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/stories', storyRoutes);
+app.use('/api/admin/stories', adminStoryRoutes);
 // GET /api/librivox/preview - live, uncached LibriVox passthrough, see librivoxRoutes.js
 app.use('/api/librivox', librivoxRoutes);
 // Private per-user AI Suggestions chat history, see aiSuggestionsRoutes.js
