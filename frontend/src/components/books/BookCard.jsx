@@ -1,4 +1,4 @@
-import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getCover, getDescription, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progressPercent, viewCount = 0 }) {
   const isAudiobook = book.category === 'Audiobook' || (book.title && book.title.toLowerCase().includes('(audiobook)')) || book.type === 'audiobook'
@@ -11,7 +11,16 @@ function BookCard({ book, favorites = [], onDetail, onFavorite, onRead, progress
   return (
     <article className="book-card">
       <button className="book-cover-button" onClick={() => onDetail(book)} type="button">
-        <img loading="lazy" src={getCover(book)} alt={`${book.title} cover`} />
+        <img
+          alt={`${book.title} cover`}
+          loading="lazy"
+          onError={(e) => {
+            if (e.currentTarget.src !== NO_COVER_IMAGE) {
+              e.currentTarget.src = NO_COVER_IMAGE
+            }
+          }}
+          src={getCover(book)}
+        />
         <span className="book-cover-overlay">
           <strong>{book.title}</strong>
           <em>{authorName}</em>

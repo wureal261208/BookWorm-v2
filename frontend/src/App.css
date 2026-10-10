@@ -21056,13 +21056,15 @@ progress {
   gap: 4px;
   background: linear-gradient(145deg, var(--app-surface-soft, #f5f4ef), var(--app-surface, #e8e6df));
   color: var(--app-muted, #72716d);
-  font-size: 13px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   border: 1px dashed var(--app-line);
   border-radius: 7px;
   user-select: none;
+  text-align: center;
+  padding: 4px 2px;
 }
 
 .submission-book-cover-none i {
@@ -21105,13 +21107,15 @@ progress {
   gap: 2px;
   background: linear-gradient(145deg, var(--app-surface-soft, #f5f4ef), var(--app-surface, #e8e6df));
   color: var(--app-muted, #72716d);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   border: 1px dashed var(--app-line);
   border-radius: 7px;
   user-select: none;
+  text-align: center;
+  padding: 2px;
 }
 
 .submission-card-main {

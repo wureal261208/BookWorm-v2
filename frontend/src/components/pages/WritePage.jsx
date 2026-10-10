@@ -1101,14 +1101,21 @@ function WritePage({ account, onDetail, onToast }) {
                           <img
                             alt={story.title}
                             className="submission-story-cover-img"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                              const placeholder = e.currentTarget.nextElementSibling
+                              if (placeholder) placeholder.style.display = 'flex'
+                            }}
                             src={story.coverUrl}
                           />
-                        ) : (
-                          <div className="submission-story-cover-none">
-                            <i className="bi bi-card-image" />
-                            <span>None</span>
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="submission-story-cover-none"
+                          style={{ display: story.coverUrl ? 'none' : 'flex' }}
+                        >
+                          <i className="bi bi-card-image" />
+                          <span>No cover</span>
+                        </div>
                       </div>
 
                       {/* Story Details */}
@@ -1175,14 +1182,21 @@ function WritePage({ account, onDetail, onToast }) {
                         <img
                           alt={book.title}
                           className="submission-book-cover-img"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const placeholder = e.currentTarget.nextElementSibling
+                            if (placeholder) placeholder.style.display = 'flex'
+                          }}
                           src={book.coverUrl}
                         />
-                      ) : (
-                        <div className="submission-book-cover-none">
-                          <i className="bi bi-journal-text" />
-                          <span>None</span>
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="submission-book-cover-none"
+                        style={{ display: book.coverUrl ? 'none' : 'flex' }}
+                      >
+                        <i className="bi bi-journal-text" />
+                        <span>No cover</span>
+                      </div>
                     </div>
 
                     {/* Book Details */}

@@ -7,7 +7,7 @@ import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 import PromoBanner from '../books/PromoBanner'
-import { getCover } from '../../utils/bookUtils'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 function useBookRow(query) {
   const [books, setBooks] = useState([])
@@ -261,7 +261,17 @@ function HomePage({
           <div className="home-recent-resume-grid">
             {recentItems.map((item) => (
               <div className="home-recent-resume-card" key={item.id}>
-                <img src={getCover(item)} alt="" className="resume-card-cover" loading="lazy" />
+                <img
+                  src={getCover(item)}
+                  alt=""
+                  className="resume-card-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                      e.currentTarget.src = NO_COVER_IMAGE
+                    }
+                  }}
+                />
                 <div className="resume-card-info">
                   <span className="mono-eyebrow">
                     {item.type === 'ebook' ? 'Ebook' : 'Audiobook'} · {item.percent}% completed

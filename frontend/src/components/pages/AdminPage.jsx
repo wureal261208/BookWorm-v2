@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
@@ -16,21 +16,9 @@ const mediaFields = [
   { name: 'readerUrl', label: 'Reader URL', placeholder: 'https://...', type: 'url' },
 ]
 
-// Inline SVG instead of a third-party icon URL, so the placeholder always
-// renders clearly (no dependency on an external site staying reachable) -
-// previously a failed external fetch made this show as an unlabeled/blurry
-// "N/A" box instead of an actual readable placeholder.
-const NONE_COVER_URL = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280" viewBox="0 0 200 280">'
-  + '<rect width="200" height="280" fill="#e4e4de"/>'
-  + '<rect x="1" y="1" width="198" height="278" fill="none" stroke="#c7c7c0" stroke-width="2"/>'
-  + '<g fill="#9a9a90">'
-  + '<path d="M60 90h80v100H60z" fill="none" stroke="#9a9a90" stroke-width="4"/>'
-  + '<path d="M60 90v100M140 90v100" stroke="#9a9a90" stroke-width="2"/>'
-  + '</g>'
-  + '<text x="100" y="215" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#77776e" text-anchor="middle">No cover</text>'
-  + '</svg>'
-)
+// Standalone SVG data URI that renders "No cover" cleanly and reliably
+// without any external network dependency.
+const NONE_COVER_URL = NO_COVER_IMAGE
 
 // Gutenberg only auto-generates a "medium" cover for most books, and a
 // "small" one for some others - neither exists for every book. Cascade
@@ -4149,7 +4137,8 @@ function createPreviewBook(adminBook) {
 
 function getAdminCover(book) {
   if (!book) return NONE_COVER_URL
-  return book.coverUrl || book.cover_image || book.formats?.['image/jpeg'] || book.cover || NONE_COVER_URL
+  const cover = book.coverUrl || book.cover_image || book.formats?.['image/jpeg'] || book.cover || ''
+  return typeof cover === 'string' && cover.trim() ? cover.trim() : NONE_COVER_URL
 }
 
 function getFormWarnings(book) {

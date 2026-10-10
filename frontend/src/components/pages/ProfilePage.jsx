@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAuthor, getCover, getInitials } from '../../utils/bookUtils'
+import { getAuthor, getCover, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { maskEmail } from '../../utils/maskEmail'
 import PreferencesModal from '../content/PreferencesModal'
 import { normalizeRole } from '../../data/bookData'
@@ -585,6 +585,11 @@ function ProfileSettings({
               <img
                 alt={resumeBookItem.book?.title || ''}
                 className="quick-resume-cover"
+                onError={(e) => {
+                  if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                    e.currentTarget.src = NO_COVER_IMAGE
+                  }
+                }}
                 src={getCover(resumeBookItem.book)}
               />
               <div className="quick-resume-info">
@@ -1118,7 +1123,16 @@ function ShelfBookList({ items = [], emptyText, emptyIcon, progress = {}, onRead
         const bookProgress = Math.round(progress[bId] || 0)
         return (
           <li key={bId} className="shelf-book-item">
-            <img alt={book.title || ''} className="shelf-book-cover" src={getCover(book)} />
+            <img
+              alt={book.title || ''}
+              className="shelf-book-cover"
+              onError={(e) => {
+                if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                  e.currentTarget.src = NO_COVER_IMAGE
+                }
+              }}
+              src={getCover(book)}
+            />
             <div className="shelf-book-meta">
               <strong>{book.title || 'Untitled'}</strong>
               <span>{getAuthor(book)}</span>
@@ -1227,7 +1241,16 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
 
         return (
           <li key={bId} className="shelf-book-item authored-book-item">
-            <img alt={book.title || ''} className="shelf-book-cover" src={getCover(book)} />
+            <img
+              alt={book.title || ''}
+              className="shelf-book-cover"
+              onError={(e) => {
+                if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                  e.currentTarget.src = NO_COVER_IMAGE
+                }
+              }}
+              src={getCover(book)}
+            />
             <div className="shelf-book-meta">
               <strong>{book.title || 'Untitled'}</strong>
               <span>{getAuthor(book)}</span>

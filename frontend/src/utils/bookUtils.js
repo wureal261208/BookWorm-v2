@@ -1,12 +1,24 @@
+export const NO_COVER_IMAGE = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="200" height="300">'
+  + '<rect width="200" height="300" fill="#f4f4ee" rx="4"/>'
+  + '<rect x="2" y="2" width="196" height="296" rx="3" fill="none" stroke="#d5d5cc" stroke-width="2"/>'
+  + '<rect x="62" y="85" width="76" height="100" rx="3" fill="none" stroke="#99998e" stroke-width="2.5"/>'
+  + '<line x1="72" y1="85" x2="72" y2="185" stroke="#99998e" stroke-width="2"/>'
+  + '<path d="M84 115h32M84 130h32M84 145h20" stroke="#abab9e" stroke-width="2" stroke-linecap="round"/>'
+  + '<text x="100" y="222" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#75756c" text-anchor="middle" letter-spacing="0.5">No cover</text>'
+  + '</svg>'
+)
+
 export function getCover(book) {
-  if (!book) return 'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
-  return (
+  if (!book) return NO_COVER_IMAGE
+  const rawCover =
     book.cover_image ||
     book.coverUrl ||
     book.cover ||
     book.formats?.['image/jpeg'] ||
-    'https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg'
-  )
+    ''
+
+  return typeof rawCover === 'string' && rawCover.trim() ? rawCover.trim() : NO_COVER_IMAGE
 }
 
 export function getAuthor(book) {

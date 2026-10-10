@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAuthor, getCategory, getCover, getDescription } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getCover, getDescription, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
 
 function DetailHero({
@@ -105,6 +105,11 @@ function DetailHero({
           alt={`${book.title} cover`}
           className="detail-hero-cover"
           loading="lazy"
+          onError={(e) => {
+            if (e.currentTarget.src !== NO_COVER_IMAGE) {
+              e.currentTarget.src = NO_COVER_IMAGE
+            }
+          }}
           src={getCover(book)}
         />
       </div>

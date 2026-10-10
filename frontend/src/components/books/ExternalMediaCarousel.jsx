@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigation } from '../../context/NavigationContext'
 
-import { getCover } from '../../utils/bookUtils'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 // "Hot ebooks"/"Hot audiobooks" on Home show Content documents synced from
 // Gutendex/LibriVox (see backend/utils/contentIngestion.js). Clicking one
@@ -33,7 +33,16 @@ function ExternalMediaCard({ item, onDetail }) {
   return (
     <article className="book-card">
       <button className="book-cover-button" onClick={openDetail} style={{ display: 'block', width: '100%', border: 0, padding: 0 }} type="button">
-        <img alt={`${title} cover`} loading="lazy" src={cover} />
+        <img
+          alt={`${title} cover`}
+          loading="lazy"
+          onError={(e) => {
+            if (e.currentTarget.src !== NO_COVER_IMAGE) {
+              e.currentTarget.src = NO_COVER_IMAGE
+            }
+          }}
+          src={cover}
+        />
         <span className="book-cover-overlay">
           <strong>{title}</strong>
           <em>{author}</em>

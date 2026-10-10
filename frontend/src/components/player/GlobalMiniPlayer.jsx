@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAudioPlayer } from '../../context/AudioPlayerContext'
 import { useNavigation } from '../../context/NavigationContext'
-import { getCover } from '../../utils/bookUtils'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 function formatTime(seconds) {
   if (!seconds || Number.isNaN(seconds) || seconds < 0) return '00:00'
@@ -120,6 +120,11 @@ export default function GlobalMiniPlayer() {
             <img
               alt=""
               className={`mini-player-cover ${isPlaying ? 'is-playing' : ''}`}
+              onError={(e) => {
+                if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                  e.currentTarget.src = NO_COVER_IMAGE
+                }
+              }}
               src={getCover(audioItem)}
             />
           </button>

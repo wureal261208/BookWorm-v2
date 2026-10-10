@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { GENRE_SLIDES } from '../../utils/genreSlides'
-import { getCover } from '../../utils/bookUtils'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 const RECENT_SEARCHES_KEY = 'bookworm_recent_searches'
 const MAX_RECENT_SEARCHES = 6
@@ -287,7 +287,16 @@ function BooksResults({ navigateTo, onDetail, query }) {
               }}
               type="button"
             >
-              <img alt="" loading="lazy" src={getCover(item)} />
+              <img
+                alt=""
+                loading="lazy"
+                onError={(e) => {
+                  if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                    e.currentTarget.src = NO_COVER_IMAGE
+                  }
+                }}
+                src={getCover(item)}
+              />
               <span className="search-result-text">
                 <span className={`search-type-tag search-type-tag-${item.type} ai-chat-tag ai-chat-tag-${item.type}`}>
                   <i className={item.type === 'ebook' ? 'bi bi-book' : 'bi bi-headphones'} aria-hidden="true" />

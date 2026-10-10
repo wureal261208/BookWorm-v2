@@ -130,7 +130,7 @@ describe('WritePage — Enhanced Navigation, Validation & My Submissions', () =>
     })
   })
 
-  test('renders book cover frame with "None" placeholder when book has no cover image', async () => {
+  test('renders book cover frame with "No cover" placeholder when book has no cover image', async () => {
     window.history.pushState({}, '', '/write?tab=mine')
     render(<WritePage account={{ name: 'Jane Author' }} />)
 
@@ -141,9 +141,9 @@ describe('WritePage — Enhanced Navigation, Validation & My Submissions', () =>
     expect(await screen.findByText('Novel With Cover')).toBeInTheDocument()
     expect(screen.getByText('Novel Without Cover')).toBeInTheDocument()
 
-    // Check for the "None" cover placeholder for the book without a cover image
-    const nonePlaceholders = screen.getAllByText('None')
-    expect(nonePlaceholders.length).toBeGreaterThanOrEqual(1)
+    // Check for the "No cover" placeholder for the book without a cover image
+    const noCoverPlaceholders = screen.getAllByText('No cover')
+    expect(noCoverPlaceholders.length).toBeGreaterThanOrEqual(1)
 
     // Check that the book with cover displays its image
     const coverImage = screen.getByAltText('Novel With Cover')

@@ -4,7 +4,7 @@ import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { useAudioPlayer } from '../../context/AudioPlayerContext'
-import { getCover } from '../../utils/bookUtils'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import ContentComments from '../content/ContentComments'
 
 function formatTime(seconds) {
@@ -284,7 +284,16 @@ function ContentPlayerPage() {
 
       <section className="content-player-hero">
         <div className="player-hero-cover-wrap">
-          <img alt={`${item.title} audiobook cover`} className="player-hero-cover" src={getCover(item)} />
+          <img
+            alt={`${item.title} audiobook cover`}
+            className="player-hero-cover"
+            onError={(e) => {
+              if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                e.currentTarget.src = NO_COVER_IMAGE
+              }
+            }}
+            src={getCover(item)}
+          />
         </div>
 
         <div className="player-hero-info">

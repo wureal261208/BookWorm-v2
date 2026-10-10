@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getCover, getInitials } from '../../utils/bookUtils'
+import { getCover, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import HelpChatWidget from '../content/HelpChatWidget'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
@@ -684,7 +684,16 @@ export function HeaderSearch({ onSearch }) {
             ) : results.length ? (
               results.map((item) => (
                 <button key={item._id} onClick={() => submit(item.title)} type="button">
-                  <img alt="" loading="lazy" src={getCover(item)} />
+                  <img
+                    alt=""
+                    loading="lazy"
+                    onError={(e) => {
+                      if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                        e.currentTarget.src = NO_COVER_IMAGE
+                      }
+                    }}
+                    src={getCover(item)}
+                  />
                   <span className="header-search-result-text">
                     <strong>{item.title}</strong>
                     <small>

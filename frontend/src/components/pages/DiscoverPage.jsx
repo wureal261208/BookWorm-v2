@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import BookGrid from '../books/BookGrid'
-import { formatTopicLabel, getCover } from '../../utils/bookUtils'
+import { formatTopicLabel, getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { publicApiFetch } from '../../utils/apiClient'
 
 const BOOKS_PER_PAGE = 20
@@ -171,7 +171,15 @@ function DiscoverPage({
                     ))}
                     {suggestions.map((book) => (
                       <button key={book.id || book._id} onMouseDown={() => submitSearch(book.title)} type="button">
-                        <img alt="" src={getCover(book)} />
+                        <img
+                          alt=""
+                          onError={(e) => {
+                            if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                              e.currentTarget.src = NO_COVER_IMAGE
+                            }
+                          }}
+                          src={getCover(book)}
+                        />
                         <span>{book.title}</span>
                         <small>Book</small>
                       </button>

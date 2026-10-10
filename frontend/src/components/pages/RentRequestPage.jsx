@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { getAuthor, getCover } from '../../utils/bookUtils'
+import { getAuthor, getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { formatDeliveryDate } from '../../utils/rentalUtils'
 
 const STATUS_LABELS = {
@@ -76,7 +76,15 @@ function RentRequestPage({ account, books = [], notifications = [], onMarkNotifi
             <div className="book-thumb-list">
               {searchResults.map((book) => (
                 <button className="book-pick-row" key={book.id} onClick={() => pickBook(book)} type="button">
-                  <img alt="" src={getCover(book)} />
+                  <img
+                    alt=""
+                    onError={(e) => {
+                      if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                        e.currentTarget.src = NO_COVER_IMAGE
+                      }
+                    }}
+                    src={getCover(book)}
+                  />
                   <div>
                     <strong>{book.title}</strong>
                     <span>{getAuthor(book)}</span>
