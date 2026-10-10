@@ -31,16 +31,19 @@ function formatTime(seconds) {
   return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
+function getUrlTab() {
+  if (typeof window !== 'undefined' && window.location?.search) {
+    const paramTab = new URLSearchParams(window.location.search).get('tab')
+    if (paramTab === 'mine') return 'mine'
+    if (paramTab === 'write' || paramTab === 'book') return 'write'
+    if (paramTab === 'story') return 'story'
+  }
+  return 'story'
+}
+
 function WritePage({ account, onDetail, onToast }) {
   const isGuest = !auth.currentUser
-  const [tab, setTab] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const paramTab = new URLSearchParams(window.location.search).get('tab')
-      if (paramTab === 'mine') return 'mine'
-      if (paramTab === 'write') return 'write'
-    }
-    return 'story'
-  })
+  const [tab, setTab] = useState(getUrlTab)
 
   // Book Writer states
   const [bookForm, setBookForm] = useState(() => ({ ...emptyBookForm, author: account?.name || '' }))
@@ -53,6 +56,7 @@ function WritePage({ account, onDetail, onToast }) {
   const [deletingBook, setDeletingBook] = useState(false)
   const [aiSummarizing, setAiSummarizing] = useState(false)
   const [aiSummaryError, setAiSummaryError] = useState('')
+  const [bookFieldErrors, setBookFieldErrors] = useState({})
   const textareaRefs = useRef({})
   const autosaveTimer = useRef(null)
   const skipNextAutosave = useRef(true)
@@ -62,6 +66,7 @@ function WritePage({ account, onDetail, onToast }) {
   const [submittingStory, setSubmittingStory] = useState(false)
   const [storyError, setStoryError] = useState('')
   const [storySuccess, setStorySuccess] = useState('')
+  const [storyFieldErrors, setStoryFieldErrors] = useState({})
 
   // Voice Recording Studio states
   const [isRecording, setIsRecording] = useState(false)
@@ -86,13 +91,24 @@ function WritePage({ account, onDetail, onToast }) {
   const [commonError, setCommonError] = useState('')
   const [commonSuccess, setCommonSuccess] = useState('')
 
+  // Sync tab with URL search parameter
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const paramTab = new URLSearchParams(window.location.search).get('tab')
-      if (paramTab === 'mine') setTab('mine')
-      else if (paramTab === 'write') setTab('write')
+    const handleLocationChange = () => {
+      setTab(getUrlTab())
     }
+    window.addEventListener('popstate', handleLocationChange)
+    return () => window.removeEventListener('popstate', handleLocationChange)
   }, [])
+
+  function handleTabChange(nextTab) {
+    setTab(nextTab)
+    if (typeof window !== 'undefined' && window.history) {
+      const urlTab = nextTab === 'write' ? 'book' : nextTab
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', urlTab)
+      window.history.pushState({}, '', url.toString())
+    }
+  }
 
   // Cleanup audio preview URL and streams on unmount
   useEffect(() => {
@@ -207,16 +223,24 @@ function WritePage({ account, onDetail, onToast }) {
 
     const title = storyForm.title.trim()
     const content = storyForm.content.trim()
+    const errors = {}
 
-    if (!title) {
-      setStoryError('Please enter a title for your story.')
+    if (!title) errors.title = true
+    if (!content) errors.content = true
+
+    if (Object.keys(errors).length > 0) {
+      setStoryFieldErrors(errors)
+      setStoryError(
+        !title && !content
+          ? 'Please enter both a title and story content before submitting.'
+          : !title
+          ? 'Please enter a title for your story.'
+          : 'Please write your story content or reflection.'
+      )
       return
     }
-    if (!content) {
-      setStoryError('Please write your story content or reflection.')
-      return
-    }
 
+    setStoryFieldErrors({})
     setSubmittingStory(true)
 
     try {
@@ -238,7 +262,9 @@ function WritePage({ account, onDetail, onToast }) {
         body: formData,
       })
 
-      setStorySuccess('Story published successfully! It is now live in the community feed on the home page.')
+      const successMsg = 'Story published successfully! It is now live in the community feed on the home page.'
+      setStorySuccess(successMsg)
+      onToast?.({ type: 'success', message: successMsg })
       setStoryForm(emptyStoryForm)
       discardRecording()
     } catch (err) {
@@ -325,6 +351,7 @@ function WritePage({ account, onDetail, onToast }) {
   async function handleDeleteBook() {
     if (!deleteConfirmBook) return
     const bId = deleteConfirmBook.id || deleteConfirmBook._id
+    const bookTitle = deleteConfirmBook.title
     setDeletingBook(true)
     setCommonError('')
     try {
@@ -333,7 +360,9 @@ function WritePage({ account, onDetail, onToast }) {
       try {
         localStorage.removeItem(`bookworm_write_draft_edit_${bId}`)
       } catch {}
-      setCommonSuccess(`"${deleteConfirmBook.title}" has been deleted.`)
+      const successMsg = `"${bookTitle}" has been permanently deleted.`
+      setCommonSuccess(successMsg)
+      onToast?.({ type: 'success', message: successMsg })
       setDeleteConfirmBook(null)
     } catch (err) {
       setCommonError(err.message || 'Could not delete book')
@@ -345,12 +374,15 @@ function WritePage({ account, onDetail, onToast }) {
   async function handleDeleteStory() {
     if (!deleteConfirmStory) return
     const sId = deleteConfirmStory.id || deleteConfirmStory._id
+    const storyTitle = deleteConfirmStory.title
     setDeletingStory(true)
     setCommonError('')
     try {
       await apiFetch(`/api/stories/${sId}`, { method: 'DELETE' })
       setMyStories((prev) => prev.filter((s) => (s.id || s._id) !== sId))
-      setCommonSuccess(`"${deleteConfirmStory.title}" has been deleted.`)
+      const successMsg = `"${storyTitle}" has been removed from the community feed.`
+      setCommonSuccess(successMsg)
+      onToast?.({ type: 'success', message: successMsg })
       setDeleteConfirmStory(null)
     } catch (err) {
       setCommonError(err.message || 'Could not delete story')
@@ -478,14 +510,22 @@ function WritePage({ account, onDetail, onToast }) {
       .map((chapter, index) => ({ order: index + 1, title: chapter.title.trim() || `Chapter ${index + 1}`, content: chapter.content.trim() }))
       .filter((chapter) => chapter.content)
 
-    if (!title || !author) {
-      setCommonError('Title and author are required.')
+    const errors = {}
+    if (!title) errors.title = true
+    if (!author) errors.author = true
+    if (!chapters.length) errors.chapters = true
+
+    if (Object.keys(errors).length > 0) {
+      setBookFieldErrors(errors)
+      if (!title || !author) {
+        setCommonError('Title and author are required.')
+      } else {
+        setCommonError('At least one chapter needs some content.')
+      }
       return
     }
-    if (!chapters.length) {
-      setCommonError('At least one chapter needs some content.')
-      return
-    }
+
+    setBookFieldErrors({})
 
     const body = {
       title,
@@ -501,11 +541,15 @@ function WritePage({ account, onDetail, onToast }) {
     try {
       if (editingBook) {
         const data = await apiFetch(`/api/books/${editingBook.id}/mine`, { method: 'PATCH', body })
-        setCommonSuccess(editingBook.status === 'published' ? 'Saved - sent back for admin review before it goes live again.' : 'Saved.')
+        const successMsg = editingBook.status === 'published' ? 'Saved - sent back for admin review before it goes live again.' : 'Saved successfully!'
+        setCommonSuccess(successMsg)
+        onToast?.({ type: 'success', message: successMsg })
         setEditingBook({ id: editingBook.id, status: data.book.status })
       } else {
         await apiFetch('/api/books', { method: 'POST', body })
-        setCommonSuccess('Submitted! An admin will review your book before it goes live on the home page.')
+        const successMsg = 'Submitted! An admin will review your book before it goes live on the home page.'
+        setCommonSuccess(successMsg)
+        onToast?.({ type: 'success', message: successMsg })
         skipNextAutosave.current = true
         setBookForm({ ...emptyBookForm, author })
       }
@@ -543,35 +587,57 @@ function WritePage({ account, onDetail, onToast }) {
         </p>
       </div>
 
-      {/* Top 3 Navigation Tabs */}
-      <div className="community-form-row write-page-tabs" role="tablist">
-        <button
-          className={tab === 'story' ? 'active' : ''}
-          onClick={() => setTab('story')}
-          type="button"
-          role="tab"
-          aria-selected={tab === 'story'}
-        >
-          <i className="bi bi-mic" /> Share a Story & Voice
-        </button>
-        <button
-          className={tab === 'write' ? 'active' : ''}
-          onClick={() => setTab('write')}
-          type="button"
-          role="tab"
-          aria-selected={tab === 'write'}
-        >
-          <i className="bi bi-book" /> Write a Book
-        </button>
-        <button
-          className={tab === 'mine' ? 'active' : ''}
-          onClick={() => setTab('mine')}
-          type="button"
-          role="tab"
-          aria-selected={tab === 'mine'}
-        >
-          <i className="bi bi-collection" /> My Submissions
-        </button>
+      {/* Top Creation Mode Bar: Dropdown Selector & Quick Tab Switcher */}
+      <div className="write-mode-bar">
+        <div className="write-dropdown-container">
+          <label className="write-dropdown-label" htmlFor="write-mode-select">
+            <i className="bi bi-pencil-square" /> Creation Mode:
+          </label>
+          <div className="write-select-shell">
+            <select
+              aria-label="Select creation mode"
+              className="write-mode-native-select"
+              id="write-mode-select"
+              onChange={(e) => handleTabChange(e.target.value)}
+              value={tab}
+            >
+              <option value="story">Write a Story & Voice</option>
+              <option value="write">Write a Book (Multi-Chapter)</option>
+              <option value="mine">My Submissions ({myBooks.length + myStories.length})</option>
+            </select>
+            <i className="bi bi-chevron-down write-select-icon" />
+          </div>
+        </div>
+
+        <div className="community-form-row write-page-tabs" role="tablist">
+          <button
+            className={tab === 'story' ? 'active' : ''}
+            onClick={() => handleTabChange('story')}
+            type="button"
+            role="tab"
+            aria-selected={tab === 'story'}
+          >
+            <i className="bi bi-mic" /> Share a Story & Voice
+          </button>
+          <button
+            className={tab === 'write' ? 'active' : ''}
+            onClick={() => handleTabChange('write')}
+            type="button"
+            role="tab"
+            aria-selected={tab === 'write'}
+          >
+            <i className="bi bi-book" /> Write a Book
+          </button>
+          <button
+            className={tab === 'mine' ? 'active' : ''}
+            onClick={() => handleTabChange('mine')}
+            type="button"
+            role="tab"
+            aria-selected={tab === 'mine'}
+          >
+            <i className="bi bi-collection" /> My Submissions
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: SHARE A STORY & AUDIO */}
@@ -588,14 +654,23 @@ function WritePage({ account, onDetail, onToast }) {
           <form className="community-form story-creation-form" onSubmit={submitStory}>
             <div className="community-form-row">
               <label>
-                Story title
+                Story title <span className="field-required-marker">*</span>
                 <input
-                  onChange={(e) => setStoryForm((prev) => ({ ...prev, title: e.target.value }))}
+                  className={storyFieldErrors.title ? 'field-has-error' : ''}
+                  onChange={(e) => {
+                    setStoryForm((prev) => ({ ...prev, title: e.target.value }))
+                    if (storyFieldErrors.title) setStoryFieldErrors((prev) => ({ ...prev, title: false }))
+                  }}
                   placeholder="e.g. A rainy day reflection, Childhood memories..."
                   required
                   type="text"
                   value={storyForm.title}
                 />
+                {storyFieldErrors.title && (
+                  <span className="field-error-hint">
+                    <i className="bi bi-exclamation-circle" /> Please provide a title for your story.
+                  </span>
+                )}
               </label>
               <label>
                 Topic tags (comma separated)
@@ -609,14 +684,23 @@ function WritePage({ account, onDetail, onToast }) {
             </div>
 
             <label>
-              Story text / caption
+              Story text / caption <span className="field-required-marker">*</span>
               <textarea
-                onChange={(e) => setStoryForm((prev) => ({ ...prev, content: e.target.value }))}
+                className={storyFieldErrors.content ? 'field-has-error' : ''}
+                onChange={(e) => {
+                  setStoryForm((prev) => ({ ...prev, content: e.target.value }))
+                  if (storyFieldErrors.content) setStoryFieldErrors((prev) => ({ ...prev, content: false }))
+                }}
                 placeholder="Share your thoughts, experiences, life stories, or describe what your voice recording is about..."
                 rows={5}
                 required
                 value={storyForm.content}
               />
+              {storyFieldErrors.content && (
+                <span className="field-error-hint">
+                  <i className="bi bi-exclamation-circle" /> Please write your story content or reflection.
+                </span>
+              )}
             </label>
 
             {/* Voice Studio Recording Section */}
@@ -685,7 +769,7 @@ function WritePage({ account, onDetail, onToast }) {
             </div>
 
             <CoverImagePicker
-              label="Story Cover Banner"
+              label="Story Cover Banner (Optional)"
               onChange={(nextUrl) => setStoryForm((prev) => ({ ...prev, coverUrl: nextUrl }))}
               onToast={onToast}
               type="story"
@@ -694,14 +778,34 @@ function WritePage({ account, onDetail, onToast }) {
             />
 
             {storyError && (
-              <p className="admin-validation-error">
-                <i className="bi bi-x-circle" /> {storyError}
-              </p>
+              <div className="modern-validation-banner error" role="alert">
+                <div className="validation-banner-icon">
+                  <i className="bi bi-exclamation-triangle-fill" />
+                </div>
+                <div className="validation-banner-text">
+                  <strong>Please check your submission</strong>
+                  <p>{storyError}</p>
+                </div>
+                <button
+                  aria-label="Dismiss error"
+                  className="validation-banner-dismiss"
+                  onClick={() => setStoryError('')}
+                  type="button"
+                >
+                  <i className="bi bi-x-lg" />
+                </button>
+              </div>
             )}
             {storySuccess && (
-              <p className="community-success">
-                <i className="bi bi-check-circle" /> {storySuccess}
-              </p>
+              <div className="modern-validation-banner success" role="status">
+                <div className="validation-banner-icon">
+                  <i className="bi bi-check-circle-fill" />
+                </div>
+                <div className="validation-banner-text">
+                  <strong>Published!</strong>
+                  <p>{storySuccess}</p>
+                </div>
+              </div>
             )}
 
             <div className="story-form-actions">
@@ -766,12 +870,40 @@ function WritePage({ account, onDetail, onToast }) {
               <form className="community-form" onSubmit={submitBook}>
                 <div className="community-form-row">
                   <label>
-                    Book title
-                    <input onChange={(e) => updateBookField('title', e.target.value)} type="text" value={bookForm.title} />
+                    Book title <span className="field-required-marker">*</span>
+                    <input
+                      className={bookFieldErrors.title ? 'field-has-error' : ''}
+                      onChange={(e) => {
+                        updateBookField('title', e.target.value)
+                        if (bookFieldErrors.title) setBookFieldErrors((prev) => ({ ...prev, title: false }))
+                      }}
+                      required
+                      type="text"
+                      value={bookForm.title}
+                    />
+                    {bookFieldErrors.title && (
+                      <span className="field-error-hint">
+                        <i className="bi bi-exclamation-circle" /> Book title is required.
+                      </span>
+                    )}
                   </label>
                   <label>
-                    Author name
-                    <input onChange={(e) => updateBookField('author', e.target.value)} type="text" value={bookForm.author} />
+                    Author name <span className="field-required-marker">*</span>
+                    <input
+                      className={bookFieldErrors.author ? 'field-has-error' : ''}
+                      onChange={(e) => {
+                        updateBookField('author', e.target.value)
+                        if (bookFieldErrors.author) setBookFieldErrors((prev) => ({ ...prev, author: false }))
+                      }}
+                      required
+                      type="text"
+                      value={bookForm.author}
+                    />
+                    {bookFieldErrors.author && (
+                      <span className="field-error-hint">
+                        <i className="bi bi-exclamation-circle" /> Author name is required.
+                      </span>
+                    )}
                   </label>
                 </div>
                 <label>
@@ -812,7 +944,7 @@ function WritePage({ account, onDetail, onToast }) {
                   </label>
                 </div>
                 <CoverImagePicker
-                  label="Book Cover Image"
+                  label="Book Cover Image (Optional)"
                   onChange={(nextUrl) => updateBookField('coverUrl', nextUrl)}
                   onToast={onToast}
                   type="book"
@@ -820,7 +952,7 @@ function WritePage({ account, onDetail, onToast }) {
                   value={bookForm.coverUrl}
                 />
 
-                <h3>Chapters</h3>
+                <h3>Chapters <span className="field-required-marker">*</span></h3>
                 <div className="write-page-chapters">
                   {bookForm.chapters.map((chapter, index) => (
                     <div className="write-page-chapter" key={index}>
@@ -853,8 +985,11 @@ function WritePage({ account, onDetail, onToast }) {
                         </button>
                       </div>
                       <textarea
-                        className="write-page-chapter-content"
-                        onChange={(e) => updateChapter(index, 'content', e.target.value)}
+                        className={`write-page-chapter-content${bookFieldErrors.chapters && !chapter.content.trim() ? ' field-has-error' : ''}`}
+                        onChange={(e) => {
+                          updateChapter(index, 'content', e.target.value)
+                          if (bookFieldErrors.chapters) setBookFieldErrors((prev) => ({ ...prev, chapters: false }))
+                        }}
                         placeholder="Write this chapter here... select text and use the Bold/Italic buttons above to format it."
                         ref={(el) => {
                           textareaRefs.current[index] = el
@@ -869,14 +1004,34 @@ function WritePage({ account, onDetail, onToast }) {
                 </button>
 
                 {commonError && (
-                  <p className="admin-validation-error">
-                    <i className="bi bi-x-circle" /> {commonError}
-                  </p>
+                  <div className="modern-validation-banner error" role="alert">
+                    <div className="validation-banner-icon">
+                      <i className="bi bi-exclamation-triangle-fill" />
+                    </div>
+                    <div className="validation-banner-text">
+                      <strong>Please check your submission</strong>
+                      <p>{commonError}</p>
+                    </div>
+                    <button
+                      aria-label="Dismiss error"
+                      className="validation-banner-dismiss"
+                      onClick={() => setCommonError('')}
+                      type="button"
+                    >
+                      <i className="bi bi-x-lg" />
+                    </button>
+                  </div>
                 )}
                 {commonSuccess && (
-                  <p className="community-success">
-                    <i className="bi bi-check-circle" /> {commonSuccess}
-                  </p>
+                  <div className="modern-validation-banner success" role="status">
+                    <div className="validation-banner-icon">
+                      <i className="bi bi-check-circle-fill" />
+                    </div>
+                    <div className="validation-banner-text">
+                      <strong>Success!</strong>
+                      <p>{commonSuccess}</p>
+                    </div>
+                  </div>
                 )}
 
                 <button className="primary-button" disabled={submittingBook} type="submit">
@@ -909,14 +1064,24 @@ function WritePage({ account, onDetail, onToast }) {
           </div>
 
           {commonSuccess && (
-            <p className="community-success" style={{ marginBottom: '16px' }}>
-              <i className="bi bi-check-circle" /> {commonSuccess}
-            </p>
+            <div className="modern-validation-banner success" style={{ marginBottom: '16px' }}>
+              <div className="validation-banner-icon">
+                <i className="bi bi-check-circle-fill" />
+              </div>
+              <div className="validation-banner-text">
+                <p>{commonSuccess}</p>
+              </div>
+            </div>
           )}
           {commonError && (
-            <p className="admin-validation-error" style={{ marginBottom: '16px' }}>
-              <i className="bi bi-x-circle" /> {commonError}
-            </p>
+            <div className="modern-validation-banner error" style={{ marginBottom: '16px' }}>
+              <div className="validation-banner-icon">
+                <i className="bi bi-exclamation-triangle-fill" />
+              </div>
+              <div className="validation-banner-text">
+                <p>{commonError}</p>
+              </div>
+            </div>
           )}
 
           {loadingMine ? (
@@ -925,44 +1090,69 @@ function WritePage({ account, onDetail, onToast }) {
             </p>
           ) : mineSubTab === 'stories' ? (
             myStories.length ? (
-              <div className="community-submissions-list">
+              <div className="my-submissions-list">
                 {myStories.map((story) => {
                   const storyId = story.id || story._id
                   return (
-                    <div className="community-submission-card" key={storyId}>
-                      <div className="table-row community-submission-row write-page-mine-row">
-                        <div>
-                          <strong>{story.title}</strong>
-                          <span style={{ display: 'inline-flex', gap: '6px', marginLeft: '8px' }}>
-                            <em className="admin-status status-published">Published</em>
-                            {story.type === 'audio-story' && (
-                              <em className="admin-status" style={{ background: 'var(--app-accent)', color: '#fff' }}>
-                                <i className="bi bi-soundwave" /> Audio
-                              </em>
-                            )}
-                          </span>
-                        </div>
-                        <small>
-                          {new Date(story.createdAt).toLocaleDateString()} · {story.likesCount || 0} likes · {story.views || 0} views
-                        </small>
-                        <div className="admin-row-actions">
-                          <button
-                            className="danger-button write-delete-btn"
-                            onClick={() => setDeleteConfirmStory(story)}
-                            type="button"
-                          >
-                            <i className="bi bi-trash" /> Delete
-                          </button>
-                        </div>
+                    <div className="my-submission-card my-submission-story-card" key={storyId}>
+                      {/* Story Cover Frame */}
+                      <div className="submission-story-cover-frame">
+                        {story.coverUrl ? (
+                          <img
+                            alt={story.title}
+                            className="submission-story-cover-img"
+                            src={story.coverUrl}
+                          />
+                        ) : (
+                          <div className="submission-story-cover-none">
+                            <i className="bi bi-card-image" />
+                            <span>None</span>
+                          </div>
+                        )}
                       </div>
-                      <p style={{ margin: '8px 0', fontSize: '13px', color: 'var(--app-muted)' }}>
-                        {story.content.slice(0, 180)}{story.content.length > 180 ? '...' : ''}
-                      </p>
-                      {story.audioUrl && (
-                        <div style={{ marginTop: '8px' }}>
-                          <audio controls preload="none" src={story.audioUrl} style={{ width: '100%', height: '36px' }} />
+
+                      {/* Story Details */}
+                      <div className="submission-card-main">
+                        <div className="submission-card-header-row">
+                          <div className="submission-card-title-group">
+                            <h3 className="submission-card-title">{story.title}</h3>
+                            <div className="submission-badges-row">
+                              <span className="admin-status status-published">Published</span>
+                              {story.type === 'audio-story' && (
+                                <span className="submission-audio-pill">
+                                  <i className="bi bi-soundwave" /> Audio
+                                </span>
+                              )}
+                              <span className="submission-meta-pill">
+                                {new Date(story.createdAt).toLocaleDateString()}
+                              </span>
+                              <span className="submission-meta-pill">
+                                {story.likesCount || 0} likes · {story.views || 0} views
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="submission-card-actions">
+                            <button
+                              className="danger-button write-delete-btn"
+                              onClick={() => setDeleteConfirmStory(story)}
+                              type="button"
+                            >
+                              <i className="bi bi-trash" /> Delete
+                            </button>
+                          </div>
                         </div>
-                      )}
+
+                        <p className="submission-story-excerpt">
+                          {story.content.slice(0, 220)}{story.content.length > 220 ? '...' : ''}
+                        </p>
+
+                        {story.audioUrl && (
+                          <div className="submission-audio-container">
+                            <audio controls preload="none" src={story.audioUrl} style={{ width: '100%', height: '36px' }} />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -971,55 +1161,92 @@ function WritePage({ account, onDetail, onToast }) {
               <p className="empty-state">You haven't shared any stories yet.</p>
             )
           ) : myBooks.length ? (
-            <div className="community-submissions-list">
+            <div className="my-submissions-list">
               {myBooks.map((book) => {
                 const bookId = book.id || book._id
                 const isHidden = book.status === 'hidden'
                 const hasRejection = Boolean(book.rejectionReason)
 
                 return (
-                  <div className="community-submission-card write-page-mine-card" key={bookId}>
-                    <div className="table-row community-submission-row write-page-mine-row">
-                      <span
-                        onClick={() => book.status === 'published' && onDetail?.(book)}
-                        style={book.status === 'published' ? { cursor: 'pointer' } : undefined}
-                      >
-                        {book.title}
-                        <em className={`admin-status status-${book.status || 'draft'}`}>
-                          {isHidden ? 'Rejected / Ignored' : book.status || 'draft'}
-                        </em>
-                      </span>
-                      <small>
+                  <div className="my-submission-card my-submission-book-card" key={bookId}>
+                    {/* Book Cover Frame (2:3 Portrait) */}
+                    <div className="submission-book-cover-frame">
+                      {book.coverUrl ? (
+                        <img
+                          alt={book.title}
+                          className="submission-book-cover-img"
+                          src={book.coverUrl}
+                        />
+                      ) : (
+                        <div className="submission-book-cover-none">
+                          <i className="bi bi-journal-text" />
+                          <span>None</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Book Details */}
+                    <div className="submission-card-main">
+                      <div className="submission-card-header-row">
+                        <div className="submission-card-title-group">
+                          <h3
+                            className={`submission-card-title${book.status === 'published' ? ' clickable' : ''}`}
+                            onClick={() => book.status === 'published' && onDetail?.(book)}
+                          >
+                            {book.title}
+                          </h3>
+                          <div className="submission-badges-row">
+                            <span className={`admin-status status-${book.status || 'draft'}`}>
+                              {isHidden ? 'Rejected / Ignored' : book.status || 'draft'}
+                            </span>
+                            {book.category && (
+                              <span className="submission-meta-pill genre">{book.category}</span>
+                            )}
+                            {book.chapters?.length ? (
+                              <span className="submission-meta-pill">
+                                {book.chapters.length} chapter{book.chapters.length > 1 ? 's' : ''}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="submission-card-actions">
+                          <button className="edit-button" onClick={() => startEdit(book)} type="button">
+                            <i className="bi bi-pencil-square" /> Edit
+                          </button>
+                          <button
+                            className="danger-button write-delete-btn"
+                            onClick={() => setDeleteConfirmBook(book)}
+                            type="button"
+                          >
+                            <i className="bi bi-trash" /> Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="submission-book-author">
+                        <i className="bi bi-pen" /> By {book.author || 'Author'}
+                      </p>
+
+                      <p className="submission-status-hint">
                         {book.status === 'published'
                           ? 'Published & visible in catalog'
                           : isHidden
                           ? 'Ignored by admin (see note below)'
                           : 'Waiting on admin review'}
-                      </small>
-                      <div className="admin-row-actions">
-                        <button className="edit-button" onClick={() => startEdit(book)} type="button">
-                          <i className="bi bi-pencil-square" /> Edit
-                        </button>
-                        <button
-                          className="danger-button write-delete-btn"
-                          onClick={() => setDeleteConfirmBook(book)}
-                          type="button"
-                        >
-                          <i className="bi bi-trash" /> Delete
-                        </button>
-                      </div>
-                    </div>
+                      </p>
 
-                    {(isHidden || hasRejection) && (
-                      <div className="author-rejection-note">
-                        <div className="rejection-note-header">
-                          <i className="bi bi-exclamation-triangle-fill" />
-                          <strong>Admin note:</strong>
+                      {(isHidden || hasRejection) && (
+                        <div className="author-rejection-note">
+                          <div className="rejection-note-header">
+                            <i className="bi bi-exclamation-triangle-fill" />
+                            <strong>Admin note:</strong>
+                          </div>
+                          <p>{book.rejectionReason || 'Admin ignored or rejected this book. You can edit content and re-submit anytime.'}</p>
+                          <span className="rejection-note-hint">Tip: Click "Edit" above to revise your content and re-submit for admin review.</span>
                         </div>
-                        <p>{book.rejectionReason || 'Admin ignored or rejected this book. You can edit content and re-submit anytime.'}</p>
-                        <span className="rejection-note-hint">Tip: Click "Edit" above to revise your content and re-submit for admin review.</span>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -1035,36 +1262,40 @@ function WritePage({ account, onDetail, onToast }) {
         <div
           aria-labelledby="delete-authored-title"
           aria-modal="true"
-          className="reader-modal-backdrop admin-book-modal-backdrop"
+          className="confirmation-dialog-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget && !deletingBook) setDeleteConfirmBook(null)
           }}
           role="dialog"
         >
-          <div className="admin-book-modal write-delete-modal" style={{ maxWidth: '440px', width: '92%' }}>
-            <header className="admin-book-modal-header">
-              <div>
-                <p className="mono-eyebrow">Confirm Deletion</p>
-                <h2 id="delete-authored-title">Delete book</h2>
-              </div>
-              <button
-                aria-label="Close"
-                className="admin-book-modal-close"
-                disabled={deletingBook}
-                onClick={() => setDeleteConfirmBook(null)}
-                type="button"
-              >
-                <i className="bi bi-x-lg" />
-              </button>
-            </header>
-            <div className="admin-book-modal-body" style={{ padding: '16px 20px' }}>
-              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--app-text, #222)' }}>
-                Are you sure you want to permanently delete <strong>"{deleteConfirmBook.title}"</strong>? All chapters and draft contents will be permanently removed.
+          <div className="confirmation-dialog-card">
+            <button
+              aria-label="Close"
+              className="confirmation-dialog-close"
+              disabled={deletingBook}
+              onClick={() => setDeleteConfirmBook(null)}
+              type="button"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+            <div className="confirmation-dialog-icon danger">
+              <i className="bi bi-trash3-fill" />
+            </div>
+            <div className="confirmation-dialog-header">
+              <span className="confirmation-dialog-eyebrow">Confirm Deletion</span>
+              <h2 id="delete-authored-title">Delete book</h2>
+            </div>
+            <div className="confirmation-dialog-body">
+              <p>
+                Are you sure you want to permanently delete <strong>"{deleteConfirmBook.title}"</strong>?
+              </p>
+              <p className="confirmation-dialog-subtext">
+                All chapters and draft contents will be permanently removed.
               </p>
             </div>
-            <footer className="admin-book-modal-footer">
+            <div className="confirmation-dialog-footer">
               <button
-                className="ghost-button"
+                className="ghost-button confirmation-cancel-btn"
                 disabled={deletingBook}
                 onClick={() => setDeleteConfirmBook(null)}
                 type="button"
@@ -1072,15 +1303,15 @@ function WritePage({ account, onDetail, onToast }) {
                 Cancel
               </button>
               <button
-                className="danger-button"
+                className="danger-button confirmation-confirm-btn"
                 disabled={deletingBook}
                 onClick={handleDeleteBook}
                 type="button"
               >
-                <i className="bi bi-trash" style={{ marginRight: '6px' }} />
-                {deletingBook ? 'Deleting...' : 'Delete book'}
+                <i className="bi bi-trash" />
+                <span>{deletingBook ? 'Deleting...' : 'Delete book'}</span>
               </button>
-            </footer>
+            </div>
           </div>
         </div>
       )}
@@ -1090,36 +1321,40 @@ function WritePage({ account, onDetail, onToast }) {
         <div
           aria-labelledby="delete-story-title"
           aria-modal="true"
-          className="reader-modal-backdrop admin-book-modal-backdrop"
+          className="confirmation-dialog-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget && !deletingStory) setDeleteConfirmStory(null)
           }}
           role="dialog"
         >
-          <div className="admin-book-modal write-delete-modal" style={{ maxWidth: '440px', width: '92%' }}>
-            <header className="admin-book-modal-header">
-              <div>
-                <p className="mono-eyebrow">Confirm Deletion</p>
-                <h2 id="delete-story-title">Delete story</h2>
-              </div>
-              <button
-                aria-label="Close"
-                className="admin-book-modal-close"
-                disabled={deletingStory}
-                onClick={() => setDeleteConfirmStory(null)}
-                type="button"
-              >
-                <i className="bi bi-x-lg" />
-              </button>
-            </header>
-            <div className="admin-book-modal-body" style={{ padding: '16px 20px' }}>
-              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--app-text, #222)' }}>
-                Are you sure you want to delete <strong>"{deleteConfirmStory.title}"</strong>? It will be removed from the community feed.
+          <div className="confirmation-dialog-card">
+            <button
+              aria-label="Close"
+              className="confirmation-dialog-close"
+              disabled={deletingStory}
+              onClick={() => setDeleteConfirmStory(null)}
+              type="button"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+            <div className="confirmation-dialog-icon danger">
+              <i className="bi bi-trash3-fill" />
+            </div>
+            <div className="confirmation-dialog-header">
+              <span className="confirmation-dialog-eyebrow">Confirm Deletion</span>
+              <h2 id="delete-story-title">Delete story</h2>
+            </div>
+            <div className="confirmation-dialog-body">
+              <p>
+                Are you sure you want to delete <strong>"{deleteConfirmStory.title}"</strong>?
+              </p>
+              <p className="confirmation-dialog-subtext">
+                It will be removed from the community feed.
               </p>
             </div>
-            <footer className="admin-book-modal-footer">
+            <div className="confirmation-dialog-footer">
               <button
-                className="ghost-button"
+                className="ghost-button confirmation-cancel-btn"
                 disabled={deletingStory}
                 onClick={() => setDeleteConfirmStory(null)}
                 type="button"
@@ -1127,15 +1362,15 @@ function WritePage({ account, onDetail, onToast }) {
                 Cancel
               </button>
               <button
-                className="danger-button"
+                className="danger-button confirmation-confirm-btn"
                 disabled={deletingStory}
                 onClick={handleDeleteStory}
                 type="button"
               >
-                <i className="bi bi-trash" style={{ marginRight: '6px' }} />
-                {deletingStory ? 'Deleting...' : 'Delete story'}
+                <i className="bi bi-trash" />
+                <span>{deletingStory ? 'Deleting...' : 'Delete story'}</span>
               </button>
-            </footer>
+            </div>
           </div>
         </div>
       )}

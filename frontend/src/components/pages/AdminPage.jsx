@@ -4454,41 +4454,48 @@ function DeleteStoryModal({ busy, item, onClose, onConfirm, reason, setReason })
     <div
       aria-labelledby="admin-delete-story-title"
       aria-modal="true"
-      className="reader-modal-backdrop admin-ban-backdrop"
+      className="confirmation-dialog-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) onClose()
       }}
       role="dialog"
     >
-      <div className="admin-ban-modal" style={{ maxWidth: '480px' }}>
-        <button aria-label="Close" className="admin-book-modal-close" disabled={busy} onClick={onClose} type="button">
+      <div className="confirmation-dialog-card" style={{ maxWidth: '480px' }}>
+        <button aria-label="Close" className="confirmation-dialog-close" disabled={busy} onClick={onClose} type="button">
           <i className="bi bi-x-lg" />
         </button>
-        <p className="mono-eyebrow">Moderation Action</p>
-        <h2 id="admin-delete-story-title">Remove Community Story</h2>
-        <p className="form-note">
-          Are you sure you want to permanently delete <strong>"{item.title}"</strong> by <em>{item.authorName || 'Author'}</em>?
-        </p>
+        <div className="confirmation-dialog-icon danger">
+          <i className="bi bi-trash3-fill" />
+        </div>
+        <div className="confirmation-dialog-header">
+          <span className="confirmation-dialog-eyebrow">Moderation Action</span>
+          <h2 id="admin-delete-story-title">Remove Community Story</h2>
+        </div>
+        <div className="confirmation-dialog-body" style={{ margin: '10px 0 16px' }}>
+          <p>
+            Are you sure you want to permanently delete <strong>"{item.title}"</strong> by <em>{item.authorName || 'Author'}</em>?
+          </p>
 
-        <label style={{ display: 'block', margin: '14px 0 6px', fontSize: '13px', fontWeight: 600 }}>
-          Removal Reason (sent to author in notification)
-          <textarea
-            disabled={busy}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Explain why this story was removed..."
-            rows={3}
-            style={{ width: '100%', marginTop: '6px', resize: 'vertical' }}
-            value={reason}
-          />
-        </label>
+          <label style={{ display: 'block', margin: '14px 0 6px', fontSize: '13px', fontWeight: 600 }}>
+            Removal Reason (sent to author in notification)
+            <textarea
+              disabled={busy}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Explain why this story was removed..."
+              rows={3}
+              style={{ width: '100%', marginTop: '6px', resize: 'vertical' }}
+              value={reason}
+            />
+          </label>
+        </div>
 
-        <div className="admin-form-actions">
-          <button className="ghost-button" disabled={busy} onClick={onClose} type="button">
+        <div className="confirmation-dialog-footer">
+          <button className="ghost-button confirmation-cancel-btn" disabled={busy} onClick={onClose} type="button">
             Cancel
           </button>
-          <button className="danger-button" disabled={busy} onClick={onConfirm} type="button">
+          <button className="danger-button confirmation-confirm-btn" disabled={busy} onClick={onConfirm} type="button">
             <i className="bi bi-trash" />
-            {busy ? 'Removing & Notifying...' : 'Remove Story'}
+            <span>{busy ? 'Removing & Notifying...' : 'Remove Story'}</span>
           </button>
         </div>
       </div>

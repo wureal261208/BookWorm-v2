@@ -1,205 +1,115 @@
-import { useEffect, useState } from 'react'
-import { auth } from '../../features/auth-firebase/firebaseConfig'
-import { apiFetch } from '../../utils/apiClient'
+import { useNavigation } from '../../context/NavigationContext'
 
-const TYPE_OPTIONS = [
-  { id: 'audiobook', label: 'Audiobook narration' },
-  { id: 'ebook', label: 'Ebook' },
-]
-
-const emptyForm = {
-  type: 'audiobook',
-  title: '',
-  author: '',
-  description: '',
-  categories: '',
-  language: 'en',
-  fileFormat: 'mp3',
-  fileUrl: '',
-}
-
-// Crowd-narration, per Wun's brainstorm (nhóm 3): a reader records/hosts
-// their own narration for a book LibriVox doesn't have yet (or contributes
-// an ebook) and links it here rather than uploading a file to this site
-// directly - there's no file-storage service wired up, so the honest,
-// buildable version of this is "paste a link to where you've already
-// hosted it" (Google Drive, archive.org, etc.), not a native file picker.
-// Submissions land as status:'draft' and go through the exact same
-// Publish/Hide review admins already use for synced content - see
-// backend/controllers/contentController.js's createUserContent.
 function CommunityPage() {
-  const isGuest = !auth.currentUser
-  const [form, setForm] = useState(emptyForm)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [mine, setMine] = useState([])
-  const [loadingMine, setLoadingMine] = useState(true)
+  const { navigateTo } = useNavigation()
 
-  function loadMine() {
-    setLoadingMine(true)
-    apiFetch('/api/content/mine')
-      .then((data) => setMine(Array.isArray(data) ? data : []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingMine(false))
-  }
-
-  useEffect(() => {
-    if (!isGuest) loadMine()
-    else setLoadingMine(false)
-  }, [isGuest])
-
-  function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
-  }
-
-  async function submit(event) {
-    event.preventDefault()
-    setError('')
-    setSuccess('')
-
-    if (!form.title.trim() || !form.fileUrl.trim()) {
-      setError('Title and a link to the file are required.')
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await apiFetch('/api/content', {
-        method: 'POST',
-        body: {
-          type: form.type,
-          title: form.title.trim(),
-          author: form.author.trim(),
-          description: form.description.trim(),
-          categories: form.categories
-            .split(',')
-            .map((category) => category.trim())
-            .filter(Boolean),
-          language: form.language.trim() || 'en',
-          files: [{ format: form.fileFormat.trim() || 'mp3', url: form.fileUrl.trim() }],
-        },
-      })
-      setSuccess('Submitted! An admin will review it before it goes live.')
-      setForm(emptyForm)
-      loadMine()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (isGuest) {
-    return (
-      <div className="community-page">
-        <div className="section-heading">
-          <div>
-            <p className="mono-eyebrow">Community</p>
-            <h2>Contribute a narration</h2>
-          </div>
-        </div>
-        <p className="empty-state">Log in to submit a narration or ebook contribution.</p>
-      </div>
-    )
-  }
+  const upcomingFeatures = [
+    {
+      icon: 'bi-people-fill',
+      title: 'Reader Book Clubs',
+      badge: 'Interactive',
+      description:
+        'Join curated book clubs, participate in monthly reading selections, and share perspectives with readers who love the same genres.',
+    },
+    {
+      icon: 'bi-chat-dots-fill',
+      title: 'Community Discussions',
+      badge: 'Chapter Talks',
+      description:
+        'Engage in deep chapter-by-chapter discussions, character debates, and thoughtful literary analyses in a friendly, moderated space.',
+    },
+    {
+      icon: 'bi-trophy-fill',
+      title: 'Reading Challenges',
+      badge: 'Milestones',
+      description:
+        'Set personal reading targets, track your annual book counts, and celebrate reading streaks with milestone badges and rewards.',
+    },
+    {
+      icon: 'bi-broadcast',
+      title: 'Voice Lounges & Live Reads',
+      badge: 'Audio First',
+      description:
+        'Tune into live author readings, audio story showcases, and spoken-word gatherings hosted by passionate community storytellers.',
+    },
+  ]
 
   return (
-    <div className="community-page">
-      <div className="section-heading">
-        <div>
-          <p className="mono-eyebrow">Community</p>
-          <h2>Contribute a narration</h2>
+    <div className="community-page community-coming-soon-container">
+      {/* Hero Header */}
+      <section className="community-hero-section">
+        <div className="community-hero-badge">
+          <i className="bi bi-stars" />
+          <span>In Active Development</span>
         </div>
-        <span>Recorded a public-domain book LibriVox doesn't have yet? Share the link here for review.</span>
-      </div>
+        <h1 className="community-hero-title">Community Hub — Coming Soon</h1>
+        <p className="community-hero-subtitle">
+          We are crafting an inspiring social space for book lovers, authors, and storytellers to connect, exchange ideas, and read together.
+        </p>
+      </section>
 
-      <form className="community-form" onSubmit={submit}>
-        <div className="community-form-row">
-          {TYPE_OPTIONS.map((option) => (
-            <button
-              className={form.type === option.id ? 'active' : ''}
-              key={option.id}
-              onClick={() => updateField('type', option.id)}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
+      {/* Feature Preview Grid */}
+      <section className="community-features-preview" aria-label="Upcoming community features">
+        <div className="section-heading-centered">
+          <p className="mono-eyebrow">Sneak Peek</p>
+          <h2>What's on the horizon</h2>
         </div>
 
-        <label>
-          Book title
-          <input onChange={(event) => updateField('title', event.target.value)} type="text" value={form.title} />
-        </label>
-        <label>
-          Author
-          <input onChange={(event) => updateField('author', event.target.value)} type="text" value={form.author} />
-        </label>
-        <label>
-          Description
-          <textarea onChange={(event) => updateField('description', event.target.value)} value={form.description} />
-        </label>
-        <div className="community-form-row">
-          <label>
-            Categories (comma-separated)
-            <input onChange={(event) => updateField('categories', event.target.value)} type="text" value={form.categories} />
-          </label>
-          <label>
-            Language
-            <input onChange={(event) => updateField('language', event.target.value)} type="text" value={form.language} />
-          </label>
-        </div>
-        <div className="community-form-row">
-          <label>
-            File format
-            <input onChange={(event) => updateField('fileFormat', event.target.value)} type="text" value={form.fileFormat} />
-          </label>
-          <label className="community-form-file-url">
-            Link to the file (Drive, archive.org, etc.)
-            <input onChange={(event) => updateField('fileUrl', event.target.value)} type="url" value={form.fileUrl} />
-          </label>
-        </div>
-
-        {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
-        {success && <p className="community-success"><i className="bi bi-check-circle" /> {success}</p>}
-
-        <button className="primary-button" disabled={submitting} type="submit">
-          {submitting ? 'Submitting...' : 'Submit for review'}
-        </button>
-      </form>
-
-      <div className="section-heading">
-        <div>
-          <p className="mono-eyebrow">Track your work</p>
-          <h2>Your submissions</h2>
-        </div>
-      </div>
-
-      {loadingMine ? (
-        <div className="community-submissions-list" aria-busy="true">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div className="table-row community-submission-row" key={i}>
-              <div className="skeleton-box" style={{ width: '45%', height: '18px' }} />
-              <div className="skeleton-box" style={{ width: '70px', height: '18px' }} />
+        <div className="community-feature-cards-grid">
+          {upcomingFeatures.map((item) => (
+            <div className="community-feature-card" key={item.title}>
+              <div className="community-card-icon-wrapper">
+                <i className={`bi ${item.icon}`} />
+              </div>
+              <div className="community-card-content">
+                <div className="community-card-header">
+                  <h3>{item.title}</h3>
+                  <span className="community-card-badge">{item.badge}</span>
+                </div>
+                <p>{item.description}</p>
+              </div>
             </div>
           ))}
         </div>
-      ) : mine.length ? (
-        <div className="community-submissions-list">
-          {mine.map((item) => (
-            <div className="table-row community-submission-row" key={item._id}>
-              <span>
-                {item.title}
-                <em className={`admin-status status-${item.status}`}>{item.status}</em>
-              </span>
-              <small>{item.type === 'ebook' ? 'Ebook' : 'Audiobook'}</small>
-            </div>
-          ))}
+      </section>
+
+      {/* Interactive Callout Banner */}
+      <section className="community-cta-banner">
+        <div className="community-cta-content">
+          <div className="community-cta-icon">
+            <i className="bi bi-pencil-square" />
+          </div>
+          <div>
+            <h3>Share your voice with the community today</h3>
+            <p>
+              While full social clubs are underway, you can already publish stories, record voice notes, and submit full-length books to our catalog!
+            </p>
+          </div>
         </div>
-      ) : (
-        <p className="empty-state">You haven't submitted anything yet.</p>
-      )}
+        <div className="community-cta-actions">
+          <button
+            className="primary-button community-action-btn"
+            onClick={() => navigateTo('write', { query: 'tab=story' })}
+            type="button"
+          >
+            <i className="bi bi-mic" /> Write a Story
+          </button>
+          <button
+            className="ghost-button community-action-btn"
+            onClick={() => navigateTo('write', { query: 'tab=book' })}
+            type="button"
+          >
+            <i className="bi bi-book" /> Write a Book
+          </button>
+          <button
+            className="ghost-button community-action-btn"
+            onClick={() => navigateTo('books')}
+            type="button"
+          >
+            <i className="bi bi-compass" /> Explore Library
+          </button>
+        </div>
+      </section>
     </div>
   )
 }

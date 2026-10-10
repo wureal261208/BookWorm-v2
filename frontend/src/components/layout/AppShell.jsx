@@ -332,12 +332,34 @@ function AppShell({
                     onClick={() => {
                       setShowWriteMenu(false)
                       setIsMobileNavOpen(false)
-                      navigateTo('write')
+                      navigateTo('write', { query: 'tab=story' })
                     }}
                     type="button"
                   >
-                    <i className="bi bi-pencil-square" />
-                    Write a story
+                    <i className="bi bi-mic" />
+                    <span>Write a story</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowWriteMenu(false)
+                      setIsMobileNavOpen(false)
+                      navigateTo('write', { query: 'tab=book' })
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-book" />
+                    <span>Write a book</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowWriteMenu(false)
+                      setIsMobileNavOpen(false)
+                      navigateTo('write', { query: 'tab=mine' })
+                    }}
+                    type="button"
+                  >
+                    <i className="bi bi-collection" />
+                    <span>My submissions</span>
                   </button>
                 </div>
               )}
@@ -491,24 +513,31 @@ function AppShell({
         <div
           aria-labelledby="shell-confirm-logout-title"
           aria-modal="true"
-          className="reader-modal-backdrop admin-ban-backdrop"
+          className="confirmation-dialog-backdrop"
           onClick={(event) => {
             if (event.target === event.currentTarget) setShowLogoutConfirm(false)
           }}
           role="dialog"
         >
-          <div className="admin-ban-modal">
-            <button aria-label="Close" className="admin-book-modal-close" onClick={() => setShowLogoutConfirm(false)} type="button">
+          <div className="confirmation-dialog-card">
+            <button aria-label="Close" className="confirmation-dialog-close" onClick={() => setShowLogoutConfirm(false)} type="button">
               <i className="bi bi-x-lg" />
             </button>
-            <p className="mono-eyebrow">Log out</p>
-            <h2 id="shell-confirm-logout-title">Leave BookWorm?</h2>
-            <p className="form-note">You'll need to log back in to pick up where you left off.</p>
+            <div className="confirmation-dialog-icon warning">
+              <i className="bi bi-box-arrow-right" />
+            </div>
+            <div className="confirmation-dialog-header">
+              <span className="confirmation-dialog-eyebrow">Account</span>
+              <h2 id="shell-confirm-logout-title">Leave BookWorm?</h2>
+            </div>
+            <div className="confirmation-dialog-body">
+              <p>You'll need to log back in to pick up where you left off.</p>
+            </div>
 
-            <div className="admin-form-actions">
-              <button className="ghost-button" onClick={() => setShowLogoutConfirm(false)} type="button">Stay signed in</button>
+            <div className="confirmation-dialog-footer">
+              <button className="ghost-button confirmation-cancel-btn" onClick={() => setShowLogoutConfirm(false)} type="button">Stay signed in</button>
               <button
-                className="danger-button"
+                className="danger-button confirmation-confirm-btn"
                 onClick={() => {
                   setShowLogoutConfirm(false)
                   onLogout()
@@ -516,7 +545,7 @@ function AppShell({
                 type="button"
               >
                 <i className="bi bi-box-arrow-right" />
-                Log out
+                <span>Log out</span>
               </button>
             </div>
           </div>
