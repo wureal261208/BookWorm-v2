@@ -1,16 +1,29 @@
 const Story = require('../models/Story');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 
 // Helper to format story output with dynamic like states
 function formatStory(story, viewerId) {
   const obj = story.toObject ? story.toObject() : { ...story };
   const likesArr = Array.isArray(obj.likes) ? obj.likes : [];
   const isLiked = viewerId ? likesArr.some((id) => id.toString() === viewerId.toString()) : false;
+  const rawComments = Array.isArray(obj.comments) ? obj.comments : [];
+  const commentsArr = rawComments.map((c) => {
+    const cObj = c.toObject ? c.toObject() : { ...c };
+    return {
+      ...cObj,
+      id: cObj._id,
+      authorName: sanitizeNickname(cObj.authorName, 'Reader'),
+    };
+  });
   return {
     ...obj,
     id: obj._id,
+    authorName: sanitizeNickname(obj.authorName, 'Reader'),
     likesCount: likesArr.length,
+    commentsCount: commentsArr.length,
+    comments: commentsArr,
     isLiked,
   };
 }
@@ -138,11 +151,13 @@ const createStory = asyncHandler(async (req, res) => {
     normalizedTags = Array.from(new Set([...normalizedTags, ...parsed]));
   }
 
+  const authorNickname = sanitizeNickname(req.user.name || req.user.email, 'Reader');
+
   const story = await Story.create({
     title: title.trim(),
     content: content.trim(),
     author: req.user._id,
-    authorName: req.user.name || 'Reader',
+    authorName: authorNickname,
     authorAvatar: req.user.avatar || '',
     audioUrl: audioUrl.trim(),
     audioDuration: Number(audioDuration) || 0,
@@ -241,6 +256,110 @@ const deleteMyStory = asyncHandler(async (req, res) => {
   return success(res, 200, 'Story deleted successfully.');
 });
 
+// @route GET /api/stories/:id/comments
+// @desc  Fetch comments for a story
+const getStoryComments = asyncHandler(async (req, res) => {
+  const story = await Story.findById(req.params.id);
+  if (!story || story.status !== 'published') {
+    return fail(res, 404, 'Story not found.');
+  }
+
+  const comments = (story.comments || []).map((c) => {
+    const cObj = c.toObject ? c.toObject() : { ...c };
+    return {
+      id: cObj._id,
+      _id: cObj._id,
+      user: cObj.user,
+      authorName: sanitizeNickname(cObj.authorName, 'Reader'),
+      authorAvatar: cObj.authorAvatar || '',
+      text: cObj.text,
+      createdAt: cObj.createdAt,
+      updatedAt: cObj.updatedAt,
+    };
+  });
+
+  return success(res, 200, 'Story comments retrieved successfully.', {
+    comments,
+    total: comments.length,
+  });
+});
+
+// @route POST /api/stories/:id/comments
+// @desc  Add a comment to a story (persisted in MongoDB)
+const addStoryComment = asyncHandler(async (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) {
+    return fail(res, 400, 'Comment text is required.');
+  }
+
+  if (text.trim().length > 2000) {
+    return fail(res, 400, 'Comment text cannot exceed 2000 characters.');
+  }
+
+  const story = await Story.findById(req.params.id);
+  if (!story || story.status !== 'published') {
+    return fail(res, 404, 'Story not found.');
+  }
+
+  const authorNickname = sanitizeNickname(req.user.name || req.user.email, 'Reader');
+
+  const newComment = {
+    user: req.user._id,
+    authorName: authorNickname,
+    authorAvatar: req.user.avatar || '',
+    text: text.trim(),
+  };
+
+  story.comments.push(newComment);
+  await story.save();
+
+  const savedComment = story.comments[story.comments.length - 1];
+  const formattedComment = {
+    id: savedComment._id,
+    _id: savedComment._id,
+    user: savedComment.user,
+    authorName: savedComment.authorName,
+    authorAvatar: savedComment.authorAvatar,
+    text: savedComment.text,
+    createdAt: savedComment.createdAt,
+    updatedAt: savedComment.updatedAt,
+  };
+
+  return success(res, 201, 'Comment added successfully.', {
+    comment: formattedComment,
+    commentsCount: story.comments.length,
+  });
+});
+
+// @route DELETE /api/stories/:id/comments/:commentId
+// @desc  Delete a comment from a story
+const deleteStoryComment = asyncHandler(async (req, res) => {
+  const story = await Story.findById(req.params.id);
+  if (!story) {
+    return fail(res, 404, 'Story not found.');
+  }
+
+  const comment = story.comments.id(req.params.commentId);
+  if (!comment) {
+    return fail(res, 404, 'Comment not found.');
+  }
+
+  const isCommentAuthor = comment.user.toString() === req.user._id.toString();
+  const isStoryAuthor = story.author.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === 'admin';
+
+  if (!isCommentAuthor && !isStoryAuthor && !isAdmin) {
+    return fail(res, 403, 'You are not authorized to delete this comment.');
+  }
+
+  comment.deleteOne();
+  await story.save();
+
+  return success(res, 200, 'Comment deleted successfully.', {
+    commentsCount: story.comments.length,
+  });
+});
+
 module.exports = {
   listStories,
   getMyStories,
@@ -250,4 +369,7 @@ module.exports = {
   uploadStoryAudio,
   toggleLikeStory,
   deleteMyStory,
+  getStoryComments,
+  addStoryComment,
+  deleteStoryComment,
 };

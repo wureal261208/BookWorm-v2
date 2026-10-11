@@ -143,4 +143,70 @@ describe('StoriesPage - Community Stories and Voice Recordings', () => {
 
     expect(mockNavigateTo).toHaveBeenCalledWith('write', { query: 'tab=story' })
   })
+
+  test('submitting a comment in story modal calls POST /api/stories/:id/comments and renders comment', async () => {
+    publicApiFetch.mockImplementation((url) => {
+      if (url.includes('/comments')) {
+        return Promise.resolve({
+          comments: [
+            {
+              id: 'c-1',
+              _id: 'c-1',
+              authorName: 'Luna Lovegood',
+              text: 'Very poetic and atmospheric!',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        })
+      }
+      return Promise.resolve({
+        stories: mockStories,
+        total: 2,
+        page: 1,
+        pages: 1,
+      })
+    })
+
+    apiFetch.mockResolvedValueOnce({
+      comment: {
+        id: 'c-2',
+        _id: 'c-2',
+        authorName: 'Alex Reader',
+        text: 'I loved reading this piece.',
+        createdAt: new Date().toISOString(),
+      },
+      commentsCount: 2,
+    })
+
+    render(<StoriesPage account={{ name: 'alex.reader@domain.com', uid: 'user-reader-1' }} onToast={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Autumn Rain Reflections')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Autumn Rain Reflections'))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText('Community Comments')).toBeInTheDocument()
+      expect(screen.getByText('Very poetic and atmospheric!')).toBeInTheDocument()
+    })
+
+    const commentInput = screen.getByRole('textbox', { name: /Write a comment/i })
+    fireEvent.change(commentInput, { target: { value: 'I loved reading this piece.' } })
+
+    const postBtn = screen.getByRole('button', { name: /Post Comment/i })
+    fireEvent.click(postBtn)
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/stories/story-1/comments',
+        expect.objectContaining({
+          method: 'POST',
+          body: { text: 'I loved reading this piece.' },
+        })
+      )
+      expect(screen.getByText('I loved reading this piece.')).toBeInTheDocument()
+    })
+  })
 })

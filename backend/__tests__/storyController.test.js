@@ -8,6 +8,9 @@ const {
   listStories,
   createStory,
   toggleLikeStory,
+  getStoryComments,
+  addStoryComment,
+  deleteStoryComment,
 } = require('../controllers/storyController');
 const {
   listStoriesForAdmin,
@@ -147,6 +150,128 @@ describe('Story Controllers', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       const payload = res.json.mock.calls[0][0];
       expect(payload.data.isLiked).toBe(true);
+    });
+
+    test('createStory sanitizes user email into clean author nickname', async () => {
+      const createdStory = {
+        _id: 'story-nick',
+        title: 'Pen Name Story',
+        content: 'Written with care',
+        authorName: 'Alex River',
+        type: 'story',
+        tags: ['stories'],
+        status: 'published',
+        likes: [],
+        toObject() {
+          return this;
+        },
+      };
+
+      Story.create = jest.fn().mockImplementation((args) => {
+        expect(args.authorName).toBe('Alex River');
+        return Promise.resolve(createdStory);
+      });
+
+      const req = {
+        body: {
+          title: 'Pen Name Story',
+          content: 'Written with care',
+        },
+        user: { _id: 'user-nick', name: 'alex.river@domain.com' },
+      };
+      const res = mockRes();
+
+      createStory(req, res);
+      await flush();
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.success).toBe(true);
+    });
+
+    test('getStoryComments returns comments with sanitized author nicknames', async () => {
+      const storyObj = {
+        _id: 'story-1',
+        status: 'published',
+        comments: [
+          {
+            _id: 'c-1',
+            user: 'user-c',
+            authorName: 'charlie.brown@peanuts.org',
+            text: 'Love this story!',
+            createdAt: new Date(),
+          },
+        ],
+      };
+      Story.findById = jest.fn().mockResolvedValue(storyObj);
+
+      const req = { params: { id: 'story-1' } };
+      const res = mockRes();
+
+      getStoryComments(req, res);
+      await flush();
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.success).toBe(true);
+      expect(payload.data.comments[0].authorName).toBe('Charlie Brown');
+    });
+
+    test('addStoryComment adds comment with nickname and saves to MongoDB story', async () => {
+      const storyObj = {
+        _id: 'story-1',
+        status: 'published',
+        comments: [],
+        save: jest.fn().mockResolvedValue(true),
+      };
+      Story.findById = jest.fn().mockResolvedValue(storyObj);
+
+      const req = {
+        params: { id: 'story-1' },
+        body: { text: 'Wonderful reading experience!' },
+        user: { _id: 'user-commenter', name: 'david.miller@gmail.com', avatar: 'https://avatar.png' },
+      };
+      const res = mockRes();
+
+      addStoryComment(req, res);
+      await flush();
+
+      expect(storyObj.comments.length).toBe(1);
+      expect(storyObj.comments[0].authorName).toBe('David Miller');
+      expect(storyObj.comments[0].text).toBe('Wonderful reading experience!');
+      expect(storyObj.save).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    test('deleteStoryComment allows comment author or story author to remove comment', async () => {
+      const mockComment = {
+        _id: 'c-1',
+        user: 'user-commenter',
+        deleteOne: jest.fn(),
+      };
+      const storyObj = {
+        _id: 'story-1',
+        author: 'story-author-id',
+        comments: {
+          id: jest.fn().mockReturnValue(mockComment),
+          length: 0,
+        },
+        save: jest.fn().mockResolvedValue(true),
+      };
+      Story.findById = jest.fn().mockResolvedValue(storyObj);
+
+      const req = {
+        params: { id: 'story-1', commentId: 'c-1' },
+        user: { _id: 'user-commenter', role: 'customer' },
+      };
+      const res = mockRes();
+
+      deleteStoryComment(req, res);
+      await flush();
+
+      expect(mockComment.deleteOne).toHaveBeenCalled();
+      expect(storyObj.save).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 

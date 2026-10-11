@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const StoryCommentSchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    authorName: { type: String, default: 'Reader', trim: true },
+    authorAvatar: { type: String, default: '' },
+    text: { type: String, required: true, trim: true, maxlength: 2000 },
+  },
+  { timestamps: true }
+);
+
 const StorySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
@@ -16,6 +26,7 @@ const StorySchema = new mongoose.Schema(
     deletedReason: { type: String, default: '' },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     views: { type: Number, default: 0 },
+    comments: { type: [StoryCommentSchema], default: [] },
   },
   { timestamps: true, collection: 'stories' }
 );

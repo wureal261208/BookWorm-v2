@@ -21,8 +21,59 @@ export function getCover(book) {
   return typeof rawCover === 'string' && rawCover.trim() ? rawCover.trim() : NO_COVER_IMAGE
 }
 
+export function getNickname(accountOrName, fallback = 'Reader') {
+  if (!accountOrName) return fallback
+  let raw = ''
+  if (typeof accountOrName === 'string') {
+    raw = accountOrName
+  } else if (typeof accountOrName === 'object') {
+    raw = accountOrName.name || accountOrName.displayName || accountOrName.authorName || accountOrName.email || ''
+  }
+
+  let clean = raw.trim()
+  if (!clean) return fallback
+
+  // If formatted as "Name <email@domain.com>", take the display name
+  if (clean.includes('<') && clean.includes('>')) {
+    const withoutBrackets = clean.replace(/<[^>]*>/g, '').trim()
+    if (withoutBrackets) clean = withoutBrackets
+  }
+
+  // If email address, take prefix before @
+  if (clean.includes('@')) {
+    clean = clean.split('@')[0].trim()
+  }
+
+  // Replace common email separators with spaces
+  clean = clean.replace(/[._+\-]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  // Remove punctuation while preserving unicode letters, digits, spaces
+  clean = clean.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim()
+
+  if (!clean) return fallback
+
+  // Capitalize each word
+  clean = clean
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+
+  if (clean.length > 40) {
+    clean = clean.slice(0, 40).trim()
+  }
+
+  return clean || fallback
+}
+
 export function getAuthor(book) {
-  return book.authors?.map((author) => author.name).join(', ') || book.author || 'Unknown author'
+  if (!book) return 'Unknown author'
+  const rawAuthor = book.authors?.map((author) => author.name).join(', ') || book.author || ''
+  if (!rawAuthor) return 'Unknown author'
+  if (rawAuthor.includes('@')) {
+    return getNickname(rawAuthor, 'Author')
+  }
+  return rawAuthor
 }
 
 export function getReaderUrl(book) {

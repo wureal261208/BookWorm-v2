@@ -9,6 +9,7 @@ const { parseLibrivoxChapters } = require('../utils/librivoxRssParser');
 const { fetchGutenbergParagraphs } = require('../utils/gutenbergReader');
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const escapeRegExp = require('../utils/escapeRegExp');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 
 async function findContentById(id, extra = {}) {
   if (!id) return null;
@@ -104,7 +105,7 @@ const createUserContent = asyncHandler(async (req, res) => {
   const content = await Content.create({
     type,
     title,
-    author: (req.body.author || '').trim() || 'Unknown author',
+    author: sanitizeNickname(req.body.author || req.user.name, 'Community Narrator'),
     description: (req.body.description || '').trim(),
     categories: Array.isArray(req.body.categories) ? req.body.categories.filter((category) => typeof category === 'string' && category.trim()) : [],
     language: (req.body.language || '').trim() || 'en',

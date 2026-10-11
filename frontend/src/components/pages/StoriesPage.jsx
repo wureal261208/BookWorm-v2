@@ -3,7 +3,7 @@ import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { renderLiteMarkdown } from '../../utils/liteMarkdown'
-import { getInitials } from '../../utils/bookUtils'
+import { getInitials, getNickname } from '../../utils/bookUtils'
 
 const POPULAR_TAGS = ['all', 'stories', 'reflection', 'inspiration', 'poetry', 'memoir', 'fiction', 'audio']
 
@@ -52,6 +52,15 @@ function StoriesPage({ account, onToast }) {
 
   // Reader Modal
   const [selectedStory, setSelectedStory] = useState(null)
+
+  // Story Comments states
+  const [comments, setComments] = useState([])
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [newCommentText, setNewCommentText] = useState('')
+  const [submittingComment, setSubmittingComment] = useState(false)
+  const [commentError, setCommentError] = useState('')
+  const [deletingCommentId, setDeletingCommentId] = useState(null)
+  const commentInputRef = useRef(null)
 
   // Search debounce
   useEffect(() => {
@@ -207,11 +216,97 @@ function StoriesPage({ account, onToast }) {
   }
 
   // Open full story reader
-  const handleOpenStory = (story) => {
+  const handleOpenStory = (story, focusComments = false) => {
     setSelectedStory(story)
-    // Silently notify backend view count increment
+    setComments(Array.isArray(story.comments) ? story.comments : [])
+    setNewCommentText('')
+    setCommentError('')
+
     const sId = story.id || story._id
+    // Silently notify backend view count increment
     publicApiFetch(`/api/stories/${sId}`).catch(() => {})
+
+    // Load fresh comments from MongoDB
+    setLoadingComments(true)
+    publicApiFetch(`/api/stories/${sId}/comments`)
+      .then((res) => {
+        if (Array.isArray(res?.comments)) {
+          setComments(res.comments)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingComments(false))
+
+    if (focusComments) {
+      setTimeout(() => {
+        const el = document.getElementById('story-comments-section')
+        if (el) el.scrollIntoView({ behavior: 'smooth' })
+        commentInputRef.current?.focus()
+      }, 200)
+    }
+  }
+
+  // Submit comment to MongoDB
+  const handleAddComment = async (e) => {
+    e.preventDefault()
+    if (isGuest) {
+      onToast?.({ type: 'info', message: 'Please sign in to post a comment.' })
+      return
+    }
+
+    const text = newCommentText.trim()
+    if (!text) {
+      setCommentError('Please enter a comment.')
+      return
+    }
+
+    setSubmittingComment(true)
+    setCommentError('')
+    const sId = selectedStory?.id || selectedStory?._id
+
+    try {
+      const res = await apiFetch(`/api/stories/${sId}/comments`, {
+        method: 'POST',
+        body: { text },
+      })
+
+      if (res?.comment) {
+        setComments((prev) => [...prev, res.comment])
+        setNewCommentText('')
+        const newCount = res.commentsCount ?? (comments.length + 1)
+        setSelectedStory((prev) => (prev ? { ...prev, commentsCount: newCount } : prev))
+        setStories((prev) =>
+          prev.map((s) => (s.id === sId || s._id === sId ? { ...s, commentsCount: newCount } : s))
+        )
+        onToast?.({ type: 'success', message: 'Comment posted successfully!' })
+      }
+    } catch (err) {
+      setCommentError(err.message || 'Could not post comment.')
+    } finally {
+      setSubmittingComment(false)
+    }
+  }
+
+  // Delete comment from MongoDB
+  const handleDeleteComment = async (commentId) => {
+    const sId = selectedStory?.id || selectedStory?._id
+    setDeletingCommentId(commentId)
+    try {
+      await apiFetch(`/api/stories/${sId}/comments/${commentId}`, {
+        method: 'DELETE',
+      })
+      setComments((prev) => prev.filter((c) => (c.id || c._id) !== commentId))
+      const newCount = Math.max(0, (selectedStory?.commentsCount || comments.length) - 1)
+      setSelectedStory((prev) => (prev ? { ...prev, commentsCount: newCount } : prev))
+      setStories((prev) =>
+        prev.map((s) => (s.id === sId || s._id === sId ? { ...s, commentsCount: newCount } : s))
+      )
+      onToast?.({ type: 'success', message: 'Comment deleted.' })
+    } catch (err) {
+      onToast?.({ type: 'error', message: err.message || 'Could not delete comment.' })
+    } finally {
+      setDeletingCommentId(null)
+    }
   }
 
   return (
@@ -377,7 +472,7 @@ function StoriesPage({ account, onToast }) {
                 const isAudio = story.type === 'audio-story' || Boolean(story.audioUrl)
                 const isPlaying = playingStoryId === sId
                 const author = story.author || {}
-                const authorName = story.authorName || author.name || 'Anonymous'
+                const authorName = getNickname(story.authorName || author.name, 'Reader')
                 const authorAvatar = story.authorAvatar || author.avatar || ''
                 const tags = Array.isArray(story.tags) && story.tags.length ? story.tags : ['stories']
 
@@ -486,6 +581,17 @@ function StoriesPage({ account, onToast }) {
                         >
                           <i className={`bi ${story.isLiked ? 'bi-heart-fill' : 'bi-heart'}`} />
                           <span>{story.likesCount || 0}</span>
+                        </button>
+
+                        <button
+                          aria-label="View comments"
+                          className="story-stat-btn comment-btn"
+                          onClick={() => handleOpenStory(story, true)}
+                          title={`${story.commentsCount ?? (story.comments?.length || 0)} comments`}
+                          type="button"
+                        >
+                          <i className="bi bi-chat-dots" />
+                          <span>{story.commentsCount ?? (story.comments?.length || 0)}</span>
                         </button>
 
                         <span className="story-stat-item" title={`${story.views || 0} reads`}>
@@ -607,11 +713,11 @@ function StoriesPage({ account, onToast }) {
                   {selectedStory.authorAvatar || selectedStory.author?.avatar ? (
                     <img alt="" src={selectedStory.authorAvatar || selectedStory.author?.avatar} />
                   ) : (
-                    <span>{getInitials(selectedStory.authorName || selectedStory.author?.name || 'A')}</span>
+                    <span>{getInitials(getNickname(selectedStory.authorName || selectedStory.author?.name, 'A'))}</span>
                   )}
                 </div>
                 <div className="story-author-meta">
-                  <strong>{selectedStory.authorName || selectedStory.author?.name || 'Anonymous'}</strong>
+                  <strong>{getNickname(selectedStory.authorName || selectedStory.author?.name, 'Reader')}</strong>
                   <time>{timeAgo(selectedStory.createdAt)}</time>
                 </div>
               </div>
@@ -663,6 +769,131 @@ function StoriesPage({ account, onToast }) {
                 {(selectedStory.tags || ['stories']).map((t, idx) => (
                   <span className="story-tag-pill" key={idx}>#{t}</span>
                 ))}
+              </div>
+            </div>
+
+            {/* Interactive Story Comments Section (Persisted in MongoDB) */}
+            <div className="story-comments-section" id="story-comments-section">
+              <div className="story-comments-header">
+                <div className="story-comments-title">
+                  <i className="bi bi-chat-left-text-fill" />
+                  <h3>Community Comments</h3>
+                  <span className="story-comments-badge">{comments.length}</span>
+                </div>
+                <small className="story-comments-subtitle">
+                  Share your reflection and thoughts on this story.
+                </small>
+              </div>
+
+              {/* Add Comment Form */}
+              {!isGuest ? (
+                <form className="story-comment-form" onSubmit={handleAddComment}>
+                  <div className="story-comment-author-badge">
+                    <i className="bi bi-person-circle" />
+                    <span>Commenting as: <strong>{getNickname(account, 'Reader')}</strong></span>
+                  </div>
+                  <div className="story-comment-input-wrap">
+                    <textarea
+                      aria-label="Write a comment"
+                      className="story-comment-textarea"
+                      maxLength={2000}
+                      onChange={(e) => setNewCommentText(e.target.value)}
+                      placeholder={`Leave a thoughtful comment as ${getNickname(account, 'Reader')}...`}
+                      ref={commentInputRef}
+                      rows={3}
+                      value={newCommentText}
+                    />
+                    <div className="story-comment-form-footer">
+                      <span className="story-comment-char-count">{newCommentText.length}/2000</span>
+                      <button
+                        className="primary-button story-comment-submit-btn"
+                        disabled={submittingComment || !newCommentText.trim()}
+                        type="submit"
+                      >
+                        {submittingComment ? (
+                          <>
+                            <i className="bi bi-arrow-repeat spin" /> Posting...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-send-fill" /> Post Comment
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  {commentError && (
+                    <p className="story-comment-error" role="alert">
+                      <i className="bi bi-exclamation-circle" /> {commentError}
+                    </p>
+                  )}
+                </form>
+              ) : (
+                <div className="story-comment-guest-prompt">
+                  <i className="bi bi-chat-heart" />
+                  <div>
+                    <strong>Join the conversation</strong>
+                    <p>Sign in to comment and share your perspective with this storyteller.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Comments List */}
+              <div className="story-comments-list">
+                {loadingComments && comments.length === 0 ? (
+                  <p className="story-comments-loading">
+                    <i className="bi bi-arrow-repeat spin" /> Loading comments...
+                  </p>
+                ) : comments.length > 0 ? (
+                  comments.map((comment) => {
+                    const cId = comment.id || comment._id
+                    const isOwner =
+                      account &&
+                      (comment.user === account.uid ||
+                        comment.user === account._id ||
+                        String(comment.user) === String(account._id) ||
+                        String(selectedStory?.author) === String(account._id) ||
+                        String(selectedStory?.author?._id) === String(account._id) ||
+                        account.role === 'admin')
+                    const cNickname = getNickname(comment.authorName || comment.user?.name, 'Reader')
+
+                    return (
+                      <div className="story-comment-item" key={cId}>
+                        <div className="story-comment-avatar">
+                          {comment.authorAvatar ? (
+                            <img alt="" src={comment.authorAvatar} />
+                          ) : (
+                            <span>{getInitials(cNickname)}</span>
+                          )}
+                        </div>
+                        <div className="story-comment-content">
+                          <div className="story-comment-meta">
+                            <span className="story-comment-author">{cNickname}</span>
+                            <time className="story-comment-time">{timeAgo(comment.createdAt)}</time>
+                            {isOwner && (
+                              <button
+                                aria-label="Delete comment"
+                                className="story-comment-delete-btn"
+                                disabled={deletingCommentId === cId}
+                                onClick={() => handleDeleteComment(cId)}
+                                title="Delete comment"
+                                type="button"
+                              >
+                                <i className="bi bi-trash" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="story-comment-text">{comment.text}</p>
+                        </div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="story-comments-empty">
+                    <i className="bi bi-chat-square" />
+                    <p>No comments yet. Be the first to share your reflection on this story!</p>
+                  </div>
+                )}
               </div>
             </div>
 

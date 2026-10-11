@@ -11,6 +11,7 @@ const { generateBookMetadataSuggestion, generateBookSummary, OpenRouterConfigErr
 const { splitParagraphsIntoChapters } = require('../utils/chapterSplitter');
 const maskEmail = require('../utils/maskEmail');
 const escapeRegExp = require('../utils/escapeRegExp');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 const {
   sendBookApprovalEmail,
   sendBookRejectionEmail,
@@ -87,11 +88,13 @@ const createBook = asyncHandler(async (req, res) => {
     ? 'draft'
     : (['draft', 'published', 'hidden'].includes(status) ? status : 'draft');
 
+  const sanitizedAuthor = sanitizeNickname(author, req.user?.name || 'Author');
+
   let book;
   try {
     book = await Book.create({
       title,
-      author,
+      author: sanitizedAuthor,
       description,
       category,
       coverUrl,
@@ -407,7 +410,11 @@ const updateBook = asyncHandler(async (req, res) => {
 
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
-      book[field] = req.body[field];
+      if (field === 'author') {
+        book.author = sanitizeNickname(req.body.author, book.author || 'Author');
+      } else {
+        book[field] = req.body[field];
+      }
     }
   });
 
@@ -516,7 +523,11 @@ const updateMyBook = asyncHandler(async (req, res) => {
   const allowedFields = ['title', 'author', 'description', 'category', 'coverUrl', 'chapters', 'subjects', 'language'];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
-      book[field] = req.body[field];
+      if (field === 'author') {
+        book.author = sanitizeNickname(req.body.author, book.author || 'Author');
+      } else {
+        book[field] = req.body[field];
+      }
     }
   });
 

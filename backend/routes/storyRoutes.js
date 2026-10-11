@@ -10,6 +10,9 @@ const {
   uploadStoryAudio,
   toggleLikeStory,
   deleteMyStory,
+  getStoryComments,
+  addStoryComment,
+  deleteStoryComment,
 } = require('../controllers/storyController');
 
 const router = express.Router();
@@ -30,5 +33,8 @@ router.post(
 router.get('/:id', identify, getStoryById);
 router.post('/:id/like', protect, toggleLikeStory);
 router.delete('/:id', protect, deleteMyStory);
+router.get('/:id/comments', identify, getStoryComments);
+router.post('/:id/comments', protect, addStoryComment);
+router.delete('/:id/comments/:commentId', protect, deleteStoryComment);
 
 module.exports = router;

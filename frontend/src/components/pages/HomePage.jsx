@@ -7,7 +7,7 @@ import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 import PromoBanner from '../books/PromoBanner'
-import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getCover, getNickname, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 function useBookRow(query) {
   const [books, setBooks] = useState([])
@@ -438,18 +438,19 @@ function HomePage({
             <div className="community-stories-grid">
               {stories.map((story) => {
                 const sId = story.id || story._id
+                const authorName = getNickname(story.authorName || story.author?.name || 'Reader')
                 return (
                   <article className="community-story-card" key={sId}>
                     <div className="story-card-header">
                       <div className="story-card-avatar">
                         {story.authorAvatar ? (
-                          <img alt={story.authorName} src={story.authorAvatar} />
+                          <img alt={authorName} src={story.authorAvatar} />
                         ) : (
-                          <span>{(story.authorName || 'R')[0].toUpperCase()}</span>
+                          <span>{(authorName || 'R')[0].toUpperCase()}</span>
                         )}
                       </div>
                       <div className="story-card-meta">
-                        <strong>{story.authorName || 'Reader'}</strong>
+                        <strong>{authorName}</strong>
                         <small>{timeAgo(story.createdAt)}</small>
                       </div>
                       {story.type === 'audio-story' ? (

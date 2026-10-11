@@ -1,7 +1,27 @@
 import { describe, expect, test } from 'vitest'
-import { formatTopicLabel, getAuthor, getCategory, getCover, getInitials, NO_COVER_IMAGE } from '../bookUtils'
+import { formatTopicLabel, getAuthor, getCategory, getCover, getInitials, getNickname, NO_COVER_IMAGE } from '../bookUtils'
 
 describe('utils/bookUtils', () => {
+  describe('getNickname', () => {
+    test('returns fallback when empty or invalid', () => {
+      expect(getNickname('')).toBe('Reader')
+      expect(getNickname(null)).toBe('Reader')
+      expect(getNickname(undefined, 'Author')).toBe('Author')
+    })
+
+    test('strips email domain and converts to clean nickname', () => {
+      expect(getNickname('alice.smith@gmail.com')).toBe('Alice Smith')
+      expect(getNickname('john_doe_99@yahoo.com')).toBe('John Doe 99')
+      expect(getNickname({ email: 'reader123@example.com' })).toBe('Reader123')
+      expect(getNickname({ name: 'mark.twain@lit.org' })).toBe('Mark Twain')
+    })
+
+    test('preserves user names and pen names', () => {
+      expect(getNickname('George Orwell')).toBe('George Orwell')
+      expect(getNickname({ displayName: 'Mary Shelley' })).toBe('Mary Shelley')
+    })
+  })
+
   describe('formatTopicLabel', () => {
     test('shows "All" for the "all" filter value', () => {
       expect(formatTopicLabel('all')).toBe('All')
@@ -24,6 +44,10 @@ describe('utils/bookUtils', () => {
 
     test('falls back to a plain author string field', () => {
       expect(getAuthor({ author: 'Jane Austen' })).toBe('Jane Austen')
+    })
+
+    test('sanitizes email address in author field to a clean nickname', () => {
+      expect(getAuthor({ author: 'sarah.connor@sky.net' })).toBe('Sarah Connor')
     })
 
     test('falls back to "Unknown author" when nothing is set', () => {

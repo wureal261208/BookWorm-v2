@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch } from '../../utils/apiClient'
 import { renderLiteMarkdown } from '../../utils/liteMarkdown'
+import { getNickname } from '../../utils/bookUtils'
 import CoverImagePicker from '../shared/CoverImagePicker'
 
 const emptyChapter = () => ({ title: '', content: '' })
@@ -46,7 +47,7 @@ function WritePage({ account, onDetail, onToast }) {
   const [tab, setTab] = useState(getUrlTab)
 
   // Book Writer states
-  const [bookForm, setBookForm] = useState(() => ({ ...emptyBookForm, author: account?.name || '' }))
+  const [bookForm, setBookForm] = useState(() => ({ ...emptyBookForm, author: getNickname(account, 'Reader') }))
   const [editingBook, setEditingBook] = useState(null)
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [submittingBook, setSubmittingBook] = useState(false)
@@ -493,7 +494,7 @@ function WritePage({ account, onDetail, onToast }) {
   function cancelEdit() {
     skipNextAutosave.current = true
     setEditingBook(null)
-    setBookForm({ ...emptyBookForm, author: account?.name || '' })
+    setBookForm({ ...emptyBookForm, author: getNickname(account, 'Reader') })
     setCommonError('')
     setCommonSuccess('')
     setPreviewMode(false)
@@ -505,7 +506,8 @@ function WritePage({ account, onDetail, onToast }) {
     setCommonSuccess('')
 
     const title = bookForm.title.trim()
-    const author = bookForm.author.trim()
+    const rawAuthor = bookForm.author.trim()
+    const author = getNickname(rawAuthor, 'Author')
     const chapters = bookForm.chapters
       .map((chapter, index) => ({ order: index + 1, title: chapter.title.trim() || `Chapter ${index + 1}`, content: chapter.content.trim() }))
       .filter((chapter) => chapter.content)
@@ -649,6 +651,11 @@ function WritePage({ account, onDetail, onToast }) {
               <strong>Instant Publishing</strong>
               <span>Stories and voice notes are published directly to the community feed on the home page.</span>
             </div>
+          </div>
+
+          <div className="story-author-pen-badge">
+            <i className="bi bi-pen-fill" />
+            <span>Publishing with nickname: <strong>{getNickname(account, 'Reader')}</strong></span>
           </div>
 
           <form className="community-form story-creation-form" onSubmit={submitStory}>
