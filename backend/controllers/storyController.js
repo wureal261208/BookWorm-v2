@@ -139,9 +139,9 @@ const createStory = asyncHandler(async (req, res) => {
       finalCoverUrl = `/uploads/${req.files.coverImage[0].filename}`;
     }
   } else if (req.file) {
-    if (req.file.mimetype.startsWith('audio/')) {
+    if (req.file.fieldname === 'audio' || (req.file.mimetype && req.file.mimetype.startsWith('audio/'))) {
       audioUrl = `/uploads/${req.file.filename}`;
-    } else if (req.file.mimetype.startsWith('image/')) {
+    } else if (req.file.fieldname === 'coverImage' || (req.file.mimetype && req.file.mimetype.startsWith('image/'))) {
       finalCoverUrl = `/uploads/${req.file.filename}`;
     }
   }

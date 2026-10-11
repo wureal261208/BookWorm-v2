@@ -7,7 +7,7 @@ import BookGrid from '../books/BookGrid'
 import BookCarousel from '../books/BookCarousel'
 import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 import PromoBanner from '../books/PromoBanner'
-import { getCover, getNickname, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getCover, getNickname, resolveMediaUrl, NO_COVER_IMAGE } from '../../utils/bookUtils'
 
 function useBookRow(query) {
   const [books, setBooks] = useState([])
@@ -472,7 +472,7 @@ function HomePage({
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
-                          src={story.coverUrl}
+                          src={resolveMediaUrl(story.coverUrl)}
                         />
                       </div>
                     )}
@@ -482,7 +482,7 @@ function HomePage({
 
                     {story.audioUrl && (
                       <div className="story-card-audio">
-                        <audio controls preload="none" src={story.audioUrl} />
+                        <audio controls preload="none" src={resolveMediaUrl(story.audioUrl)} />
                       </div>
                     )}
 

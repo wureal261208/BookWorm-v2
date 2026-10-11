@@ -3,7 +3,7 @@ import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 import { useNavigation } from '../../context/NavigationContext'
 import { renderLiteMarkdown } from '../../utils/liteMarkdown'
-import { getInitials, getNickname } from '../../utils/bookUtils'
+import { getInitials, getNickname, resolveMediaUrl } from '../../utils/bookUtils'
 
 const POPULAR_TAGS = ['all', 'stories', 'reflection', 'inspiration', 'poetry', 'memoir', 'fiction', 'audio']
 
@@ -178,7 +178,7 @@ function StoriesPage({ account, onToast }) {
       setAudioProgress(0)
       setAudioCurrentTime(0)
       if (audioRef.current) {
-        audioRef.current.src = story.audioUrl
+        audioRef.current.src = resolveMediaUrl(story.audioUrl)
         audioRef.current.play().catch(() => {})
       }
     }
@@ -511,7 +511,7 @@ function StoriesPage({ account, onToast }) {
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
-                          src={story.coverUrl}
+                          src={resolveMediaUrl(story.coverUrl)}
                         />
                       </div>
                     )}
@@ -736,7 +736,7 @@ function StoriesPage({ account, onToast }) {
                   onError={(e) => {
                     e.currentTarget.style.display = 'none'
                   }}
-                  src={selectedStory.coverUrl}
+                  src={resolveMediaUrl(selectedStory.coverUrl)}
                 />
               </div>
             )}
@@ -753,7 +753,7 @@ function StoriesPage({ account, onToast }) {
                   <audio
                     controls
                     preload="metadata"
-                    src={selectedStory.audioUrl}
+                    src={resolveMediaUrl(selectedStory.audioUrl)}
                     style={{ width: '100%' }}
                   />
                 </div>

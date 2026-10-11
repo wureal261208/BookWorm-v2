@@ -28,8 +28,27 @@ const allowedMimeTypes = new Set([
   'application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/x-m4a', 'audio/aac', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml',
 ]);
 
+const allowedExtensions = new Set([
+  '.pdf', '.epub', '.mp3', '.m4a', '.wav', '.ogg', '.webm', '.aac', '.mp4',
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif',
+]);
+
 module.exports = multer({
   storage,
   limits: { fileSize: 250 * 1024 * 1024 },
-  fileFilter: (_req, file, callback) => callback(null, allowedMimeTypes.has(file.mimetype)),
+  fileFilter: (_req, file, callback) => {
+    const rawMime = (file.mimetype || '').toLowerCase();
+    const baseMime = rawMime.split(';')[0].trim();
+    if (allowedMimeTypes.has(baseMime)) {
+      return callback(null, true);
+    }
+    if (baseMime.startsWith('audio/') || baseMime.startsWith('image/')) {
+      return callback(null, true);
+    }
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (allowedExtensions.has(ext)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
 });

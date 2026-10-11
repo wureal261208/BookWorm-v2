@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch } from '../../utils/apiClient'
 import { renderLiteMarkdown } from '../../utils/liteMarkdown'
-import { getNickname } from '../../utils/bookUtils'
+import { getNickname, resolveMediaUrl } from '../../utils/bookUtils'
 import CoverImagePicker from '../shared/CoverImagePicker'
 
 const emptyChapter = () => ({ title: '', content: '' })
@@ -255,8 +255,10 @@ function WritePage({ account, onDetail, onToast }) {
 
       if (recordedAudioBlob) {
         formData.append('audio', recordedAudioBlob, 'voice-recording.webm')
+        formData.append('type', 'audio-story')
       } else if (selectedAudioFile) {
         formData.append('audio', selectedAudioFile, selectedAudioFile.name)
+        formData.append('type', 'audio-story')
       }
 
       await apiFetch('/api/stories', {
@@ -1164,7 +1166,7 @@ function WritePage({ account, onDetail, onToast }) {
 
                         {story.audioUrl && (
                           <div className="submission-audio-container">
-                            <audio controls preload="none" src={story.audioUrl} style={{ width: '100%', height: '36px' }} />
+                            <audio controls preload="none" src={resolveMediaUrl(story.audioUrl)} style={{ width: '100%', height: '36px' }} />
                           </div>
                         )}
                       </div>

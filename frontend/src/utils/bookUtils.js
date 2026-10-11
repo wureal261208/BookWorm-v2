@@ -9,6 +9,24 @@ export const NO_COVER_IMAGE = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   + '</svg>'
 )
 
+export function resolveMediaUrl(url) {
+  if (!url || typeof url !== 'string') return ''
+  const trimmed = url.trim()
+  if (!trimmed) return ''
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed
+  }
+  const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:5000'
+  const cleanBase = apiBase.replace(/\/+$/, '')
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return `${cleanBase}${cleanPath}`
+}
+
 export function getCover(book) {
   if (!book) return NO_COVER_IMAGE
   const rawCover =
@@ -18,7 +36,10 @@ export function getCover(book) {
     book.formats?.['image/jpeg'] ||
     ''
 
-  return typeof rawCover === 'string' && rawCover.trim() ? rawCover.trim() : NO_COVER_IMAGE
+  if (typeof rawCover === 'string' && rawCover.trim()) {
+    return resolveMediaUrl(rawCover.trim())
+  }
+  return NO_COVER_IMAGE
 }
 
 export function getNickname(accountOrName, fallback = 'Reader') {

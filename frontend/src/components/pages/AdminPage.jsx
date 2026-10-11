@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials, getNickname, truncateNickname, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials, getNickname, truncateNickname, resolveMediaUrl, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
@@ -4371,7 +4371,7 @@ function StoriesManagementPanel({ onToast }) {
                         onError={(e) => {
                           e.currentTarget.style.display = 'none'
                         }}
-                        src={story.coverUrl}
+                        src={resolveMediaUrl(story.coverUrl)}
                         style={{ width: '64px', height: '40px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, border: '1px solid #e2e8f0' }}
                       />
                     )}
@@ -4380,7 +4380,7 @@ function StoriesManagementPanel({ onToast }) {
                       <p className="admin-story-excerpt">{story.content}</p>
                       {isAudio && story.audioUrl && (
                         <div className="admin-story-audio-inline">
-                          <audio controls preload="none" src={story.audioUrl} style={{ height: '32px', width: '280px' }} />
+                          <audio controls preload="none" src={resolveMediaUrl(story.audioUrl)} style={{ height: '32px', width: '280px' }} />
                         </div>
                       )}
                     </div>

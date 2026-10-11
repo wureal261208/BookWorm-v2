@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAuthor, getCover, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getAuthor, getCover, getInitials, NO_COVER_IMAGE, resolveMediaUrl } from '../../utils/bookUtils'
 import { maskEmail } from '../../utils/maskEmail'
 import PreferencesModal from '../content/PreferencesModal'
 import { normalizeRole } from '../../data/bookData'
@@ -132,6 +132,8 @@ function ProfileSettings({
   const [mongoProgress, setMongoProgress] = useState({})
   const [myBooks, setMyBooks] = useState([])
   const [myBooksLoading, setMyBooksLoading] = useState(false)
+  const [myStories, setMyStories] = useState([])
+  const [myStoriesLoading, setMyStoriesLoading] = useState(false)
 
   useEffect(() => {
     if (account?.name) {
@@ -877,7 +879,18 @@ function ProfileSettings({
               <span>Authored</span>
               <span className="shelf-count-pill">{myBooks.length}</span>
             </button>
-          </div>
+          <button
+              type="button"
+              role="tab"
+              aria-selected={activeShelfTab === 'stories'}
+              className={`shelf-tab-btn ${activeShelfTab === 'stories' ? 'active' : ''}`}
+              onClick={() => setActiveShelfTab('stories')}
+            >
+              <i className="bi bi-music-note-list" />
+              <span>Stories</span>
+              <span className="shelf-count-pill">{myStories.length}</span>
+            </button>
+</div>
 
           <div className="shelf-tab-content">
             {activeShelfTab === 'reading' && (
@@ -925,7 +938,24 @@ function ProfileSettings({
                 onNavigate={onNavigate}
               />
             )}
-          </div>
+          {activeShelfTab === 'stories' && (
+  <div className="story-list">
+    {myStoriesLoading ? (
+      <p>Loading stories...</p>
+    ) : myStories.length === 0 ? (
+      <p>No stories found.</p>
+    ) : (
+      myStories.map((story) => (
+        <div key={story.id || story._id} className="story-card">
+          <img src={resolveMediaUrl(story.coverUrl || story.cover)} alt={story.title} className="story-cover" />
+          <h5>{story.title}</h5>
+          <audio controls src={resolveMediaUrl(story.audioUrl)} />
+        </div>
+      ))
+    )}
+  </div>
+))
+</div>
         </div>
 
         <div className="account-settings-card profile-security-card">
@@ -1332,3 +1362,5 @@ function AuthoredBookList({ items = [], loading, onRead, onDetail, onNavigate })
 }
 
 export default ProfilePage
+
+
