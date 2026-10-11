@@ -43,6 +43,7 @@ const RandomPage = lazy(() => import('./components/pages/RandomPage'))
 const HomePage = lazy(() => import('./components/pages/HomePage'))
 const ProfilePage = lazy(() => import('./components/pages/ProfilePage'))
 const WritePage = lazy(() => import('./components/pages/WritePage'))
+const StoriesPage = lazy(() => import('./components/pages/StoriesPage'))
 
 const emptyAuthForm = { name: '', email: '', password: '' }
 const emptyAdminBook = {
@@ -71,6 +72,7 @@ const VIEW_DWELL_MS = 90_000
 const PAGE_PATHS = {
   home: '/',
   books: '/books',
+  stories: '/stories',
   search: '/search',
   'ai-suggestions': '/ai-suggestions',
   read: '/read',
@@ -1236,6 +1238,7 @@ function App() {
       />
     ),
     books: <BooksPage />,
+    stories: <StoriesPage account={account} onToast={setToast} />,
     search: <SearchPage onDetail={openDetail} />,
     'ai-suggestions': <AiSuggestionsPage />,
     read: <ContentReaderPage />,

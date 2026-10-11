@@ -408,18 +408,27 @@ function HomePage({
               People share their own stories & audio
             </h2>
           </div>
-          <button
-            className="ghost-button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/?tab=story')
-              }
-              setPage?.('write')
-            }}
-            type="button"
-          >
-            <i className="bi bi-mic" /> Share a story
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="ghost-button"
+              onClick={() => setPage?.('stories')}
+              type="button"
+            >
+              <i className="bi bi-grid" /> View all stories
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/?tab=story')
+                }
+                setPage?.('write')
+              }}
+              type="button"
+            >
+              <i className="bi bi-mic" /> Share a story
+            </button>
+          </div>
         </div>
 
         {storiesLoading ? (

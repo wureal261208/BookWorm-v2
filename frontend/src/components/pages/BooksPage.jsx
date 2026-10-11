@@ -1,103 +1,239 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { publicApiFetch } from '../../utils/apiClient'
 import { findGenreSlide } from '../../utils/genreSlides'
+import { getCover, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { useNavigation } from '../../context/NavigationContext'
 import ExternalMediaCarousel from '../books/ExternalMediaCarousel'
 
-const CAROUSEL_LIMIT = 24
+const INITIAL_LIMIT = 24
+const POPULAR_GENRES = [
+  'All',
+  'Fiction',
+  'Literature',
+  'Mystery',
+  'Romance',
+  'Science Fiction',
+  'Adventure',
+  'History',
+  'Philosophy',
+  'Children',
+  'Poetry',
+]
 
-// One single page for every category, per spec - no /books/romance,
-// /books/fantasy, etc. `category` and `type` live in the URL - the
-// Ebooks/Audiobooks navbar links, the promo banner, and AI Suggestions
-// clicks just set the query string differently and land here the same way.
-// Keyword search has its own dedicated page now (see SearchPage.jsx) -
-// this page is purely for browsing by category/type, not searching.
 function BooksPage() {
   const [searchParams] = useSearchParams()
-  const category = searchParams.get('category') || ''
+  const urlCategory = searchParams.get('category') || ''
   const type = searchParams.get('type') || ''
 
-  const slide = findGenreSlide(category)
-  // A specific type in the URL (from the Ebooks/Audiobooks navbar links)
-  // means show just that one section as a full-width carousel. With no
-  // type - a category click or an AI Suggestion - show both sections side
-  // by side, each its own "giống trang main" carousel row (see
-  // ExternalMediaCarousel.jsx, shared with Home's Hot ebooks/audiobooks
-  // rows for a consistent look).
+  const [selectedGenre, setSelectedGenre] = useState(urlCategory || 'All')
+  const [viewMode, setViewMode] = useState('grid') // 'grid' | 'carousel'
+  const [sortBy, setSortBy] = useState('popular') // 'popular' | 'alpha' | 'newest'
+
+  // Sync category if changed via external navigation
+  useEffect(() => {
+    setSelectedGenre(urlCategory || 'All')
+  }, [urlCategory])
+
+  const activeCategory = selectedGenre === 'All' ? '' : selectedGenre
+  const slide = findGenreSlide(activeCategory)
   const showEbooks = type !== 'audiobook'
   const showAudiobooks = type !== 'ebook'
 
-  let heading = 'All books'
-  if (category) heading = category
-  else if (type === 'ebook') heading = 'Ebooks'
-  else if (type === 'audiobook') heading = 'Audiobooks'
+  let heading = 'All Books & Media'
+  if (activeCategory) heading = activeCategory
+  else if (type === 'ebook') heading = 'Ebooks Catalog'
+  else if (type === 'audiobook') heading = 'Audiobooks Catalog'
 
   return (
     <div className="books-page">
-      {/* The big background banner only makes sense when there's an actual
-          genre behind it (a promo-banner/AI-suggestion click) - the plain
-          Ebooks/Audiobooks navbar links get a plain heading instead. */}
-      {category ? (
+      {/* Banner / Header */}
+      {activeCategory ? (
         <section
           className="books-page-banner"
-          style={slide ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.65)), url(${slide.image})` } : undefined}
+          style={slide ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.72)), url(${slide.image})` } : undefined}
         >
-          <p className="mono-eyebrow">Browsing</p>
+          <p className="mono-eyebrow">Category Shelf</p>
           <h1>{heading}</h1>
         </section>
       ) : (
-        <h1 className="books-page-heading">{heading}</h1>
+        <header className="books-page-hero">
+          <div className="books-hero-eyebrow">
+            <i className={`bi ${type === 'audiobook' ? 'bi-headphones' : type === 'ebook' ? 'bi-book-fill' : 'bi-collection-play'}`} />
+            <span>Digital Library</span>
+          </div>
+          <h1 className="books-page-heading">{heading}</h1>
+          <p className="books-page-subheading">
+            Browse through thousands of classics and public domain literary works. Read in your browser or listen with full narration.
+          </p>
+        </header>
       )}
 
-      {showEbooks && <BooksPageSection category={category} type="ebook" />}
-      {showAudiobooks && <BooksPageSection category={category} type="audiobook" />}
+      {/* Genre Filter Bar */}
+      <nav className="books-genre-nav" aria-label="Browse genres">
+        <span className="books-genre-label"><i className="bi bi-tag" /> Genres:</span>
+        <div className="books-genre-chips">
+          {POPULAR_GENRES.map((genre) => (
+            <button
+              className={`books-genre-chip ${selectedGenre === genre ? 'active' : ''}`}
+              key={genre}
+              onClick={() => setSelectedGenre(genre)}
+              type="button"
+            >
+              {genre}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* View Mode & Sorting Controls */}
+      <div className="books-controls-bar">
+        <div className="books-view-toggles" role="group" aria-label="Catalog layout mode">
+          <button
+            aria-label="Grid layout"
+            className={`books-control-toggle ${viewMode === 'grid' ? 'active' : ''}`}
+            onClick={() => setViewMode('grid')}
+            title="Grid view"
+            type="button"
+          >
+            <i className="bi bi-grid-3x3-gap-fill" />
+            <span>Grid Catalog</span>
+          </button>
+          <button
+            aria-label="Carousel layout"
+            className={`books-control-toggle ${viewMode === 'carousel' ? 'active' : ''}`}
+            onClick={() => setViewMode('carousel')}
+            title="Carousel view"
+            type="button"
+          >
+            <i className="bi bi-view-list" />
+            <span>Carousel Spotlight</span>
+          </button>
+        </div>
+
+        <div className="books-sort-selector">
+          <label htmlFor="books-sort-select"><i className="bi bi-sort-down" /> Sort by:</label>
+          <select
+            id="books-sort-select"
+            onChange={(e) => setSortBy(e.target.value)}
+            value={sortBy}
+          >
+            <option value="popular">Most Popular</option>
+            <option value="alpha">Title (A - Z)</option>
+            <option value="newest">Recently Added</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Catalog Sections */}
+      {showEbooks && (
+        <BooksCatalogSection
+          category={activeCategory}
+          sortBy={sortBy}
+          type="ebook"
+          viewMode={viewMode}
+        />
+      )}
+      {showAudiobooks && (
+        <BooksCatalogSection
+          category={activeCategory}
+          sortBy={sortBy}
+          type="audiobook"
+          viewMode={viewMode}
+        />
+      )}
     </div>
   )
 }
 
-// One type's worth of results as its own titled carousel row, with its own
-// independent loading/empty state - an empty Audiobooks section (say, a
-// category nothing's been tagged with yet) never blocks the Ebooks section
-// above it from showing, and vice versa.
-function BooksPageSection({ category, type }) {
+function BooksCatalogSection({ category, sortBy, type, viewMode }) {
+  const { navigateTo } = useNavigation()
+  const isEbook = type === 'ebook'
+
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  useEffect(() => {
-    let ignore = false
-    setLoading(true)
+  const fetchItems = useCallback((pageNum = 1, append = false) => {
+    if (pageNum === 1) setLoading(true)
+    else setLoadingMore(true)
     setError('')
 
-    const params = new URLSearchParams({ type, limit: String(CAROUSEL_LIMIT) })
+    const params = new URLSearchParams({
+      type,
+      limit: String(INITIAL_LIMIT),
+      page: String(pageNum),
+    })
     if (category) params.set('category', category)
 
     publicApiFetch(`/api/content?${params.toString()}`)
       .then((data) => {
-        if (!ignore) setItems(Array.isArray(data?.items) ? data.items : [])
+        let fetched = Array.isArray(data?.items) ? data.items : []
+
+        // Client-side sort refinement
+        if (sortBy === 'alpha') {
+          fetched = [...fetched].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+        } else if (sortBy === 'popular') {
+          fetched = [...fetched].sort((a, b) => (b.views || b.downloadCount || 0) - (a.views || a.downloadCount || 0))
+        }
+
+        if (append) {
+          setItems((prev) => [...prev, ...fetched])
+        } else {
+          setItems(fetched)
+        }
+
+        setPage(pageNum)
+        const total = data?.total || 0
+        setHasMore((pageNum * INITIAL_LIMIT) < total)
       })
       .catch((err) => {
-        if (!ignore) setError(err.message)
+        setError(err.message)
+        if (!append) setItems([])
       })
       .finally(() => {
-        if (!ignore) setLoading(false)
+        setLoading(false)
+        setLoadingMore(false)
       })
+  }, [category, sortBy, type])
 
-    return () => {
-      ignore = true
-    }
-  }, [category, type])
+  useEffect(() => {
+    fetchItems(1, false)
+  }, [fetchItems])
+
+  const openDetail = (item) => {
+    navigateTo('detail', { query: `id=${item._id || item.id}` })
+  }
+
+  const handleAction = (item) => {
+    navigateTo(isEbook ? 'read' : 'listen', { query: `id=${item._id || item.id}` })
+  }
 
   return (
-    <section className="section-block">
+    <section className="section-block books-catalog-section">
       <div className="section-heading">
         <div>
-          <p className="mono-eyebrow">{type === 'ebook' ? 'Reading' : 'Listening'}</p>
-          <h2>{type === 'ebook' ? 'Ebooks' : 'Audiobooks'}</h2>
+          <p className="mono-eyebrow">{isEbook ? 'Reading Room' : 'Audio Theater'}</p>
+          <h2>
+            <i className={`bi ${isEbook ? 'bi-book' : 'bi-headphones'}`} style={{ marginRight: '8px', color: 'var(--app-accent)' }} />
+            {isEbook ? 'Ebooks' : 'Audiobooks'}
+          </h2>
         </div>
+        {items.length > 0 && (
+          <span className="books-section-counter">
+            Showing {items.length} works
+          </span>
+        )}
       </div>
 
-      {error && <p className="admin-validation-error"><i className="bi bi-x-circle" /> {error}</p>}
+      {error && (
+        <p className="admin-validation-error">
+          <i className="bi bi-x-circle" /> {error}
+        </p>
+      )}
 
       {loading ? (
         <div className="book-carousel">
@@ -109,13 +245,95 @@ function BooksPageSection({ category, type }) {
             ))}
           </div>
         </div>
-      ) : items.length ? (
-        <ExternalMediaCarousel items={items} />
+      ) : items.length > 0 ? (
+        viewMode === 'carousel' ? (
+          <ExternalMediaCarousel items={items} />
+        ) : (
+          <>
+            <div className="books-catalog-grid">
+              {items.map((item) => {
+                const cover = getCover(item)
+                const title = item.title || 'Untitled'
+                const author = item.author || 'Unknown Author'
+                const totalReads = (item.views || 0) + (item.downloadCount || 0)
+                const meta = isEbook
+                  ? `${totalReads.toLocaleString()} reads`
+                  : (item.views ? `${item.views.toLocaleString()} listens` : 'LibriVox audio')
+
+                return (
+                  <article className="book-card books-grid-card" key={item._id || item.id}>
+                    <button
+                      className="book-cover-button"
+                      onClick={() => openDetail(item)}
+                      style={{ display: 'block', width: '100%', border: 0, padding: 0 }}
+                      type="button"
+                    >
+                      <img
+                        alt={`${title} cover`}
+                        loading="lazy"
+                        onError={(e) => {
+                          if (e.currentTarget.src !== NO_COVER_IMAGE) {
+                            e.currentTarget.src = NO_COVER_IMAGE
+                          }
+                        }}
+                        src={cover}
+                      />
+                    </button>
+                    <div className="book-card-body">
+                      <span className="category">{item.source || (isEbook ? 'Gutenberg' : 'LibriVox')}</span>
+                      <h2 onClick={() => openDetail(item)} style={{ cursor: 'pointer' }} title={title}>
+                        {title}
+                      </h2>
+                      <p title={author}>{author}</p>
+                    </div>
+                    <div className="book-card-meta">
+                      <i className={`bi ${isEbook ? 'bi-eye' : 'bi-headphones'}`} />
+                      <small>{meta}</small>
+                    </div>
+                    <div className="card-actions">
+                      <button
+                        className="primary-button card-main-action-btn"
+                        onClick={() => handleAction(item)}
+                        type="button"
+                      >
+                        <i className={`bi ${isEbook ? 'bi-journal-text' : 'bi-headphones'}`} />
+                        <span>{isEbook ? 'Read' : 'Listen'}</span>
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+
+            {hasMore && (
+              <div className="books-load-more-row">
+                <button
+                  className="primary-button books-load-more-btn"
+                  disabled={loadingMore}
+                  onClick={() => fetchItems(page + 1, true)}
+                  type="button"
+                >
+                  {loadingMore ? (
+                    <>
+                      <i className="bi bi-arrow-repeat spin" /> Loading more books...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-chevron-down" /> Load More Books
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
+        )
       ) : (
         <div className="books-page-empty">
           <i className="bi bi-hourglass-split" />
           <h2>Coming soon</h2>
-          <p>No {type === 'ebook' ? 'ebooks' : 'audiobooks'} here yet{category ? ` for ${category}` : ''} - check back soon.</p>
+          <p>
+            No {isEbook ? 'ebooks' : 'audiobooks'} here yet{category ? ` for ${category}` : ''} - check back soon.
+          </p>
         </div>
       )}
     </section>

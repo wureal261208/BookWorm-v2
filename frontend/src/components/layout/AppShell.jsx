@@ -20,6 +20,7 @@ import { hasAccess, normalizeRole } from '../../data/bookData'
 const navItems = [
   { id: 'ebooks', label: 'Ebooks', icon: 'bi-book', target: 'books', query: 'type=ebook' },
   { id: 'audiobooks', label: 'Audio', icon: 'bi-headphones', target: 'books', query: 'type=audiobook' },
+  { id: 'stories', label: 'Stories', icon: 'bi-chat-heart', target: 'stories' },
   { id: 'ai-suggestions', label: 'AI Suggestions', icon: 'bi-stars' },
   { id: 'community', label: 'Community', icon: 'bi-people' },
   { id: 'admin', label: 'Management', icon: 'bi-shield-lock', admin: true },
@@ -554,7 +555,7 @@ function AppShell({
 
       <main className={`${isAdminPage ? 'admin-page-shell' : `page-shell page-shell-${activePage || 'default'}`}${isPlayerVisible && !isAdminPage ? ' has-mini-player' : ''}`}>{children}</main>
       {!isAdminPage && <GlobalMiniPlayer />}
-      {!isAdminPage && <ChatWidget isPlayerVisible={isPlayerVisible} />}
+      {!isAdminPage && activePage !== 'ai-suggestions' && <ChatWidget isPlayerVisible={isPlayerVisible} />}
       {!isAdminPage && <footer className="site-footer">
         <section className="footer-brand">
           <div className="footer-logo">
