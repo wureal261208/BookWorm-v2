@@ -193,6 +193,25 @@ function ProfileSettings({
   useEffect(() => {
     if (!account || account.role === 'guest') return
     let ignore = false
+    setMyStoriesLoading(true)
+    apiFetch('/api/stories/mine')
+      .then((data) => {
+        if (!ignore && Array.isArray(data?.stories)) setMyStories(data.stories)
+      })
+      .catch(() => {
+        if (!ignore) setMyStories([])
+      })
+      .finally(() => {
+        if (!ignore) setMyStoriesLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [account])
+
+  useEffect(() => {
+    if (!account || account.role === 'guest') return
+    let ignore = false
     setMyBooksLoading(true)
     apiFetch('/api/books/mine?limit=50')
       .then((data) => {
@@ -887,7 +906,7 @@ function ProfileSettings({
               onClick={() => setActiveShelfTab('stories')}
             >
               <i className="bi bi-music-note-list" />
-              <span>Stories</span>
+              <span>My Stories</span>
               <span className="shelf-count-pill">{myStories.length}</span>
             </button>
 </div>
@@ -938,23 +957,38 @@ function ProfileSettings({
                 onNavigate={onNavigate}
               />
             )}
-          {activeShelfTab === 'stories' && (
-  <div className="story-list">
-    {myStoriesLoading ? (
-      <p>Loading stories...</p>
-    ) : myStories.length === 0 ? (
-      <p>No stories found.</p>
-    ) : (
-      myStories.map((story) => (
-        <div key={story.id || story._id} className="story-card">
-          <img src={resolveMediaUrl(story.coverUrl || story.cover)} alt={story.title} className="story-cover" />
-          <h5>{story.title}</h5>
-          <audio controls src={resolveMediaUrl(story.audioUrl)} />
-        </div>
-      ))
-    )}
-  </div>
-))
+            {activeShelfTab === 'stories' && (
+              <div className="profile-stories-list" aria-live="polite">
+                {myStoriesLoading ? (
+                  <div className="shelf-empty-box"><i className="bi bi-hourglass-split" /><p>Loading your stories...</p></div>
+                ) : myStories.length === 0 ? (
+                  <div className="shelf-empty-box">
+                    <i className="bi bi-mic" />
+                    <p>You have not shared any stories yet. Your written stories and voice recordings will appear here.</p>
+                    <button className="primary-button" onClick={() => onNavigate?.('write', { query: 'tab=story' })} type="button">
+                      <i className="bi bi-plus-lg" /> Share a story
+                    </button>
+                  </div>
+                ) : (
+                  myStories.map((story) => (
+                    <article key={story.id || story._id} className="profile-story-card">
+                      {story.coverUrl && <img src={resolveMediaUrl(story.coverUrl)} alt="" className="profile-story-cover" />}
+                      <div className="profile-story-details">
+                        <div className="profile-story-heading">
+                          <h3>{story.title}</h3>
+                          <span className="profile-story-type">{story.audioUrl ? 'Voice recording' : 'Written story'}</span>
+                        </div>
+                        <p>{story.content}</p>
+                        {story.audioUrl && (
+                          <audio controls preload="none" src={resolveMediaUrl(story.audioUrl)} aria-label={`Play ${story.title}`} />
+                        )}
+                        <time dateTime={story.createdAt}>{story.createdAt ? new Date(story.createdAt).toLocaleDateString() : ''}</time>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
 </div>
         </div>
 

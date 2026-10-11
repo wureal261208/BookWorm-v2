@@ -32,6 +32,14 @@ function formatTime(seconds) {
   return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
+function getAudioFileExtension(mimeType = '') {
+  const mime = mimeType.toLowerCase().split(';')[0]
+  if (mime.includes('mp4') || mime.includes('m4a')) return 'mp4'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('wav')) return 'wav'
+  return 'webm'
+}
+
 function getUrlTab() {
   if (typeof window !== 'undefined' && window.location?.search) {
     const paramTab = new URLSearchParams(window.location.search).get('tab')
@@ -254,7 +262,11 @@ function WritePage({ account, onDetail, onToast }) {
       formData.append('audioDuration', String(recordingSeconds || 0))
 
       if (recordedAudioBlob) {
-        formData.append('audio', recordedAudioBlob, 'voice-recording.webm')
+        if (recordedAudioBlob.size === 0) {
+          throw new Error('The recording is empty. Please record your voice again before publishing.')
+        }
+        const extension = getAudioFileExtension(recordedAudioBlob.type || mediaRecorderRef.current?.mimeType)
+        formData.append('audio', recordedAudioBlob, `voice-recording.${extension}`)
         formData.append('type', 'audio-story')
       } else if (selectedAudioFile) {
         formData.append('audio', selectedAudioFile, selectedAudioFile.name)
