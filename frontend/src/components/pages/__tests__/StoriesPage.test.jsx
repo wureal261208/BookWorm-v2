@@ -203,7 +203,7 @@ describe('StoriesPage - Community Stories and Voice Recordings', () => {
         '/api/stories/story-1/comments',
         expect.objectContaining({
           method: 'POST',
-          body: { text: 'I loved reading this piece.' },
+          body: expect.objectContaining({ text: 'I loved reading this piece.' }),
         })
       )
       expect(screen.getByText('I loved reading this piece.')).toBeInTheDocument()

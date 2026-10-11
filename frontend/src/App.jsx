@@ -22,7 +22,7 @@ import {
 import { NavigationProvider } from './context/NavigationContext'
 import { AudioPlayerProvider } from './context/AudioPlayerContext'
 import { auth } from './features/auth-firebase/firebaseConfig'
-import { getAuthor, getCategory, getReaderUrl } from './utils/bookUtils'
+import { getAuthor, getCategory, getNickname, getReaderUrl } from './utils/bookUtils'
 import {
   globalDataDefaults,
   stableStringify,
@@ -185,6 +185,7 @@ function App() {
         return {
           role: normalizeRole(data.user?.role) || 'customer',
           id: data.user?.id || '',
+          name: data.user?.name || '',
           displayId: data.user?.displayId || '',
           themePreference: data.user?.themePreference || '',
           hasSetPreferences: Boolean(data.user?.hasSetPreferences),
@@ -206,16 +207,16 @@ function App() {
           // message - surface that verbatim in the ban popup instead of a
           // generic toast.
           const banMessage = /banned/i.test(error.message || '') ? error.message : ''
-          return { role: 'customer', id: '', displayId: '', themePreference: '', rejected: true, banMessage }
+          return { role: 'customer', id: '', name: '', displayId: '', themePreference: '', rejected: true, banMessage }
         }
         // Every retry failed but the server never actually said "no" (no
         // 401/403) - a connection issue on our end, not a reason to sign
         // anyone out. The Firebase session stays valid so a page refresh
         // can just try again cleanly.
-        return { role: 'customer', id: '', displayId: '', themePreference: '', unverified: true }
+        return { role: 'customer', id: '', name: '', displayId: '', themePreference: '', unverified: true }
       }
     }
-    return { role: 'customer', id: '', displayId: '', themePreference: '', unverified: true }
+    return { role: 'customer', id: '', name: '', displayId: '', themePreference: '', unverified: true }
   }, [])
 
   const scrollToTopForPage = useCallback((page) => {
@@ -363,7 +364,8 @@ function App() {
     if (account.role === 'guest' || !userDataReady) return
 
     const savedSettings = accountSettings[account.id] || accountSettings[account.email] || {}
-    const nextName = savedSettings.displayName || account.name
+    const rawNextName = savedSettings.displayName || account.name
+    const nextName = getNickname(rawNextName, 'Reader').slice(0, 12)
     const nextAvatar = savedSettings.avatar || account.avatar || ''
     const shouldUpdateName = nextName && nextName !== account.name
     const shouldUpdateAvatar = nextAvatar !== (account.avatar || '')
@@ -426,11 +428,29 @@ function App() {
         return
       }
 
+      let rawName = savedSettings.displayName || user.displayName || trustedProfile.name || ''
+      if (!rawName || rawName.includes('@')) {
+        rawName = trustedProfile.name || user.displayName || (email ? email.split('@')[0] : '') || 'Reader'
+      }
+      const resolvedCleanName = getNickname(rawName, 'Reader').slice(0, 12)
+
+      // Auto-heal backend MongoDB user name if it has an email or differs
+      if (resolvedCleanName && (!trustedProfile.name || trustedProfile.name.includes('@') || trustedProfile.name !== resolvedCleanName)) {
+        apiFetch('/api/users/me/profile', {
+          method: 'PATCH',
+          body: { name: resolvedCleanName },
+        }).catch(() => {})
+      }
+      // Keep Firebase displayName in sync if empty
+      if (resolvedCleanName && !user.displayName) {
+        updateProfile(user, { displayName: resolvedCleanName }).catch(() => {})
+      }
+
       const nextAccount = {
         id: trustedProfile.id,
         firebaseUid: user.uid,
         displayId: trustedProfile.displayId,
-        name: savedSettings.displayName || user.displayName || email.split('@')[0] || 'Reader',
+        name: resolvedCleanName,
         email,
         avatar: savedSettings.avatar || user.photoURL || '',
         role: trustedProfile.role,
@@ -632,8 +652,27 @@ function App() {
       if (authMode === 'signup') {
         const credential = await createUserWithEmailAndPassword(auth, email, password)
         const rawName = authForm.name.trim() || email.split('@')[0]
-        const displayName = rawName.slice(0, 12)
-        await updateProfile(credential.user, { displayName })
+        const cleanName = getNickname(rawName, 'Reader').slice(0, 12)
+        try {
+          await updateProfile(credential.user, { displayName: cleanName })
+          await credential.user.getIdToken(true)
+          await apiFetch('/api/users/me/profile', {
+            method: 'PATCH',
+            body: { name: cleanName },
+          }).catch(() => {})
+        } catch (_) {}
+
+        setAccount((prev) => ({
+          ...prev,
+          name: cleanName,
+        }))
+        const userKey = credential.user.uid
+        setAccountSettings((prev) => ({
+          ...prev,
+          [userKey]: { ...(prev[userKey] || {}), displayName: cleanName },
+          [email]: { ...(prev[email] || {}), displayName: cleanName },
+        }))
+
         setAuthForm(emptyAuthForm)
         setToast({ type: 'success', message: 'Account created successfully.' })
         return
@@ -691,6 +730,9 @@ function App() {
     }
 
     await updateProfile(auth.currentUser, { displayName: trimmedName })
+    try {
+      await auth.currentUser.getIdToken(true)
+    } catch (_) {}
 
     try {
       await apiFetch('/api/users/me/profile', {
@@ -700,7 +742,12 @@ function App() {
     } catch (_) {}
 
     setAccount((current) => ({ ...current, avatar, name: trimmedName }))
-    setAccountSettings((current) => ({ ...current, [account.id]: nextSettings }))
+    setAccountSettings((current) => ({
+      ...current,
+      [account.id]: nextSettings,
+      ...(account.firebaseUid ? { [account.firebaseUid]: nextSettings } : {}),
+      ...(account.email ? { [account.email]: nextSettings } : {}),
+    }))
     setToast({ type: 'success', message: 'Account profile updated.' })
   }
 

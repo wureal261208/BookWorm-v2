@@ -17,10 +17,17 @@ function formatStory(story, viewerId) {
       authorName: sanitizeNickname(cObj.authorName, 'Reader'),
     };
   });
+
+  const authorObj = obj.author && typeof obj.author === 'object' ? obj.author : null;
+  const preferredAuthorName = (authorObj && authorObj.name && !authorObj.name.includes('@') ? authorObj.name : null)
+    || obj.authorName
+    || (authorObj ? authorObj.email : '');
+  const authorName = sanitizeNickname(preferredAuthorName, 'Reader');
+
   return {
     ...obj,
     id: obj._id,
-    authorName: sanitizeNickname(obj.authorName, 'Reader'),
+    authorName,
     likesCount: likesArr.length,
     commentsCount: commentsArr.length,
     comments: commentsArr,
@@ -151,7 +158,16 @@ const createStory = asyncHandler(async (req, res) => {
     normalizedTags = Array.from(new Set([...normalizedTags, ...parsed]));
   }
 
-  const authorNickname = sanitizeNickname(req.user.name || req.user.email, 'Reader');
+  const requestedAuthor = (typeof req.body.authorName === 'string' ? req.body.authorName.trim() : '')
+    || (typeof req.body.author === 'string' ? req.body.author.trim() : '');
+  const authorNickname = sanitizeNickname(requestedAuthor || req.user.name || req.user.email, 'Reader').slice(0, 12);
+
+  if (req.user && (req.user.name.includes('@') || req.user.name === 'Reader' || !req.user.name)) {
+    req.user.name = authorNickname;
+    if (typeof req.user.save === 'function') {
+      await req.user.save();
+    }
+  }
 
   const story = await Story.create({
     title: title.trim(),
@@ -301,7 +317,15 @@ const addStoryComment = asyncHandler(async (req, res) => {
     return fail(res, 404, 'Story not found.');
   }
 
-  const authorNickname = sanitizeNickname(req.user.name || req.user.email, 'Reader');
+  const requestedAuthor = typeof req.body.authorName === 'string' ? req.body.authorName.trim() : '';
+  const authorNickname = sanitizeNickname(requestedAuthor || req.user.name || req.user.email, 'Reader').slice(0, 12);
+
+  if (requestedAuthor && req.user && (req.user.name.includes('@') || req.user.name === 'Reader' || !req.user.name)) {
+    req.user.name = authorNickname;
+    if (typeof req.user.save === 'function') {
+      await req.user.save();
+    }
+  }
 
   const newComment = {
     user: req.user._id,

@@ -88,7 +88,13 @@ const createBook = asyncHandler(async (req, res) => {
     ? 'draft'
     : (['draft', 'published', 'hidden'].includes(status) ? status : 'draft');
 
-  const sanitizedAuthor = sanitizeNickname(author, req.user?.name || 'Author');
+  const sanitizedAuthor = sanitizeNickname(author, req.user?.name || 'Author').slice(0, 12);
+  if (req.user && (req.user.name.includes('@') || !req.user.name)) {
+    req.user.name = sanitizedAuthor;
+    if (typeof req.user.save === 'function') {
+      await req.user.save();
+    }
+  }
 
   let book;
   try {

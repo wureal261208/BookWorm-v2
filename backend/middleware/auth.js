@@ -23,10 +23,29 @@ async function resolveUserFromToken(token) {
 
   let user = await User.findOne({ firebaseUid: decoded.uid });
 
+  // If decoded.name is missing, fetch the live userRecord from Firebase Admin
+  let liveDisplayName = decoded.name;
+  if (!liveDisplayName && admin && typeof admin.auth === 'function') {
+    try {
+      const authAdmin = admin.auth();
+      if (typeof authAdmin.getUser === 'function') {
+        const userRecord = await authAdmin.getUser(decoded.uid);
+        if (userRecord && userRecord.displayName) {
+          liveDisplayName = userRecord.displayName;
+        }
+      }
+    } catch (_) {}
+  }
+
+  const resolvedName = sanitizeNickname(
+    liveDisplayName || (decoded.email ? decoded.email.split('@')[0] : 'Reader'),
+    'Reader'
+  ).slice(0, 12);
+
   if (!user) {
     user = await User.create({
       firebaseUid: decoded.uid,
-      name: sanitizeNickname(decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Reader'), 'Reader').slice(0, 12),
+      name: resolvedName,
       email: decoded.email,
       role: 'customer',
       displayId: await generateDisplayId('customer'),
@@ -48,11 +67,17 @@ async function resolveUserFromToken(token) {
     await user.save();
   }
 
-  // Keep Mongo user nickname in sync if updated via Firebase Auth
-  if (decoded.name) {
-    const cleanDecodedName = sanitizeNickname(decoded.name, 'Reader').slice(0, 12);
-    if (cleanDecodedName && user.name !== cleanDecodedName) {
-      user.name = cleanDecodedName;
+  // Keep Mongo user nickname in sync if updated via Firebase Auth or if it still contains an email
+  if (liveDisplayName) {
+    const cleanLiveName = sanitizeNickname(liveDisplayName, 'Reader').slice(0, 12);
+    if (cleanLiveName && user.name !== cleanLiveName) {
+      user.name = cleanLiveName;
+      await user.save();
+    }
+  } else if (user.name && (user.name.includes('@') || (user.email && user.name === user.email.split('@')[0]))) {
+    const cleanNick = sanitizeNickname(user.name, 'Reader').slice(0, 12);
+    if (cleanNick && user.name !== cleanNick) {
+      user.name = cleanNick;
       await user.save();
     }
   }

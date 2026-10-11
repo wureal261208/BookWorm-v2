@@ -248,6 +248,7 @@ function WritePage({ account, onDetail, onToast }) {
       const formData = new FormData()
       formData.append('title', title)
       formData.append('content', content)
+      formData.append('authorName', getNickname(account?.name || auth.currentUser?.displayName || 'Reader', 'Reader').slice(0, 12))
       formData.append('coverUrl', storyForm.coverUrl.trim())
       formData.append('tags', storyForm.tags.trim() || 'stories')
       formData.append('audioDuration', String(recordingSeconds || 0))
@@ -507,7 +508,7 @@ function WritePage({ account, onDetail, onToast }) {
 
     const title = bookForm.title.trim()
     const rawAuthor = bookForm.author.trim()
-    const author = getNickname(rawAuthor, 'Author')
+    const author = getNickname(rawAuthor, 'Author').slice(0, 12)
     const chapters = bookForm.chapters
       .map((chapter, index) => ({ order: index + 1, title: chapter.title.trim() || `Chapter ${index + 1}`, content: chapter.content.trim() }))
       .filter((chapter) => chapter.content)

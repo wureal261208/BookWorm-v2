@@ -3,6 +3,7 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from './firebaseConfig'
 import { getFirebaseErrorMessage } from './firebaseErrors'
 import { validateConfirmPassword, validateDisplayName, validateEmail, validatePassword } from './validators'
+import { apiFetch } from '../../utils/apiClient'
 import BrandMark from './BrandMark'
 import './AuthFirebase.css'
 
@@ -53,6 +54,13 @@ function Register({ onSuccess, onGoToLogin }) {
       const cleanName = name.trim().slice(0, 12)
       if (cleanName) {
         await updateProfile(credential.user, { displayName: cleanName })
+        try {
+          await credential.user.getIdToken(true)
+          await apiFetch('/api/users/me/profile', {
+            method: 'PATCH',
+            body: { name: cleanName },
+          })
+        } catch (_) {}
       }
       onSuccess?.(credential.user)
     } catch (error) {

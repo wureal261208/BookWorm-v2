@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getCover, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getCover, getInitials, getNickname, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import HelpChatWidget from '../content/HelpChatWidget'
 import { publicApiFetch } from '../../utils/apiClient'
 import logo from '../../assets/logo.jpg'
@@ -63,7 +63,7 @@ function AppShell({
   const isAdminPage = activePage === 'admin'
   const canShowAdminNav = isAdmin || isAdminPage || rememberedAdminAccess
   const isManagementNavContext = canShowAdminNav && managementNavIds.includes(activePage)
-  const displayName = account?.name || 'None Account'
+  const displayName = isGuest ? 'None Account' : getNickname(account?.name, 'Reader')
   const unreadNotificationItems = isGuest ? [] : notifications.filter((item) => !item.read)
   const unreadNotifications = unreadNotificationItems.length
 
@@ -251,7 +251,7 @@ function AppShell({
                   </div>
                   <div className="mobile-user-meta">
                     <strong>{displayName}</strong>
-                    <span>{account?.email || (isAdmin ? 'Admin / Staff' : 'Reader Account')}</span>
+                    <span>{isAdmin ? 'Admin / Staff' : 'Reader Account'}</span>
                   </div>
                   <i className="bi bi-chevron-right mobile-profile-arrow" />
                 </button>

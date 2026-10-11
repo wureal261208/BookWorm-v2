@@ -133,6 +133,12 @@ function ProfileSettings({
   const [myBooks, setMyBooks] = useState([])
   const [myBooksLoading, setMyBooksLoading] = useState(false)
 
+  useEffect(() => {
+    if (account?.name) {
+      setDisplayName(account.name)
+    }
+  }, [account?.name])
+
   const handleRemoveShelfBook = (bookId) => {
     if (!bookId) return
     const sId = String(bookId)

@@ -265,9 +265,10 @@ function StoriesPage({ account, onToast }) {
     const sId = selectedStory?.id || selectedStory?._id
 
     try {
+      const authorNickname = getNickname(account?.name || auth.currentUser?.displayName || 'Reader', 'Reader').slice(0, 12)
       const res = await apiFetch(`/api/stories/${sId}/comments`, {
         method: 'POST',
-        body: { text },
+        body: { text, authorName: authorNickname },
       })
 
       if (res?.comment) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../../features/auth-firebase/firebaseConfig'
 import { apiFetch, publicApiFetch } from '../../utils/apiClient'
+import { getNickname } from '../../utils/bookUtils'
 
 const PREVIEW_LIMIT = 4
 
@@ -49,7 +50,7 @@ function ContentComments({ contentId, account, onComment }) {
   const userAccount = account && account.role !== 'guest' ? account : null
   const isGuest = !auth?.currentUser && !userAccount
   const activeUserId = currentUserId || userAccount?.id || userAccount?._id
-  const activeUserName = auth?.currentUser?.displayName || auth?.currentUser?.email?.split('@')[0] || userAccount?.name || 'Reader'
+  const activeUserName = getNickname(userAccount?.name || auth?.currentUser?.displayName || auth?.currentUser?.email, 'Reader').slice(0, 12)
 
   // Edit comment state
   const [editingCommentId, setEditingCommentId] = useState(null)
