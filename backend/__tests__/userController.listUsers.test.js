@@ -76,7 +76,7 @@ describe('listUsers', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.data.total).toBe(5);
     expect(payload.data.page).toBe(2);
-    expect(payload.data.users.map((user) => user.name)).toEqual(['c', 'b']);
+    expect(payload.data.users.map((user) => user.name)).toEqual(['C', 'B']);
   });
 
   test('no role filter: keeps the original DB-level pagination and no bookCount field', async () => {

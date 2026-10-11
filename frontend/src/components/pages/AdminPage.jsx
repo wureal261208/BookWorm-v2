@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials, NO_COVER_IMAGE } from '../../utils/bookUtils'
+import { getAuthor, getCategory, getDescription, getReaderUrl, getInitials, getNickname, truncateNickname, NO_COVER_IMAGE } from '../../utils/bookUtils'
 import { getTotalPages } from '../../utils/chapterUtils'
 import { normalizeRole } from '../../data/bookData'
 import { apiFetch } from '../../utils/apiClient'
@@ -1248,15 +1248,19 @@ function AdminDashboard({ canManageUsers, canPushBooks, onNavigateSection }) {
         <div className="admin-chart-card">
           <h3><i className="bi bi-trophy" /> Top readers</h3>
           {mostActiveReaders.length ? (
-            mostActiveReaders.map((reader) => (
-              <div className="admin-bar-row" key={reader.id}>
-                <span className="admin-bar-label admin-bar-label-title" title={reader.name}>{reader.name}</span>
-                <div className="admin-bar-track">
-                  <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(reader.booksReadCount / maxReaderCount) * 100}%` }} />
+            mostActiveReaders.map((reader) => {
+              const fullNick = getNickname(reader.name, 'Reader')
+              const truncatedNick = truncateNickname(reader.name, 12, 'Reader')
+              return (
+                <div className="admin-bar-row" key={reader.id}>
+                  <span className="admin-bar-label admin-bar-label-title" title={fullNick}>{truncatedNick}</span>
+                  <div className="admin-bar-track">
+                    <div className="admin-bar-fill admin-bar-fill-alt" style={{ width: `${(reader.booksReadCount / maxReaderCount) * 100}%` }} />
+                  </div>
+                  <span className="admin-bar-value">{reader.booksReadCount}</span>
                 </div>
-                <span className="admin-bar-value">{reader.booksReadCount}</span>
-              </div>
-            ))
+              )
+            })
           ) : (
             <p className="settings-copy">No reading activity recorded yet.</p>
           )}
@@ -2189,12 +2193,14 @@ function UsersDirectoryPanel({ banBusyId, onBan, onToast, onUnban, refreshTick =
         ) : users.length ? (
           <>
             <div className="admin-users-directory">
-              {users.map((user) => (
-                <div className="admin-users-directory-row admin-row-fade-in" key={user.id}>
-                  <span className="admin-sidebar-avatar admin-users-directory-avatar">{getInitials(user.name)}</span>
-                  <span className="admin-users-directory-info">
-                    <strong>{user.name}</strong>
-                    <small>{user.email}</small>
+              {users.map((user) => {
+                const userNickname = getNickname(user.name || user.email, 'Reader')
+                return (
+                  <div className="admin-users-directory-row admin-row-fade-in" key={user.id}>
+                    <span className="admin-sidebar-avatar admin-users-directory-avatar">{getInitials(userNickname)}</span>
+                    <span className="admin-users-directory-info">
+                      <strong>{userNickname}</strong>
+                      <small>{user.email}</small>
                     {user.isRestricted && (
                       <span style={{ fontSize: '12px', color: '#dc2626', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <i className="bi bi-exclamation-triangle-fill" />
@@ -2233,7 +2239,7 @@ function UsersDirectoryPanel({ banBusyId, onBan, onToast, onUnban, refreshTick =
                     )}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             {total > LIMIT && (
@@ -3301,7 +3307,7 @@ function AdminSettingsPanel({ account, onChangePassword, onProfileUpdate, onToas
     event.preventDefault()
     setSavingProfile(true)
     try {
-      await onProfileUpdate({ avatar: safeAvatar, displayName: displayName.trim() })
+      await onProfileUpdate({ avatar: safeAvatar, displayName: displayName.trim().slice(0, 12) })
       onToast?.({ type: 'success', message: 'Profile updated successfully.' })
     } catch {
       onToast?.({ type: 'error', message: 'Could not update your profile. Please try again.' })
@@ -3334,7 +3340,8 @@ function AdminSettingsPanel({ account, onChangePassword, onProfileUpdate, onToas
           </div>
           <label>
             Display name
-            <input maxLength={32} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+            <input maxLength={12} value={displayName} onChange={(event) => setDisplayName(event.target.value.slice(0, 12))} placeholder="Max 12 chars" />
+            <small style={{ fontSize: '12px', color: '#74746f' }}>Max 12 characters.</small>
           </label>
           <button className="primary-button" disabled={savingProfile} type="submit">
             <i className="bi bi-check2-circle" />
@@ -4032,7 +4039,7 @@ function BanUserModal({ busy, onClose, onConfirm, user }) {
           <i className="bi bi-x-lg" />
         </button>
         <p className="mono-eyebrow">Ban customer</p>
-        <h2 id="admin-ban-title">{user.name}</h2>
+        <h2 id="admin-ban-title">{getNickname(user.name || user.email, 'Reader')}</h2>
         <p className="form-note">{user.displayId ? `${user.displayId} - ` : ''}{user.email}</p>
 
         <label>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatTopicLabel, getAuthor, getCategory, getCover, getInitials, getNickname, NO_COVER_IMAGE } from '../bookUtils'
+import { formatTopicLabel, getAuthor, getCategory, getCover, getInitials, getNickname, truncateNickname, NO_COVER_IMAGE } from '../bookUtils'
 
 describe('utils/bookUtils', () => {
   describe('getNickname', () => {
@@ -19,6 +19,23 @@ describe('utils/bookUtils', () => {
     test('preserves user names and pen names', () => {
       expect(getNickname('George Orwell')).toBe('George Orwell')
       expect(getNickname({ displayName: 'Mary Shelley' })).toBe('Mary Shelley')
+    })
+  })
+
+  describe('truncateNickname', () => {
+    test('returns unchanged nickname if length is within max characters', () => {
+      expect(truncateNickname('Alex', 12)).toBe('Alex')
+      expect(truncateNickname('Mark Twain', 12)).toBe('Mark Twain')
+    })
+
+    test('truncates with ellipsis when nickname exceeds max length', () => {
+      expect(truncateNickname('Christopher Columbus', 12)).toBe('Christopher...')
+      expect(truncateNickname('alexander_the_great@bookworm.com', 12)).toBe('Alexander Th...')
+    })
+
+    test('falls back correctly when empty or invalid', () => {
+      expect(truncateNickname('', 12, 'Reader')).toBe('Reader')
+      expect(truncateNickname(null, 12)).toBe('Reader')
     })
   })
 

@@ -62,6 +62,11 @@ function AuthPage({
     if (!password) nextErrors.password = 'Please enter your password.'
 
     if (authMode === 'signup') {
+      const rawName = (authForm.name || '').trim()
+      if (rawName && rawName.length > 12) {
+        nextErrors.name = 'Display name must be 12 characters or fewer.'
+      }
+
       if (password.length < 6) {
         nextErrors.password = 'Password must be at least 6 characters.'
       }
@@ -204,18 +209,22 @@ function AuthPage({
                 </div>
 
                 <div className="input-group">
-                  <label htmlFor="signup-name">Name</label>
+                  <label htmlFor="signup-name">Display name (optional, max 12)</label>
                   <div className="input-wrapper">
                     <span aria-hidden="true"><Icon name="person" /></span>
                     <input
                       id="signup-name"
                       type="text"
+                      maxLength={12}
                       value={isSignup ? authForm.name : ''}
-                      onChange={(event) => updateField('name', event.target.value)}
-                      placeholder="Your display name"
+                      onChange={(event) => updateField('name', event.target.value.slice(0, 12))}
+                      placeholder="Your display name (max 12)"
                       disabled={!isSignup || authLoading}
+                      aria-invalid={Boolean(isSignup && getError('name'))}
+                      aria-describedby="signup-name-error"
                     />
                   </div>
+                  {isSignup && getError('name') && <span className="error-message" id="signup-name-error">{getError('name')}</span>}
                 </div>
 
                 <div className="input-group">

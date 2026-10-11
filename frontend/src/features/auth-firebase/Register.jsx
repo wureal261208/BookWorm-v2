@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from './firebaseConfig'
 import { getFirebaseErrorMessage } from './firebaseErrors'
-import { validateConfirmPassword, validateEmail, validatePassword } from './validators'
+import { validateConfirmPassword, validateDisplayName, validateEmail, validatePassword } from './validators'
 import BrandMark from './BrandMark'
 import './AuthFirebase.css'
 
@@ -33,6 +33,7 @@ function Register({ onSuccess, onGoToLogin }) {
 
   function runValidation() {
     const nextErrors = {
+      name: validateDisplayName(name),
       email: validateEmail(email),
       password: validatePassword(password),
       confirmPassword: validateConfirmPassword(password, confirmPassword),
@@ -49,8 +50,9 @@ function Register({ onSuccess, onGoToLogin }) {
     setLoading(true)
     try {
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password)
-      if (name.trim()) {
-        await updateProfile(credential.user, { displayName: name.trim() })
+      const cleanName = name.trim().slice(0, 12)
+      if (cleanName) {
+        await updateProfile(credential.user, { displayName: cleanName })
       }
       onSuccess?.(credential.user)
     } catch (error) {
@@ -76,18 +78,24 @@ function Register({ onSuccess, onGoToLogin }) {
 
         <form noValidate onSubmit={handleSubmit}>
           <div className="fa-field">
-            <label htmlFor="register-name">Full name (optional)</label>
+            <label htmlFor="register-name">Display name (optional, max 12)</label>
             <div className="fa-input-wrap">
               <input
                 id="register-name"
                 type="text"
                 autoComplete="name"
-                placeholder="Your display name"
+                maxLength={12}
+                placeholder="Your display name (max 12)"
                 value={name}
                 onChange={updateField(setName, 'name')}
                 disabled={loading}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby="register-name-error"
               />
             </div>
+            {errors.name && (
+              <span className="fa-error" id="register-name-error">{errors.name}</span>
+            )}
           </div>
 
           <div className="fa-field">

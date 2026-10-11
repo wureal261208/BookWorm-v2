@@ -7,7 +7,7 @@ import { apiFetch, publicApiFetch } from '../../utils/apiClient'
 
 const AVATAR_MAX_SIZE = 2 * 1024 * 1024
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-const DISPLAY_NAME_MAX = 32
+const DISPLAY_NAME_MAX = 12
 const DISPLAY_NAME_MIN = 2
 const DISPLAY_NAME_PATTERN = /^[\p{L}\p{N} ._'-]+$/u
 

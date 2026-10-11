@@ -631,7 +631,8 @@ function App() {
     try {
       if (authMode === 'signup') {
         const credential = await createUserWithEmailAndPassword(auth, email, password)
-        const displayName = authForm.name.trim() || email.split('@')[0]
+        const rawName = authForm.name.trim() || email.split('@')[0]
+        const displayName = rawName.slice(0, 12)
         await updateProfile(credential.user, { displayName })
         setAuthForm(emptyAuthForm)
         setToast({ type: 'success', message: 'Account created successfully.' })
@@ -679,7 +680,7 @@ function App() {
   }
 
   async function updateAccountProfile({ avatar, displayName }) {
-    const trimmedName = displayName.trim()
+    const trimmedName = displayName.trim().slice(0, 12)
     if (!auth.currentUser || !trimmedName) return
 
     const nextSettings = {
@@ -690,6 +691,13 @@ function App() {
     }
 
     await updateProfile(auth.currentUser, { displayName: trimmedName })
+
+    try {
+      await apiFetch('/api/users/me/profile', {
+        method: 'PATCH',
+        body: { name: trimmedName },
+      })
+    } catch (_) {}
 
     setAccount((current) => ({ ...current, avatar, name: trimmedName }))
     setAccountSettings((current) => ({ ...current, [account.id]: nextSettings }))

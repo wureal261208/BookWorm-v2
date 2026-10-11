@@ -9,6 +9,7 @@ const {
   sendUnbanNotificationEmail,
   sendPasswordChangedEmail,
 } = require('../utils/emailTemplates');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 
@@ -16,7 +17,7 @@ function sanitizeUser(user, bookCount) {
   const base = {
     id: user._id,
     displayId: user.displayId || '',
-    name: user.name,
+    name: sanitizeNickname(user.name || user.email, 'Reader'),
     email: maskEmail(user.email),
     role: user.role,
     isRestricted: user.isRestricted,

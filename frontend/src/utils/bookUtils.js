@@ -66,6 +66,14 @@ export function getNickname(accountOrName, fallback = 'Reader') {
   return clean || fallback
 }
 
+export function truncateNickname(accountOrName, max = 12, fallback = 'Reader') {
+  const nick = getNickname(accountOrName, fallback)
+  if (nick.length > max) {
+    return nick.slice(0, max).trim() + '...'
+  }
+  return nick
+}
+
 export function getAuthor(book) {
   if (!book) return 'Unknown author'
   const rawAuthor = book.authors?.map((author) => author.name).join(', ') || book.author || ''

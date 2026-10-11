@@ -13,7 +13,7 @@ const {
   removeShelfBook,
   updateReadingGoal,
 } = require('../controllers/userController');
-const { getMe, updateMyTheme, updateMyPreferences, recordCategoryEngagement } = require('../controllers/authController');
+const { getMe, updateMyProfile, updateMyTheme, updateMyPreferences, recordCategoryEngagement } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -22,6 +22,7 @@ router.use(protect);
 
 // Alias for /api/auth/me, kept for frontend compatibility.
 router.get('/me', getMe);
+router.patch('/me/profile', updateMyProfile);
 router.patch('/me/theme', updateMyTheme);
 router.patch('/me/preferences', updateMyPreferences);
 router.post('/me/engagement', recordCategoryEngagement);

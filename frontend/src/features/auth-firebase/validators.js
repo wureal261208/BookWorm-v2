@@ -7,6 +7,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // +84912345678, +6591234567, +12025550123
 const PHONE_RE = /^\+[1-9]\d{7,14}$/
 
+export function validateDisplayName(name) {
+  const value = (name || '').trim()
+  if (value.length > 12) return 'Display name must be 12 characters or fewer.'
+  return ''
+}
+
 export function validateEmail(email) {
   const value = (email || '').trim()
   if (!value) return 'Please enter your email.'

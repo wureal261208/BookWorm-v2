@@ -1,6 +1,7 @@
 const initFirebaseAdmin = require('../config/firebaseAdmin');
 const User = require('../models/User');
 const generateDisplayId = require('../utils/generateDisplayId');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 const { fail } = require('../utils/response');
 const { sendWelcomeEmail } = require('../utils/emailTemplates');
 
@@ -25,7 +26,7 @@ async function resolveUserFromToken(token) {
   if (!user) {
     user = await User.create({
       firebaseUid: decoded.uid,
-      name: decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Reader'),
+      name: sanitizeNickname(decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Reader'), 'Reader').slice(0, 12),
       email: decoded.email,
       role: 'customer',
       displayId: await generateDisplayId('customer'),
@@ -45,6 +46,15 @@ async function resolveUserFromToken(token) {
   if (!user.displayId) {
     user.displayId = await generateDisplayId(user.role);
     await user.save();
+  }
+
+  // Keep Mongo user nickname in sync if updated via Firebase Auth
+  if (decoded.name) {
+    const cleanDecodedName = sanitizeNickname(decoded.name, 'Reader').slice(0, 12);
+    if (cleanDecodedName && user.name !== cleanDecodedName) {
+      user.name = cleanDecodedName;
+      await user.save();
+    }
   }
 
   // A timed ban auto-lifts once it expires, checked lazily right here on

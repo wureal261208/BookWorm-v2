@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const maskEmail = require('../utils/maskEmail');
+const sanitizeNickname = require('../utils/sanitizeNickname');
 const asyncHandler = require('../utils/asyncHandler');
 const { success, fail } = require('../utils/response');
 const { sendPasswordResetEmail } = require('../utils/emailTemplates');
@@ -8,7 +9,7 @@ function sanitizeUser(user) {
   return {
     id: user._id,
     displayId: user.displayId || '',
-    name: user.name,
+    name: sanitizeNickname(user.name || user.email, 'Reader'),
     email: maskEmail(user.email),
     role: user.role,
     isRestricted: user.isRestricted,
@@ -124,9 +125,25 @@ const forgotPassword = asyncHandler(async (req, res) => {
   });
 });
 
+// @route PATCH /api/users/me/profile
+// @desc  Updates the user's display name / nickname in MongoDB
+const updateMyProfile = asyncHandler(async (req, res) => {
+  const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  if (!rawName) {
+    return fail(res, 400, 'Display name cannot be empty.');
+  }
+
+  const cleanName = sanitizeNickname(rawName, 'Reader').slice(0, 12);
+  req.user.name = cleanName;
+  await req.user.save();
+
+  return success(res, 200, 'Profile updated successfully.', { user: sanitizeUser(req.user) });
+});
+
 module.exports = {
   getMe,
   sanitizeUser,
+  updateMyProfile,
   updateMyTheme,
   updateMyPreferences,
   recordCategoryEngagement,

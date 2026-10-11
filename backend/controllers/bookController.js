@@ -761,7 +761,7 @@ const getBookStats = asyncHandler(async (req, res) => {
     mostCommented: mostCommentedRaw,
     mostActiveReaders: mostActiveReadersRaw.map((user) => ({
       id: user._id,
-      name: user.name,
+      name: sanitizeNickname(user.name || user.email, 'Reader'),
       maskedEmail: maskEmail(user.email),
       booksReadCount: user.booksReadCount,
     })),
