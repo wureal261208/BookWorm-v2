@@ -28,7 +28,7 @@ function ContentReaderPage() {
     const saved = Number(localStorage.getItem('bookworm_reader_width'))
     if (saved === 1260) return 1280
     if ([760, 920, 1080, 1280].includes(saved)) return saved
-    return 920
+    return 1080
   })
   const [textAlign, setTextAlign] = useState(() => localStorage.getItem('bookworm_reader_align') || 'justify')
   const [showAaPopover, setShowAaPopover] = useState(false)

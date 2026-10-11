@@ -4449,7 +4449,7 @@ function DeleteStoryModal({ busy, item, onClose, onConfirm, reason, setReason })
       }}
       role="dialog"
     >
-      <div className="confirmation-dialog-card" style={{ maxWidth: '480px' }}>
+      <div className="confirmation-dialog-card" style={{ maxWidth: '560px' }}>
         <button aria-label="Close" className="confirmation-dialog-close" disabled={busy} onClick={onClose} type="button">
           <i className="bi bi-x-lg" />
         </button>
