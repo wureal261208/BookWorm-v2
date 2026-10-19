@@ -26,15 +26,30 @@ async function request(path, { method = 'GET', body, requireAuth = false } = {})
     payload = null
   }
 
-  if (!response.ok || payload?.success === false) {
-    const error = new Error(payload?.message || `Request failed with status ${response.status}`)
-    // Lets a caller tell "the server rejected me" (401/403 - a real auth
-    // failure) apart from "something went wrong reaching the server"
-    // (network error, 500, cold start) - see App.jsx's resolveTrustedProfile,
-    // which used to sign a person back out on ANY failure here, including
-    // ones that had nothing to do with their account being invalid.
-    error.status = response.status
-    throw error
+    if (!response.ok || payload?.success === false) {
+    // If unauthorized, attempt a token refresh and retry once
+    if (response.status === 401 && auth.currentUser) {
+      // Force a fresh token
+      const freshToken = await auth.currentUser.getIdToken(true);
+      headers.Authorization = `Bearer ${freshToken}`;
+      // Retry the request once
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        method,
+        headers,
+        body: isFormData ? body : (body !== undefined ? JSON.stringify(body) : undefined),
+      });
+      // Parse retry payload
+      let retryPayload = null;
+      try { retryPayload = await retryResponse.json(); } catch { retryPayload = null; }
+      if (retryResponse.ok && !(retryPayload?.success === false)) {
+        // Successful retry, return data
+        return 'data' in (retryPayload || {}) ? retryPayload.data : {};
+      }
+      // If still failing, fall through to error handling below
+    }
+    const error = new Error(payload?.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   // A bare `?? {}` here would silently turn a legitimate `null` (several
